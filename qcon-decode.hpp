@@ -38,17 +38,6 @@ namespace qcon
         object,
         array
     };
-
-    ///
-    /// Pass with an object or array to specify its density
-    ///
-    enum class Density : int8_t
-    {
-        unspecified = 0b000, /// Use that of the root or parent element
-        multiline   = 0b001, /// Elements are put on new lines
-        uniline     = 0b011, /// Elements are put on one line separated by spaces
-        nospace     = 0b111  /// No whitespace is used whatsoever
-    };
 }
 
 #endif // QCON_COMMON
@@ -91,7 +80,7 @@ namespace qcon
 
         State object(State & /*outerState*/) { return State{}; }
         State array(State & /*outerState*/) { return State{}; }
-        void end(const Density /*density*/, State && /*innerState*/, State & /*outerState*/) {}
+        void end(State && /*innerState*/, State & /*outerState*/) {}
         void key(const string_view /*key*/, State & /*state*/) {}
         void val(const string_view /*val*/, State & /*state*/) {}
         void val(const int64_t /*val*/, State & /*state*/) {}
@@ -107,18 +96,6 @@ namespace qcon
 
 namespace qcon
 {
-    inline Density & operator&=(Density & d1, const Density d2)
-    {
-        reinterpret_cast<uint8_t &>(d1) &= uint8_t(int8_t(d2));
-        return d1;
-    }
-
-    inline Density & operator|=(Density & d1, const Density d2)
-    {
-        reinterpret_cast<uint8_t &>(d1) |= uint8_t(int8_t(d2));
-        return d1;
-    }
-
     // This functionality is wrapped in a class purely as a convenient way to keep track of state
     template <typename Composer, typename State>
     class _Decoder
@@ -145,30 +122,19 @@ namespace qcon
 
         const DecodeResult & operator()(State & initialState)
         {
-            Density density;
-
-            if (!_skipSpaceAndIngestComments(density, initialState))
-            {
-                return _results;
-            }
+            _skipSpaceAndComments();
 
             if (!_ingestValue(initialState))
             {
                 return _results;
             }
 
-            if (!_skipSpaceAndIngestComments(density, initialState))
-            {
-                return _results;
-            }
+            _skipSpaceAndComments();
 
             // Allow trailing comma
             if (_tryConsumeChar(','))
             {
-                if (!_skipSpaceAndIngestComments(density, initialState))
-                {
-                    return _results;
-                }
+                _skipSpaceAndComments();
             }
 
             if (_pos != _end)
@@ -190,177 +156,26 @@ namespace qcon
         string _stringBuffer{};
         DecodeResult _results{};
 
-        Density _skipWhitespace()
+        void _skipSpace()
         {
-            Density density{Density::nospace};
-
-            while (_pos < _end)
-            {
-                if (std::isspace(uchar(*_pos)))
-                {
-                    if (*_pos == '\n') density &= Density::multiline;
-                    else density &= Density::uniline;
-                    ++_pos;
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            return density;
+            for (; _pos < _end && std::isspace(uchar(*_pos)); ++_pos);
         }
 
-        Density _ingestLineComment(bool concat, State & state)
+        void _skipSpaceAndComments()
         {
-            // We already know we have `//`
-            _pos += 2;
-            const char * commentStart{_pos};
+            _skipSpace();
 
-            // Seek to end of line
-            while (_pos < _end && *_pos != '\n')
+            // Skip comments and space
+            while (_pos < _end && *_pos == '#')
             {
+                // Skip `#`
                 ++_pos;
+
+                // Skip rest of line
+                for (; _pos < _end && *_pos != '\n'; ++_pos);
+
+                _skipSpace();
             }
-            const char * commentEnd{_pos};
-
-            // Trim space after `//`
-            if (commentStart < commentEnd && *commentStart == ' ')
-            {
-                ++commentStart;
-            }
-
-            // Trim `\r` from end
-            if (commentEnd[-1] == '\r')
-            {
-                --commentEnd;
-            }
-
-            // If this is a continuation, add it to the buffer
-            if (concat)
-            {
-                _stringBuffer.push_back('\n');
-                _stringBuffer.append(commentStart, commentEnd);
-            }
-
-            // Check for continuation on next line
-            bool isContinuation{false};
-            Density density{Density::nospace};
-
-            // This comment ended with a newline (as opposed to the end of the qcon)
-            if (_pos < _end)
-            {
-                // Skip newline
-                ++_pos;
-                density = Density::multiline;
-
-                // There are no additional newlines
-                if (_skipWhitespace() > Density::multiline)
-                {
-                    isContinuation = _pos + 2 < _end && _pos[0] == '/' && _pos[1] == '/';
-                }
-            }
-
-            // There is more comment to come
-            if (isContinuation)
-            {
-                if (!concat)
-                {
-                    _stringBuffer.assign(commentStart, commentEnd);
-                }
-
-                _ingestLineComment(true, state);
-
-                if (!concat)
-                {
-                    _composer.comment(string_view{_stringBuffer}, state);
-                }
-            }
-            // This is the end of the comment
-            else
-            {
-                if (!concat)
-                {
-                    _composer.comment(string_view{commentStart, size_t(commentEnd - commentStart)}, state);
-                }
-            }
-
-            return density;
-        }
-
-        [[nodiscard]] bool _ingestBlockComment(State & state)
-        {
-            // We already know we have `/*`
-            _pos += 2;
-            const char * commentStart{_pos};
-
-            // Seek to `*/`
-            while (_pos + 1 < _end && !(_pos[0] == '*' && _pos[1] == '/'))
-            {
-                ++_pos;
-            }
-
-            // `*/` not found
-            if (_pos + 1 >= _end)
-            {
-                _error("Block comment is unterminated", commentStart - 2);
-                return false;
-            }
-
-            const char * commentEnd{_pos};
-            _pos += 2;
-
-            // Trim space after `/*`
-            if (*commentStart == ' ')
-            {
-                ++commentStart;
-            }
-
-            // Trim space before `*/`
-            if (commentEnd > commentStart && commentEnd[-1] == ' ')
-            {
-                --commentEnd;
-            }
-
-            _composer.comment(string_view{commentStart, size_t(commentEnd - commentStart)}, state);
-            return true;
-        }
-
-        [[nodiscard]] bool _skipSpaceAndIngestComments(Density & density, State & state)
-        {
-            // Skip whitespace
-            density = _skipWhitespace();
-
-            while (true)
-            {
-                // Check for comment
-                if (_pos + 1 < _end && _pos[0] == '/')
-                {
-                    // Ingest line comment
-                    if (_pos[1] == '/')
-                    {
-                        density &= _ingestLineComment(false, state);
-                        // `_ingesetLineComment` skips trailing whitespace already
-                        continue;
-                    }
-                    // Ingest block comment
-                    else if (_pos[1] == '*')
-                    {
-                        if (!_ingestBlockComment(state))
-                        {
-                            return false;
-                        }
-
-                        // Skip whitespace
-                        density &= _skipWhitespace();
-                        continue;
-                    }
-                }
-
-                break;
-            }
-
-            return true;
         }
 
         bool _tryConsumeChar(const char c)
@@ -512,11 +327,7 @@ namespace qcon
 
             ++_pos; // We already know we have `{`
 
-            Density density;
-            if (!_skipSpaceAndIngestComments(density, innerState))
-            {
-                return false;
-            }
+            _skipSpaceAndComments();
 
             if (!_tryConsumeChar('}'))
             {
@@ -546,34 +357,21 @@ namespace qcon
                     }
                     _composer.key(key, innerState);
 
-                    Density density_;
-                    if (!_skipSpaceAndIngestComments(density_, innerState))
-                    {
-                        return false;
-                    }
-                    density &= density_;
+                    _skipSpaceAndComments();
 
                     if (!_consumeChar(':'))
                     {
                         return false;
                     }
 
-                    if (!_skipSpaceAndIngestComments(density_, innerState))
-                    {
-                        return false;
-                    }
-                    density &= density_;
+                    _skipSpaceAndComments();
 
                     if (!_ingestValue(innerState))
                     {
                         return false;
                     }
 
-                    if (!_skipSpaceAndIngestComments(density_, innerState))
-                    {
-                        return false;
-                    }
-                    density &= density_;
+                    _skipSpaceAndComments();
 
                     if (_tryConsumeChar('}'))
                     {
@@ -586,11 +384,7 @@ namespace qcon
                             return false;
                         }
 
-                        if (!_skipSpaceAndIngestComments(density_, innerState))
-                        {
-                            return false;
-                        }
-                        density &= density_;
+                        _skipSpaceAndComments();
 
                         // Allow trailing comma
                         if (_tryConsumeChar('}'))
@@ -601,7 +395,7 @@ namespace qcon
                 }
             }
 
-            _composer.end(density, std::move(innerState), outerState);
+            _composer.end(std::move(innerState), outerState);
             return true;
         }
 
@@ -611,11 +405,7 @@ namespace qcon
 
             ++_pos; // We already know we have `[`
 
-            Density density;
-            if (!_skipSpaceAndIngestComments(density, innerState))
-            {
-                return false;
-            }
+            _skipSpaceAndComments();
 
             if (!_tryConsumeChar(']'))
             {
@@ -626,12 +416,7 @@ namespace qcon
                         return false;
                     }
 
-                    Density density_;
-                    if (!_skipSpaceAndIngestComments(density_, innerState))
-                    {
-                        return false;
-                    }
-                    density &= density_;
+                    _skipSpaceAndComments();
 
                     if (_tryConsumeChar(']'))
                     {
@@ -644,11 +429,7 @@ namespace qcon
                             return false;
                         }
 
-                        if (!_skipSpaceAndIngestComments(density_, innerState))
-                        {
-                            return false;
-                        }
-                        density &= density_;
+                        _skipSpaceAndComments();
 
                         // Allow trailing comma
                         if (_tryConsumeChar(']'))
@@ -659,7 +440,7 @@ namespace qcon
                 }
             }
 
-            _composer.end(density, std::move(innerState), outerState);
+            _composer.end(std::move(innerState), outerState);
             return true;
         }
 
@@ -997,7 +778,7 @@ namespace qcon
 
     template <typename Composer, typename State> concept _ComposerHasObjectMethod = requires (Composer composer, State state) { State{composer.object(state)}; };
     template <typename Composer, typename State> concept _ComposerHasArrayMethod = requires (Composer composer, State state) { State{composer.array(state)}; };
-    template <typename Composer, typename State> concept _ComposerHasEndMethod = requires (Composer composer, const Density density, State innerState, State outerState) { composer.end(density, std::move(innerState), outerState); };
+    template <typename Composer, typename State> concept _ComposerHasEndMethod = requires (Composer composer, State innerState, State outerState) { composer.end(std::move(innerState), outerState); };
     template <typename Composer, typename State> concept _ComposerHasKeyMethod = requires (Composer composer, const string_view key, State state) { composer.key(key, state); };
     template <typename Composer, typename State> concept _ComposerHasStringValMethod = requires (Composer composer, const string_view val, State state) { composer.val(val, state); };
     template <typename Composer, typename State> concept _ComposerHasSignedIntegerValMethod = requires (Composer composer, const int64_t val, State state) { composer.val(val, state); };
@@ -1005,7 +786,6 @@ namespace qcon
     template <typename Composer, typename State> concept _ComposerHasFloaterValMethod = requires (Composer composer, const double val, State state) { composer.val(val, state); };
     template <typename Composer, typename State> concept _ComposerHasBooleanValMethod = requires (Composer composer, const bool val, State state) { composer.val(val, state); };
     template <typename Composer, typename State> concept _ComposerHasNullValMethod = requires (Composer composer, State state) { composer.val(nullptr, state); };
-    template <typename Composer, typename State> concept _ComposerHasCommentMethod = requires (Composer composer, const string_view comment, State state) { composer.comment(comment, state); };
 
     template <typename Composer, typename State>
     inline DecodeResult decode(const string_view qcon, Composer & composer, State & initialState)
@@ -1021,7 +801,6 @@ namespace qcon
         static_assert(_ComposerHasFloaterValMethod<Composer, State>);
         static_assert(_ComposerHasBooleanValMethod<Composer, State>);
         static_assert(_ComposerHasNullValMethod<Composer, State>);
-        static_assert(_ComposerHasCommentMethod<Composer, State>);
 
         return _Decoder<Composer, State>{qcon, composer}(initialState);
     }

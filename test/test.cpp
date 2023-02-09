@@ -622,17 +622,15 @@ TEST(qcon, swap)
 TEST(qcon, valueTypes)
 {
     { // Object
-        Value v(Object{}, Density::uniline);
+        Value v(Object{});
         ASSERT_EQ(Type::object, v.type());
-        ASSERT_EQ(Density::uniline, v.density());
         ASSERT_TRUE(v.isObject());
         ASSERT_TRUE(v.is<Object>());
         ASSERT_TRUE(v.asObject());
     }
     { // Array
-        Value v(Array{}, Density::multiline);
+        Value v(Array{});
         ASSERT_EQ(Type::array, v.type());
-        ASSERT_EQ(Density::multiline, v.density());
         ASSERT_TRUE(v.isArray());
         ASSERT_TRUE(v.is<Array>());
         ASSERT_TRUE(v.asArray());
@@ -640,7 +638,6 @@ TEST(qcon, valueTypes)
     { // String
         Value v("abc"sv);
         ASSERT_EQ(Type::string, v.type());
-        ASSERT_EQ(Density::unspecified, v.density());
         ASSERT_TRUE(v.isString());
         ASSERT_TRUE(v.is<std::string>());
         ASSERT_TRUE(v.is<std::string_view>());
@@ -654,7 +651,6 @@ TEST(qcon, valueTypes)
     { // Character
         Value v('a');
         ASSERT_EQ(Type::string, v.type());
-        ASSERT_EQ(Density::unspecified, v.density());
         ASSERT_TRUE(v.isString());
         ASSERT_TRUE(v.is<std::string>());
         ASSERT_TRUE(v.is<std::string_view>());
@@ -669,8 +665,6 @@ TEST(qcon, valueTypes)
     { // Signed integer
         Value v(123);
         ASSERT_EQ(Type::integer, v.type());
-        ASSERT_EQ(Density::unspecified, v.density());
-        ASSERT_TRUE(v.isNumber());
         ASSERT_TRUE(v.isInteger());
         ASSERT_TRUE(v.is<int>());
         ASSERT_TRUE(v.asInteger());
@@ -679,8 +673,6 @@ TEST(qcon, valueTypes)
     { // Unsigned integer
         Value v(123u);
         ASSERT_EQ(Type::unsigner, v.type());
-        ASSERT_EQ(Density::unspecified, v.density());
-        ASSERT_TRUE(v.isNumber());
         ASSERT_TRUE(v.isUnsigner());
         ASSERT_TRUE(v.is<unsigned int>());
         ASSERT_TRUE(v.asUnsigner());
@@ -689,8 +681,6 @@ TEST(qcon, valueTypes)
     { // Floater
         Value v(123.0);
         ASSERT_EQ(Type::floater, v.type());
-        ASSERT_EQ(Density::unspecified, v.density());
-        ASSERT_TRUE(v.isNumber());
         ASSERT_TRUE(v.isFloater());
         ASSERT_TRUE(v.is<float>());
         ASSERT_TRUE(v.asFloater());
@@ -699,7 +689,6 @@ TEST(qcon, valueTypes)
     { // Boolean
         Value v(false);
         ASSERT_EQ(Type::boolean, v.type());
-        ASSERT_EQ(Density::unspecified, v.density());
         ASSERT_TRUE(v.isBoolean());
         ASSERT_TRUE(v.is<bool>());
         ASSERT_TRUE(v.asBoolean());
@@ -708,7 +697,6 @@ TEST(qcon, valueTypes)
     { // Null
         Value v(nullptr);
         ASSERT_EQ(Type::null, v.type());
-        ASSERT_EQ(Density::unspecified, v.density());
         ASSERT_TRUE(v.isNull());
         ASSERT_TRUE(v.get<nullptr_t>());
     }
@@ -930,76 +918,39 @@ TEST(qcon, makeArray)
 
 TEST(qcon, comments)
 {
-    { // Encode object
-        Value qcon{makeObject("a", 1, "b", 2, "c", 3)};
-        qcon.setComment("Yada yada");
-        Object & obj{*qcon.asObject()};
-        obj.at("a").setComment("How fascinating...");
-        obj.at("c").setComment("Wow,\nso\n  incredible");
-        ASSERT_EQ(R"(// Yada yada
-{
-    // How fascinating...
-    "a": 1,
-    "b": 2,
-    // Wow,
-    // so
-    //   incredible
-    "c": 3
-})"s, qcon::encode(qcon, Density::multiline));
-        ASSERT_EQ(R"(/* Yada yada */ { /* How fascinating... */ "a": 1, "b": 2, /* Wow,
-so
-  incredible */ "c": 3 })"s, qcon::encode(qcon, Density::uniline));
-        ASSERT_EQ(R"(/*Yada yada*/{/*How fascinating...*/"a":1,"b":2,/*Wow,
-so
-  incredible*/"c":3})"s, qcon::encode(qcon, Density::nospace));
-    }
-    { // Encode array
-        Value qcon{makeArray(1, 2, 3)};
-        qcon.setComment("Yada yada");
-        Array & arr{*qcon.asArray()};
-        arr[0].setComment("How fascinating...");
-        arr[2].setComment("Wow,\nso\n  incredible");
-        ASSERT_EQ(R"(// Yada yada
-[
-    // How fascinating...
-    1,
-    2,
-    // Wow,
-    // so
-    //   incredible
-    3
-])"s, qcon::encode(qcon, Density::multiline));
-        ASSERT_EQ(R"(/* Yada yada */ [ /* How fascinating... */ 1, 2, /* Wow,
-so
-  incredible */ 3 ])"s, qcon::encode(qcon, Density::uniline));
-        ASSERT_EQ(R"(/*Yada yada*/[/*How fascinating...*/1,2,/*Wow,
-so
-  incredible*/3])"s, qcon::encode(qcon, Density::nospace));
-    }
     { // Decode
-        const Value qcon{*decode(R"(// AAAAA
-// BBBBB
-/* CCCCC */
-[
-    /* DDDDD */
-    // EEEEE
-    [ /* FFFFF */ /* GGGGG */ 0, /* HHHHH */ 1, /* IIIII */ ], // JJJJJ
-    { /* KKKKK */ /* LLLLL */ "k1": /* MMMMM */ "v1", /* NNNNN */ /* OOOOO */ "k2": "v2" /* PPPPP */ } // QQQQQ
-    /* RRRRR */
-] // SSSSS)"sv)};
-        ASSERT_EQ("CCCCC", *qcon.comment());
+        const Value qcon{*decode(R"(# AAAAA
+# Blah
+[ # Blah
+    # Blah
+    [ # Blah
+        # Blah
+        0, # Blah
+        # Blah
+        1 # Blah
+        # Blah
+    ], # Blah
+    # Blah
+    { # Blah
+        # Blah
+        "k1": # Blah
+        # Blah
+        "v1", # Blah
+        # Blah
+        "k2": # Blah
+        # Blah
+        "v2" # Blah
+    # Blah
+    } # Blah
+    # Blah
+] # Blah
+# Blah)"sv)};
         const Array & rootArr{*qcon.asArray()};
         ASSERT_EQ(2u, rootArr.size());
-        ASSERT_EQ("EEEEE", *rootArr.at(0).comment());
         const Array & innerArr{*rootArr.at(0).asArray()};
         ASSERT_EQ(2u, innerArr.size());
-        ASSERT_EQ("GGGGG", *innerArr.at(0).comment());
-        ASSERT_EQ("HHHHH", *innerArr.at(1).comment());
-        ASSERT_EQ("JJJJJ", *rootArr.at(1).comment());
         const Object & innerObj{*rootArr.at(1).asObject()};
         ASSERT_EQ(2u, innerObj.size());
-        ASSERT_EQ("MMMMM", *innerObj.at("k1").comment());
-        ASSERT_EQ("OOOOO", *innerObj.at("k2").comment());
     }
 }
 
@@ -1125,42 +1076,62 @@ TEST(qcon, numberEquality)
 
 TEST(qcon, general)
 {
-    std::string qcon(R"(// Third quarter summary document
-// Protected information, do not propagate!
-{
+    const std::string qcon(R"({
     "Dishes": [
         {
             "Gluten Free": false,
-            "Ingredients": [ "\"Salt\"", "Barnacles" ],
+            "Ingredients": [
+                "\"Salt\"",
+                "Barnacles"
+            ],
             "Name": "Basket o' Barnacles",
             "Price": 5.45
         },
         {
             "Gluten Free": true,
-            "Ingredients": [ /* It's actually cod lmao */ "Tuna" ],
+            "Ingredients": [
+                "Tuna"
+            ],
             "Name": "Two Tuna",
             "Price": -inf
         },
         {
             "Gluten Free": false,
-            "Ingredients": [ "\"Salt\"", "Octopus", "Crab" ],
+            "Ingredients": [
+                "\"Salt\"",
+                "Octopus",
+                "Crab"
+            ],
             "Name": "18 Leg Bouquet",
             "Price": nan
         }
     ],
-    // Not necessarily up to date
     "Employees": [
-        { "Age": 69, "Name": "Ol' Joe Fisher", "Title": "Fisherman" },
-        { "Age": 41, "Name": "Mark Rower", "Title": "Cook" },
-        { "Age": 19, "Name": "Phineas", "Title": "Server Boy" }
+        {
+            "Age": 69,
+            "Name": "Ol' Joe Fisher",
+            "Title": "Fisherman"
+        },
+        {
+            "Age": 41,
+            "Name": "Mark Rower",
+            "Title": "Cook"
+        },
+        {
+            "Age": 19,
+            "Name": "Phineas",
+            "Title": "Server Boy"
+        }
     ],
     "Founded": 1964,
     "Green Eggs and Ham": "I do not like them in a box\nI do not like them with a fox\nI do not like them in a house\nI do not like them with a mouse\nI do not like them here or there\nI do not like them anywhere\nI do not like green eggs and ham\nI do not like them Sam I am\n",
     "Ha\x03r Name": "M\0\0n",
-    // What could they mean?!
-    "Magic Numbers": [777,777,777],
+    "Magic Numbers": [
+        777,
+        777,
+        777
+    ],
     "Name": "Salt's Crust",
-    // Pay no heed
     "Profit Margin": null
 })"s);
     ASSERT_EQ(qcon, encode(*decode(qcon)));

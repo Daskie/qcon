@@ -27,23 +27,18 @@
 namespace qcon
 {
     ///
-    /// Required for low-order bit packing
-    ///
-    static_assert(__STDCPP_DEFAULT_NEW_ALIGNMENT__ >= 8);
-
-    ///
     /// The type of the QCON value
     ///
-    enum class Type : uint8_t
+    enum class Type
     {
-        null     = 0b000u,
-        object   = 0b001u,
-        array    = 0b010u,
-        string   = 0b011u,
-        integer  = 0b100u,
-        unsigner = 0b101u,
-        floater  = 0b110u,
-        boolean  = 0b111u
+        null,
+        object,
+        array,
+        string,
+        integer,
+        unsigner,
+        floater,
+        boolean
     };
 
     // Forward declarations
@@ -129,8 +124,8 @@ namespace qcon
         ///
         /// @param val the value whith which to be constructed
         ///
-        Value(Object && val, Density density = Density::unspecified);
-        Value(Array && val, Density density = Density::unspecified);
+        Value(Object && val);
+        Value(Array && val);
         Value(string && val);
         Value(string_view val);
         Value(const char * val);
@@ -191,63 +186,47 @@ namespace qcon
         ///
         /// @return the type of the value
         ///
-        Type type() const;
-
-        ///
-        /// @return the density of the object or array, or `unspecified` if not an object or array
-        ///
-        Density density() const;
-
-        ///
-        /// Sets the density of the object or array
-        /// @param density the new density
-        ///
-        void setDensity(Density density);
+        Type type() const { return _type; }
 
         ///
         /// @return whether the value is an object
         ///
-        bool isObject() const;
+        bool isObject() const { return _type == Type::object; }
 
         ///
         /// @return whether the value is an array
         ///
-        bool isArray() const;
+        bool isArray() const { return _type == Type::array; }
 
         ///
         /// @return whether the value is a string
         ///
-        bool isString() const;
-
-        ///
-        /// @return whether the value is a number
-        ///
-        bool isNumber() const;
+        bool isString() const { return _type == Type::string; }
 
         ///
         /// @return whether the value is a signed integer
         ///
-        bool isInteger() const;
+        bool isInteger() const { return _type == Type::integer; }
 
         ///
         /// @return whether the value is an unsigned integer
         ///
-        bool isUnsigner() const;
+        bool isUnsigner() const { return _type == Type::unsigner; }
 
         ///
         /// @return whether the value is a floater
         ///
-        bool isFloater() const;
+        bool isFloater() const { return _type == Type::floater; }
 
         ///
         /// @return whether the value is a boolean
         ///
-        bool isBoolean() const;
+        bool isBoolean() const { return _type == Type::boolean; }
 
         ///
         /// @return whether the value is null
         ///
-        bool isNull() const;
+        bool isNull() const { return _type == Type::null; }
 
         ///
         /// Determines if the value type is compatible with `T`, which is to say calling `get<T>()` would be valid
@@ -332,32 +311,7 @@ namespace qcon
         template <typename T> std::optional<T> get() const;
 
         ///
-        /// @return whether the value has a comment
-        ///
-        bool hasComment() const;
-
-        ///
-        /// @return the value's comment, or `nullptr` if it has no comment
-        ///
-        string * comment();
-        const string * comment() const;
-
-        ///
-        /// @param str the new comment
-        ///
-        void setComment(string && str);
-        void setComment(string_view str);
-        void setComment(const char * str);
-
-        ///
-        /// Removes the value's comment
-        /// @return ownership of the value's comment
-        ///
-        std::unique_ptr<string> removeComment();
-
-        ///
         /// Compares if two values are equivalent, that is they have the same type and value
-        /// The presence/content of comments is ignored
         /// @param other the value to compare with
         /// @return whether this is equivalent to the other value
         ///
@@ -391,29 +345,18 @@ namespace qcon
 
         union
         {
-            uintptr_t _ptrAndDensity;
+            nullptr_t _null{};
+            Object * _object;
+            Array * _array;
             string * _string;
             int64_t _integer;
             uint64_t _unsigner;
             double _floater;
             bool _boolean;
-            nullptr_t _null{};
         };
-        uintptr_t _typeAndComment{};
-
-        Object * _object();
-        const Object * _object() const;
-
-        Array * _array();
-        const Array * _array() const;
-
-        void _setType(Type type);
-
-        template <typename T> void _setComment(T && str);
+        Type _type{};
 
         void _deleteValue();
-
-        void _deleteComment();
     };
 
     ///
@@ -441,7 +384,7 @@ namespace qcon
 
     ///
     /// @param val the QCON value to encode
-    /// @param density the base density of the encoded QCON string
+    /// @param density the density of the encoded QCON string
     /// @param indentSpaces the number of spaces to insert per level of indentation
     /// @param singleQuotes whether to use `'` instead of `"` for strings
     /// @param identifiers whether to encode all eligible keys as identifiers instead of strings
@@ -467,19 +410,14 @@ namespace qcon
             switch (outerState.container)
             {
                 case Container::object:
-                    innerNode = &outerState.node->_object()->emplace(std::move(_key), Object{}).first->second;
+                    innerNode = &outerState.node->_object->emplace(std::move(_key), Object{}).first->second;
                     break;
                 case Container::array:
-                    innerNode = &outerState.node->_array()->emplace_back(Object{});
+                    innerNode = &outerState.node->_array->emplace_back(Object{});
                     break;
                 default:
                     *outerState.node = Object{};
                     innerNode = outerState.node;
-            }
-
-            if (!_comment.empty())
-            {
-                innerNode->setComment(std::move(_comment));
             }
 
             return {innerNode, Container::object};
@@ -492,19 +430,14 @@ namespace qcon
             switch (outerState.container)
             {
                 case Container::object:
-                    innerNode = &outerState.node->_object()->emplace(std::move(_key), Array{}).first->second;
+                    innerNode = &outerState.node->_object->emplace(std::move(_key), Array{}).first->second;
                     break;
                 case Container::array:
-                    innerNode = &outerState.node->_array()->emplace_back(Array{});
+                    innerNode = &outerState.node->_array->emplace_back(Array{});
                     break;
                 default:
                     *outerState.node = Array{};
                     innerNode = outerState.node;
-            }
-
-            if (!_comment.empty())
-            {
-                innerNode->setComment(std::move(_comment));
             }
 
             return {innerNode, Container::array};
@@ -515,21 +448,9 @@ namespace qcon
             _key = k;
         }
 
-        void end(const Density density, State && innerState, State & /*outerState*/)
+        void end(State && /*innerState*/, State & /*outerState*/)
         {
-            switch (innerState.container)
-            {
-                case Container::object:
-                    innerState.node->setDensity(density);
-                    break;
-                case Container::array:
-                    innerState.node->setDensity(density);
-                    break;
-                default:
-                    break;
-            }
 
-            _comment.clear();
         }
 
         template <typename T>
@@ -540,40 +461,24 @@ namespace qcon
             switch (state.container)
             {
                 case Container::object:
-                    composedVal = &state.node->_object()->emplace(std::move(_key), v).first->second;
+                    composedVal = &state.node->_object->emplace(std::move(_key), v).first->second;
                     break;
                 case Container::array:
-                    composedVal = &state.node->_array()->emplace_back(v);
+                    composedVal = &state.node->_array->emplace_back(v);
                     break;
                 default:
                     *state.node = v;
                     composedVal = state.node;
             }
-
-            if (!_comment.empty())
-            {
-                composedVal->setComment(std::move(_comment));
-            }
-        }
-
-        void comment(const string_view comment, State & /*state*/)
-        {
-            _comment = comment;
         }
 
       private:
 
         string _key{};
-        string _comment{};
     };
 
     inline Encoder & operator<<(Encoder & encoder, const Value & val)
     {
-        if (val.hasComment() && encoder.container() != Container::object)
-        {
-            encoder << comment(*val.comment());
-        }
-
         switch (val.type())
         {
             case Type::null:
@@ -583,13 +488,9 @@ namespace qcon
             }
             case Type::object:
             {
-                encoder << object(val.density());
-                for (const auto & [key, v] : *val._object())
+                encoder << object;
+                for (const auto & [key, v] : *val._object)
                 {
-                    if (v.hasComment())
-                    {
-                        encoder << comment(*v.comment());
-                    }
                     encoder << key << v;
                 }
                 encoder << end;
@@ -597,8 +498,8 @@ namespace qcon
             }
             case Type::array:
             {
-                encoder << array(val.density());
-                for (const auto & v : *val._array())
+                encoder << array;
+                for (const auto & v : *val._array)
                 {
                     encoder << v;
                 }
@@ -635,24 +536,24 @@ namespace qcon
         return encoder;
     }
 
-    inline Value::Value(Object && val, const Density density) :
-        _ptrAndDensity{std::bit_cast<uintptr_t>(new Object{std::move(val)}) | uintptr_t(density)},
-        _typeAndComment{uintptr_t(Type::object)}
+    inline Value::Value(Object && val) :
+        _object{new Object{std::move(val)}},
+        _type{Type::object}
     {}
 
-    inline Value::Value(Array && val, const Density density) :
-        _ptrAndDensity{std::bit_cast<uintptr_t>(new Array{std::move(val)}) | uintptr_t(density)},
-        _typeAndComment{uintptr_t(Type::array)}
+    inline Value::Value(Array && val) :
+        _array{new Array{std::move(val)}},
+        _type{Type::array}
     {}
 
     inline Value::Value(string && val) :
         _string{new string{std::move(val)}},
-        _typeAndComment{uintptr_t(Type::string)}
+        _type{Type::string}
     {}
 
     inline Value::Value(const string_view val) :
         _string{new string{val}},
-        _typeAndComment{uintptr_t(Type::string)}
+        _type{Type::string}
     {}
 
     inline Value::Value(const char * const val) :
@@ -669,7 +570,7 @@ namespace qcon
 
     inline Value::Value(const int64_t val) :
         _integer{val},
-        _typeAndComment{uintptr_t(Type::integer)}
+        _type{Type::integer}
     {}
 
     inline Value::Value(const int32_t val) :
@@ -686,7 +587,7 @@ namespace qcon
 
     inline Value::Value(const uint64_t val) :
         _unsigner{val},
-        _typeAndComment{uintptr_t(Type::unsigner)}
+        _type{Type::unsigner}
     {}
 
     inline Value::Value(const uint32_t val) :
@@ -703,7 +604,7 @@ namespace qcon
 
     inline Value::Value(const double val) :
         _floater{val},
-        _typeAndComment{uintptr_t(Type::floater)}
+        _type{Type::floater}
     {}
 
     inline Value::Value(const float val) :
@@ -712,7 +613,7 @@ namespace qcon
 
     inline Value::Value(const bool val) :
         _boolean{val},
-        _typeAndComment{uintptr_t(Type::boolean)}
+        _type{Type::boolean}
     {}
 
     template <ValueFromAble T>
@@ -722,49 +623,49 @@ namespace qcon
 
     inline Value::Value(Value && other) :
         _unsigner{std::exchange(other._unsigner, 0u)},
-        _typeAndComment{std::exchange(other._typeAndComment, 0u)}
+        _type{std::exchange(other._type, Type::null)}
     {}
 
     inline Value & Value::operator=(Object && val)
     {
-        if (type() == Type::object)
+        if (_type == Type::object)
         {
-            *_object() = std::move(val);
+            *_object = std::move(val);
         }
         else
         {
             _deleteValue();
-            _setType(Type::object);
-            _ptrAndDensity = std::bit_cast<uintptr_t>(new Object{std::move(val)});
+            _type = Type::object;
+            _object = new Object{std::move(val)};
         }
         return *this;
     }
 
     inline Value & Value::operator=(Array && val)
     {
-        if (type() == Type::array)
+        if (_type == Type::array)
         {
-            *_array() = std::move(val);
+            *_array = std::move(val);
         }
         else
         {
             _deleteValue();
-            _setType(Type::array);
-            _ptrAndDensity = std::bit_cast<uintptr_t>(new Array{std::move(val)});
+            _type = Type::array;
+            _array = new Array{std::move(val)};
         }
         return *this;
     }
 
     inline Value & Value::operator=(string && val)
     {
-        if (type() == Type::string)
+        if (_type == Type::string)
         {
             *_string = std::move(val);
         }
         else
         {
             _deleteValue();
-            _setType(Type::string);
+            _type = Type::string;
             _string = new string{std::move(val)};
         }
         return *this;
@@ -772,14 +673,14 @@ namespace qcon
 
     inline Value & Value::operator=(const string_view val)
     {
-        if (type() == Type::string)
+        if (_type == Type::string)
         {
             *_string = val;
         }
         else
         {
             _deleteValue();
-            _setType(Type::string);
+            _type = Type::string;
             _string = new string{val};
         }
         return *this;
@@ -797,10 +698,10 @@ namespace qcon
 
     inline Value & Value::operator=(const int64_t val)
     {
-        if (type() != Type::integer)
+        if (_type != Type::integer)
         {
             _deleteValue();
-            _setType(Type::integer);
+            _type = Type::integer;
         }
         _integer = val;
         return *this;
@@ -823,10 +724,10 @@ namespace qcon
 
     inline Value & Value::operator=(const uint64_t val)
     {
-        if (type() != Type::unsigner)
+        if (_type != Type::unsigner)
         {
             _deleteValue();
-            _setType(Type::unsigner);
+            _type = Type::unsigner;
         }
         _unsigner = val;
         return *this;
@@ -849,10 +750,10 @@ namespace qcon
 
     inline Value & Value::operator=(const double val)
     {
-        if (type() != Type::floater)
+        if (_type != Type::floater)
         {
             _deleteValue();
-            _setType(Type::floater);
+            _type = Type::floater;
         }
         _floater = val;
         return *this;
@@ -865,10 +766,10 @@ namespace qcon
 
     inline Value & Value::operator=(const bool val)
     {
-        if (type() != Type::boolean)
+        if (_type != Type::boolean)
         {
             _deleteValue();
-            _setType(Type::boolean);
+            _type = Type::boolean;
         }
         _boolean = val;
         return *this;
@@ -876,10 +777,10 @@ namespace qcon
 
     inline Value & Value::operator=(const nullptr_t)
     {
-        if (type() != Type::null)
+        if (_type != Type::null)
         {
             _deleteValue();
-            _setType(Type::null);
+            _type = Type::null;
         }
         _null = nullptr;
         return *this;
@@ -888,90 +789,14 @@ namespace qcon
     inline Value & Value::operator=(Value && other)
     {
         _deleteValue();
-        _deleteComment();
         _unsigner = std::exchange(other._unsigner, 0u);
-        _typeAndComment = std::exchange(other._typeAndComment, 0u);
+        _type = std::exchange(other._type, Type::null);
         return *this;
     }
 
     inline Value::~Value()
     {
         _deleteValue();
-        _deleteComment();
-    }
-
-    inline Type Value::type() const
-    {
-        return Type(_typeAndComment & 0b111u);
-    }
-
-    inline Density Value::density() const
-    {
-        const Type type{this->type()};
-        if (type == Type::object || type == Type::array)
-        {
-            return Density(_ptrAndDensity & 0b111u);
-        }
-        else
-        {
-            return Density::unspecified;
-        }
-    }
-
-    inline void Value::setDensity(const Density density)
-    {
-        const Type type{this->type()};
-        if (type == Type::object || type == Type::array)
-        {
-            _ptrAndDensity &= ~uintptr_t{0b111u};
-            _ptrAndDensity |= uintptr_t(density);
-        }
-    }
-
-    inline bool Value::isObject() const
-    {
-        return type() == Type::object;
-    }
-
-    inline bool Value::isArray() const
-    {
-        return type() == Type::array;
-    }
-
-    inline bool Value::isString() const
-    {
-        return type() == Type::string;
-    }
-
-    inline bool Value::isNumber() const
-    {
-        const Type type{this->type()};
-        return type == Type::integer || type == Type::unsigner || type == Type::floater;
-    }
-
-    inline bool Value::isInteger() const
-    {
-        return type() == Type::integer;
-    }
-
-    inline bool Value::isUnsigner() const
-    {
-        return type() == Type::unsigner;
-    }
-
-    inline bool Value::isFloater() const
-    {
-        return type() == Type::floater;
-    }
-
-    inline bool Value::isBoolean() const
-    {
-        return type() == Type::boolean;
-    }
-
-    inline bool Value::isNull() const
-    {
-        return type() == Type::null;
     }
 
     template <typename T>
@@ -1007,7 +832,7 @@ namespace qcon
         // Signed integer
         else if constexpr (std::is_integral_v<U> && std::is_signed_v<U>)
         {
-            switch (type())
+            switch (_type)
             {
                 case Type::integer:
                 {
@@ -1037,7 +862,7 @@ namespace qcon
         // Unsigned integer
         else if constexpr (std::is_integral_v<U> && std::is_unsigned_v<U>)
         {
-            switch (type())
+            switch (_type)
             {
                 case Type::integer:
                 {
@@ -1067,7 +892,7 @@ namespace qcon
         // Floater
         else if constexpr (std::is_floating_point_v<U>)
         {
-            return isNumber();
+            return _type == Type::integer || _type == Type::unsigner || _type == Type::floater;
         }
         // Other
         else
@@ -1078,22 +903,22 @@ namespace qcon
 
     inline Object * Value::asObject()
     {
-        return isObject() ? _object() : nullptr;
+        return isObject() ? _object : nullptr;
     }
 
     inline const Object * Value::asObject() const
     {
-        return isObject() ? _object() : nullptr;
+        return isObject() ? _object : nullptr;
     }
 
     inline Array * Value::asArray()
     {
-        return isArray() ? _array() : nullptr;
+        return isArray() ? _array : nullptr;
     }
 
     inline const Array * Value::asArray() const
     {
-        return isArray() ? _array() : nullptr;
+        return isArray() ? _array : nullptr;
     }
 
     inline string * Value::asString()
@@ -1212,7 +1037,7 @@ namespace qcon
         {
             if (is<U>())
             {
-                switch (type())
+                switch (_type)
                 {
                     case Type::integer: return U(_integer);
                     case Type::unsigner: return U(_unsigner);
@@ -1245,65 +1070,13 @@ namespace qcon
         }
     }
 
-    inline bool Value::hasComment() const
-    {
-        return comment();
-    }
-
-    inline string * Value::comment()
-    {
-        return std::bit_cast<string *>(_typeAndComment & ~uintptr_t{0b111u});
-    }
-
-    inline const string * Value::comment() const
-    {
-        return std::bit_cast<const string *>(_typeAndComment & ~uintptr_t{0b111u});
-    }
-
-    inline void Value::setComment(string && str)
-    {
-        _setComment(std::move(str));
-    }
-
-    inline void Value::setComment(const string_view str)
-    {
-        _setComment(str);
-    }
-
-    inline void Value::setComment(const char * str)
-    {
-        _setComment(str);
-    }
-
-    template <typename T>
-    inline void Value::_setComment(T && str)
-    {
-        string * const comment{this->comment()};
-        if (comment)
-        {
-            *comment = std::forward<T>(str);
-        }
-        else
-        {
-            _typeAndComment &= 0b111u;
-            _typeAndComment |= std::bit_cast<uintptr_t>(new string{std::move(str)});
-        }
-    }
-
-    inline std::unique_ptr<string> Value::removeComment()
-    {
-        string * const comment{this->comment()};
-        _typeAndComment &= 0b111u;
-        return std::unique_ptr<string>{comment};
-    }
-
     inline bool Value::operator==(const Value & other) const
     {
-        switch (other.type())
+        switch (other._type)
         {
             case Type::null: return *this == other._null;
-            case Type::object: return *this == *other._object();
-            case Type::array: return *this == *other._array();
+            case Type::object: return *this == *other._object;
+            case Type::array: return *this == *other._array;
             case Type::string: return *this == *other._string;
             case Type::integer: return *this == other._integer;
             case Type::unsigner: return *this == other._unsigner;
@@ -1315,12 +1088,12 @@ namespace qcon
 
     inline bool Value::operator==(const Object & val) const
     {
-        return type() == Type::object && *_object() == val;
+        return _type == Type::object && *_object == val;
     }
 
     inline bool Value::operator==(const Array & val) const
     {
-        return type() == Type::array && *_array() == val;
+        return _type == Type::array && *_array == val;
     }
 
     inline bool Value::operator==(const string & val) const
@@ -1330,7 +1103,7 @@ namespace qcon
 
     inline bool Value::operator==(const string_view val) const
     {
-        return type() == Type::string && *_string == val;
+        return _type == Type::string && *_string == val;
     }
 
     inline bool Value::operator==(const char * const val) const
@@ -1345,7 +1118,7 @@ namespace qcon
 
     inline bool Value::operator==(const int64_t val) const
     {
-        switch (type())
+        switch (_type)
         {
             case Type::integer: return _integer == val;
             case Type::unsigner: return val >= 0 && _unsigner == uint64_t(val);
@@ -1371,7 +1144,7 @@ namespace qcon
 
     inline bool Value::operator==(const uint64_t val) const
     {
-        switch (type())
+        switch (_type)
         {
             case Type::integer: return _integer >= 0 && uint64_t(_integer) == val;
             case Type::unsigner: return _unsigner == val;
@@ -1397,7 +1170,7 @@ namespace qcon
 
     inline bool Value::operator==(const double val) const
     {
-        switch (type())
+        switch (_type)
         {
             case Type::integer: return double(_integer) == val && _integer == int64_t(val);
             case Type::unsigner: return double(_unsigner) == val && _unsigner == uint64_t(val);
@@ -1413,57 +1186,22 @@ namespace qcon
 
     inline bool Value::operator==(const bool val) const
     {
-        return type() == Type::boolean && _boolean == val;
+        return _type == Type::boolean && _boolean == val;
     }
 
     inline bool Value::operator==(const nullptr_t) const
     {
-        return type() == Type::null;
-    }
-
-    inline Object * Value::_object()
-    {
-        return std::bit_cast<Object *>(_ptrAndDensity & ~uintptr_t{0b111u});
-    }
-
-    inline const Object * Value::_object() const
-    {
-        return std::bit_cast<const Object *>(_ptrAndDensity & ~uintptr_t{0b111u});
-    }
-
-    inline Array * Value::_array()
-    {
-        return std::bit_cast<Array *>(_ptrAndDensity & ~uintptr_t{0b111u});
-    }
-
-    inline const Array * Value::_array() const
-    {
-        return std::bit_cast<const Array *>(_ptrAndDensity & ~uintptr_t{0b111u});
-    }
-
-    inline void Value::_setType(const Type type)
-    {
-        _typeAndComment &= ~uintptr_t{0b111u};
-        _typeAndComment |= uintptr_t(type);
+        return _type == Type::null;
     }
 
     inline void Value::_deleteValue()
     {
-        switch (type())
+        switch (_type)
         {
-            case Type::object: delete _object(); break;
-            case Type::array: delete _array(); break;
+            case Type::object: delete _object; break;
+            case Type::array: delete _array; break;
             case Type::string: delete _string; break;
             default: break;
-        }
-    }
-
-    inline void Value::_deleteComment()
-    {
-        string * const comment{this->comment()};
-        if (comment)
-        {
-            delete comment;
         }
     }
 

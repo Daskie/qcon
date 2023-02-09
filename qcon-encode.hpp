@@ -38,7 +38,12 @@ namespace qcon
         object,
         array
     };
+}
 
+#endif // QCON_COMMON
+
+namespace qcon
+{
     ///
     /// Pass with an object or array to specify its density
     ///
@@ -47,14 +52,9 @@ namespace qcon
         unspecified = 0b000, /// Use that of the root or parent element
         multiline   = 0b001, /// Elements are put on new lines
         uniline     = 0b011, /// Elements are put on one line separated by spaces
-        nospace     = 0b111  /// No whitespace is used whatsoever
+        nospace     = 0b111  /// No space is used whatsoever
     };
-}
 
-#endif // QCON_COMMON
-
-namespace qcon
-{
     // This weird struct/operator()/variable setup allows for both ` << object ` and ` << object(density) `
     struct _ObjectToken { Density density{Density::unspecified}; constexpr _ObjectToken operator()(Density density_) const { return _ObjectToken{density_}; } };
 
