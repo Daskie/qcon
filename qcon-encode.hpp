@@ -13,24 +13,20 @@
 #include <charconv>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
-#ifndef QCON_COMMON
-#define QCON_COMMON
-
 namespace qcon
 {
-    using std::string;
-    using std::string_view;
     using namespace std::string_literals;
     using namespace std::string_view_literals;
 
     using uchar = unsigned char;
 
     ///
-    /// Simple enum representing a qcon container type
+    /// Simple enum representing a QCON container type
     ///
     enum class Container : int8_t
     {
@@ -38,21 +34,16 @@ namespace qcon
         object,
         array
     };
-}
 
-#endif // QCON_COMMON
-
-namespace qcon
-{
     ///
     /// Pass with an object or array to specify its density
     ///
     enum class Density : int8_t
     {
-        unspecified = 0b000, /// Use that of the root or parent element
-        multiline   = 0b001, /// Elements are put on new lines
-        uniline     = 0b011, /// Elements are put on one line separated by spaces
-        nospace     = 0b111  /// No space is used whatsoever
+        unspecified, /// Use that of the root or parent element
+        multiline,   /// Elements are put on new lines
+        uniline,     /// Elements are put on one line separated by spaces
+        nospace      /// No space is used whatsoever
     };
 
     // This weird struct/operator()/variable setup allows for both ` << object ` and ` << object(density) `
@@ -67,7 +58,7 @@ namespace qcon
     struct _OctalToken { uint64_t val{}; };
     struct _HexToken { uint64_t val{}; };
 
-    struct _CommentToken { string_view comment{}; };
+    struct _CommentToken { std::string_view comment{}; };
 
     ///
     /// Namespace provided to allow the user to `using namespace qcon::tokens` to avoid the verbosity of fully
@@ -100,7 +91,7 @@ namespace qcon
         ///
         /// Stream ` << comment(str) ` to encode a comment
         ///
-        constexpr struct { constexpr _CommentToken operator()(string_view str) const { return _CommentToken{str}; } } comment{};
+        constexpr struct { constexpr _CommentToken operator()(std::string_view str) const { return _CommentToken{str}; } } comment{};
     }
 
     ///
@@ -200,8 +191,8 @@ namespace qcon
         /// @param v the value to encode
         /// @return this
         ///
-        Encoder & operator<<(string_view v);
-        Encoder & operator<<(const string & v);
+        Encoder & operator<<(std::string_view v);
+        Encoder & operator<<(const std::string & v);
         Encoder & operator<<(const char * v);
         Encoder & operator<<(char * v);
         Encoder & operator<<(char v);
@@ -234,7 +225,7 @@ namespace qcon
         ///
         /// @return the encoded QCON string
         ///
-        [[nodiscard]] std::optional<string> finish();
+        [[nodiscard]] std::optional<std::string> finish();
 
         ///
         /// @return the current container
@@ -262,7 +253,7 @@ namespace qcon
         char _quote;
         bool _useIdentifiers;
 
-        string _str;
+        std::string _str;
         std::vector<_ScopeDelta> _scopeDeltas;
         Container _container;
         Density _density;
@@ -276,7 +267,7 @@ namespace qcon
 
         template <typename T> void _val(T v);
 
-        void _key(string_view key);
+        void _key(std::string_view key);
 
         void _prefix();
 
@@ -284,7 +275,7 @@ namespace qcon
 
         void _putSpace();
 
-        void _encode(string_view val);
+        void _encode(std::string_view val);
         void _encode(int64_t val);
         void _encode(uint64_t val);
         void _encode(_BinaryToken v);
@@ -485,7 +476,7 @@ namespace qcon
         else
         {
             // Ensure block comment does not contain `*/`
-            if (v.comment.find("*/"sv) != string_view::npos)
+            if (v.comment.find("*/"sv) != std::string_view::npos)
             {
                 _status = false;
                 return *this;
@@ -508,7 +499,7 @@ namespace qcon
         return *this;
     }
 
-    inline Encoder & Encoder::operator<<(const string_view v)
+    inline Encoder & Encoder::operator<<(const std::string_view v)
     {
         if (_container == Container::object && !_isKey)
         {
@@ -522,24 +513,24 @@ namespace qcon
         return *this;
     }
 
-    inline Encoder & Encoder::operator<<(const string & v)
+    inline Encoder & Encoder::operator<<(const std::string & v)
     {
-        return operator<<(string_view(v));
+        return operator<<(std::string_view{v});
     }
 
     inline Encoder & Encoder::operator<<(const char * const v)
     {
-        return operator<<(string_view(v));
+        return operator<<(std::string_view{v});
     }
 
     inline Encoder & Encoder::operator<<(char * const v)
     {
-        return operator<<(string_view(v));
+        return operator<<(std::string_view{v});
     }
 
     inline Encoder & Encoder::operator<<(const char v)
     {
-        return operator<<(string_view(&v, 1u));
+        return operator<<(std::string_view{&v, 1u});
     }
 
     inline Encoder & Encoder::operator<<(const int64_t v)
@@ -620,7 +611,7 @@ namespace qcon
         _status = true;
     }
 
-    inline std::optional<string> Encoder::finish()
+    inline std::optional<std::string> Encoder::finish()
     {
         // QCON is not yet complete
         if (_container != Container::none || !_isContent)
@@ -628,7 +619,7 @@ namespace qcon
             _status = false;
         }
 
-        std::optional<string> result{};
+        std::optional<std::string> result{};
 
         if (_status)
         {
@@ -701,7 +692,7 @@ namespace qcon
         _isKey = false;
     }
 
-    inline void Encoder::_key(const string_view key)
+    inline void Encoder::_key(const std::string_view key)
     {
         if (!_status)
         {
@@ -789,7 +780,7 @@ namespace qcon
         }
     }
 
-    inline void Encoder::_encode(const string_view v)
+    inline void Encoder::_encode(const std::string_view v)
     {
         static constexpr char hexChars[16u]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 

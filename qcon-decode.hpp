@@ -17,37 +17,17 @@
 #include <system_error>
 #include <utility>
 
-#ifndef QCON_COMMON
-#define QCON_COMMON
-
 namespace qcon
 {
-    using std::string;
-    using std::string_view;
+    using uchar = unsigned char;
+
     using namespace std::string_literals;
     using namespace std::string_view_literals;
 
-    using uchar = unsigned char;
-
-    ///
-    /// Simple enum representing a qcon container type
-    ///
-    enum class Container : int8_t
-    {
-        none,
-        object,
-        array
-    };
-}
-
-#endif // QCON_COMMON
-
-namespace qcon
-{
     struct DecodeResult
     {
         bool success{}; /// Whether the decode succeeded
-        string errorMessage{}; /// Brief description of what went wrong
+        std::string errorMessage{}; /// Brief description of what went wrong
         size_t errorPosition{}; /// The index into the string where the error occurred
     };
 
@@ -65,8 +45,8 @@ namespace qcon
     /// @param composer the contents of the QCON are decoded in order and passed to this to do something with
     /// @param initialState the initial state object to be passed to the composer
     ///
-    template <typename Composer, typename State> [[nodiscard]] DecodeResult decode(string_view qcon, Composer & composer, State & initialState);
-    template <typename Composer, typename State> [[nodiscard]] DecodeResult decode(string_view qcon, Composer & composer, State && initialState);
+    template <typename Composer, typename State> [[nodiscard]] DecodeResult decode(std::string_view qcon, Composer & composer, State & initialState);
+    template <typename Composer, typename State> [[nodiscard]] DecodeResult decode(std::string_view qcon, Composer & composer, State && initialState);
 
     ///
     /// An example composer whose operations are all no-ops
@@ -81,14 +61,14 @@ namespace qcon
         State object(State & /*outerState*/) { return State{}; }
         State array(State & /*outerState*/) { return State{}; }
         void end(State && /*innerState*/, State & /*outerState*/) {}
-        void key(const string_view /*key*/, State & /*state*/) {}
-        void val(const string_view /*val*/, State & /*state*/) {}
+        void key(const std::string_view /*key*/, State & /*state*/) {}
+        void val(const std::string_view /*val*/, State & /*state*/) {}
         void val(const int64_t /*val*/, State & /*state*/) {}
         void val(const uint64_t /*val*/, State & /*state*/) {}
         void val(const double /*val*/, State & /*state*/) {}
         void val(const bool /*val*/, State & /*state*/) {}
         void val(const std::nullptr_t, State & /*state*/) {}
-        void comment(const string_view /*comment*/, State & /*state*/) {}
+        void comment(const std::string_view /*comment*/, State & /*state*/) {}
     };
 }
 
@@ -102,7 +82,7 @@ namespace qcon
     {
       private:
 
-        void _error(string && message, const char * const position)
+        void _error(std::string && message, const char * const position)
         {
             _results.success = false;
             _results.errorMessage = std::move(message);
@@ -111,7 +91,7 @@ namespace qcon
 
       public:
 
-        _Decoder(const string_view str, Composer & composer) :
+        _Decoder(const std::string_view str, Composer & composer) :
             _start{str.data()},
             _end{_start + str.length()},
             _pos{_start},
@@ -153,7 +133,7 @@ namespace qcon
         size_t _line{0u};
         size_t _column{0u};
         Composer & _composer;
-        string _stringBuffer{};
+        std::string _stringBuffer{};
         DecodeResult _results{};
 
         void _skipSpace()
@@ -202,7 +182,7 @@ namespace qcon
             return true;
         }
 
-        bool _tryConsumeChars(const string_view str)
+        bool _tryConsumeChars(const std::string_view str)
         {
             if (size_t(_end - _pos) >= str.length())
             {
@@ -222,7 +202,7 @@ namespace qcon
             }
         }
 
-        [[nodiscard]] bool _consumeChars(const string_view str)
+        [[nodiscard]] bool _consumeChars(const std::string_view str)
         {
             if (!_tryConsumeChars(str))
             {
@@ -335,7 +315,7 @@ namespace qcon
                         return false;
                     }
 
-                    string_view key;
+                    std::string_view key;
                     if (!_consumeString(key))
                     {
                         return false;
@@ -432,7 +412,7 @@ namespace qcon
 
         [[nodiscard]] bool _ingestString(State & state)
         {
-            string_view str;
+            std::string_view str;
             if (!_consumeString(str))
             {
                 return false;
@@ -441,7 +421,7 @@ namespace qcon
             return true;
         }
 
-        [[nodiscard]] bool _consumeString(string_view & str)
+        [[nodiscard]] bool _consumeString(std::string_view & str)
         {
             _stringBuffer.clear();
 
@@ -726,8 +706,8 @@ namespace qcon
     template <typename Composer, typename State> concept _ComposerHasObjectMethod = requires (Composer composer, State state) { State{composer.object(state)}; };
     template <typename Composer, typename State> concept _ComposerHasArrayMethod = requires (Composer composer, State state) { State{composer.array(state)}; };
     template <typename Composer, typename State> concept _ComposerHasEndMethod = requires (Composer composer, State innerState, State outerState) { composer.end(std::move(innerState), outerState); };
-    template <typename Composer, typename State> concept _ComposerHasKeyMethod = requires (Composer composer, const string_view key, State state) { composer.key(key, state); };
-    template <typename Composer, typename State> concept _ComposerHasStringValMethod = requires (Composer composer, const string_view val, State state) { composer.val(val, state); };
+    template <typename Composer, typename State> concept _ComposerHasKeyMethod = requires (Composer composer, const std::string_view key, State state) { composer.key(key, state); };
+    template <typename Composer, typename State> concept _ComposerHasStringValMethod = requires (Composer composer, const std::string_view val, State state) { composer.val(val, state); };
     template <typename Composer, typename State> concept _ComposerHasSignedIntegerValMethod = requires (Composer composer, const int64_t val, State state) { composer.val(val, state); };
     template <typename Composer, typename State> concept _ComposerHasUnsignedIntegerValMethod = requires (Composer composer, const uint64_t val, State state) { composer.val(val, state); };
     template <typename Composer, typename State> concept _ComposerHasFloaterValMethod = requires (Composer composer, const double val, State state) { composer.val(val, state); };
@@ -735,7 +715,7 @@ namespace qcon
     template <typename Composer, typename State> concept _ComposerHasNullValMethod = requires (Composer composer, State state) { composer.val(nullptr, state); };
 
     template <typename Composer, typename State>
-    inline DecodeResult decode(const string_view qcon, Composer & composer, State & initialState)
+    inline DecodeResult decode(const std::string_view qcon, Composer & composer, State & initialState)
     {
         // Much more understandable compile errors than just letting the template code fly
         static_assert(_ComposerHasObjectMethod<Composer, State>);
@@ -753,7 +733,7 @@ namespace qcon
     }
 
     template <typename Composer, typename State>
-    inline DecodeResult decode(string_view qcon, Composer & composer, State && initialState)
+    inline DecodeResult decode(std::string_view qcon, Composer & composer, State && initialState)
     {
         return decode(qcon, composer, initialState);
     }

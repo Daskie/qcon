@@ -10,7 +10,6 @@
 
 #include <cstring>
 
-#include <algorithm>
 #include <concepts>
 #include <map>
 #include <memory>
@@ -19,7 +18,6 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <variant>
 
 #include <qcon-decode.hpp>
 #include <qcon-encode.hpp>
@@ -47,9 +45,9 @@ namespace qcon
 
     ///
     /// Convenience type alias
-    /// The internal representation for objects is `std::map<string, qcon::value>`
+    /// The internal representation for objects is `std::map<std::string, qcon::value>`
     ///
-    using Object = std::map<string, Value>;
+    using Object = std::map<std::string, Value>;
 
     ///
     /// Convenience type alias
@@ -126,8 +124,8 @@ namespace qcon
         ///
         Value(Object && val);
         Value(Array && val);
-        Value(string && val);
-        Value(string_view val);
+        Value(std::string && val);
+        Value(std::string_view val);
         Value(const char * val);
         Value(char * val);
         Value(char val);
@@ -161,8 +159,8 @@ namespace qcon
         ///
         Value & operator=(Object && val);
         Value & operator=(Array && val);
-        Value & operator=(string && val);
-        Value & operator=(string_view val);
+        Value & operator=(std::string && val);
+        Value & operator=(std::string_view val);
         Value & operator=(const char * val);
         Value & operator=(char val);
         Value & operator=(int64_t val);
@@ -254,8 +252,8 @@ namespace qcon
         /// @tparam safety whether to check if this value is actually a string
         /// @return this value as a string if it is a string, otherwise null
         ///
-        string * asString();
-        const string * asString() const;
+        std::string * asString();
+        const std::string * asString() const;
 
         ///
         /// @tparam safety whether to check if this value is actually a signed integer
@@ -322,8 +320,8 @@ namespace qcon
         ///
         bool operator==(const Object & val) const;
         bool operator==(const Array & val) const;
-        bool operator==(const string & val) const;
-        bool operator==(string_view val) const;
+        bool operator==(const std::string & val) const;
+        bool operator==(std::string_view val) const;
         bool operator==(const char * val) const;
         bool operator==(char val) const;
         bool operator==(int64_t val) const;
@@ -348,7 +346,7 @@ namespace qcon
             nullptr_t _null{};
             Object * _object;
             Array * _array;
-            string * _string;
+            std::string * _string;
             int64_t _integer;
             uint64_t _unsigner;
             double _floater;
@@ -380,7 +378,7 @@ namespace qcon
     /// @param qcon the QCON string to decode
     /// @return the decoded value of the QCON, or empty if the string is invalid or could otherwise not be parsed
     ///
-    std::optional<Value> decode(string_view qcon);
+    std::optional<Value> decode(std::string_view qcon);
 
     ///
     /// @param val the QCON value to encode
@@ -390,7 +388,7 @@ namespace qcon
     /// @param identifiers whether to encode all eligible keys as identifiers instead of strings
     /// @return an encoded QCON string, or empty if there was an issue encoding the QCON
     ///
-    std::optional<string> encode(const Value & val, Density density = Density::multiline, size_t indentSpaces = 4u, bool singleQuotes = false, bool identifiers = false);
+    std::optional<std::string> encode(const Value & val, Density density = Density::multiline, size_t indentSpaces = 4u, bool singleQuotes = false, bool identifiers = false);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -443,7 +441,7 @@ namespace qcon
             return {innerNode, Container::array};
         }
 
-        void key(const string_view k, State & /*state*/)
+        void key(const std::string_view k, State & /*state*/)
         {
             _key = k;
         }
@@ -474,7 +472,7 @@ namespace qcon
 
       private:
 
-        string _key{};
+        std::string _key{};
     };
 
     inline Encoder & operator<<(Encoder & encoder, const Value & val)
@@ -546,26 +544,26 @@ namespace qcon
         _type{Type::array}
     {}
 
-    inline Value::Value(string && val) :
-        _string{new string{std::move(val)}},
+    inline Value::Value(std::string && val) :
+        _string{new std::string{std::move(val)}},
         _type{Type::string}
     {}
 
-    inline Value::Value(const string_view val) :
-        _string{new string{val}},
+    inline Value::Value(const std::string_view val) :
+        _string{new std::string{val}},
         _type{Type::string}
     {}
 
     inline Value::Value(const char * const val) :
-        Value(string_view{val})
+        Value(std::string_view{val})
     {}
 
     inline Value::Value(char * const val) :
-        Value(string_view{val})
+        Value(std::string_view{val})
     {}
 
     inline Value::Value(const char val) :
-        Value{string_view{&val, 1u}}
+        Value{std::string_view{&val, 1u}}
     {}
 
     inline Value::Value(const int64_t val) :
@@ -656,7 +654,7 @@ namespace qcon
         return *this;
     }
 
-    inline Value & Value::operator=(string && val)
+    inline Value & Value::operator=(std::string && val)
     {
         if (_type == Type::string)
         {
@@ -666,12 +664,12 @@ namespace qcon
         {
             _deleteValue();
             _type = Type::string;
-            _string = new string{std::move(val)};
+            _string = new std::string{std::move(val)};
         }
         return *this;
     }
 
-    inline Value & Value::operator=(const string_view val)
+    inline Value & Value::operator=(const std::string_view val)
     {
         if (_type == Type::string)
         {
@@ -681,19 +679,19 @@ namespace qcon
         {
             _deleteValue();
             _type = Type::string;
-            _string = new string{val};
+            _string = new std::string{val};
         }
         return *this;
     }
 
     inline Value & Value::operator=(const char * const val)
     {
-        return *this = string_view{val};
+        return *this = std::string_view{val};
     }
 
     inline Value & Value::operator=(const char val)
     {
-        return *this = string_view{&val, 1u};
+        return *this = std::string_view{&val, 1u};
     }
 
     inline Value & Value::operator=(const int64_t val)
@@ -815,7 +813,7 @@ namespace qcon
             return isArray();
         }
         // String
-        else if constexpr (std::is_same_v<U, string> || std::is_same_v<U, string_view> || std::is_same_v<U, const char *> || std::is_same_v<U, char *>)
+        else if constexpr (std::is_same_v<U, std::string> || std::is_same_v<U, std::string_view> || std::is_same_v<U, const char *> || std::is_same_v<U, char *>)
         {
             return isString();
         }
@@ -921,12 +919,12 @@ namespace qcon
         return isArray() ? _array : nullptr;
     }
 
-    inline string * Value::asString()
+    inline std::string * Value::asString()
     {
         return isString() ? _string : nullptr;
     }
 
-    inline const string * Value::asString() const
+    inline const std::string * Value::asString() const
     {
         return isString() ? _string : nullptr;
     }
@@ -986,7 +984,7 @@ namespace qcon
         static_assert(!std::is_same_v<U, char *>, "Mutable char pointer may not be accessed by const function. Use `qcon::Value::asString` or `qcon::Value::to<const char *>` instead");
 
         // String
-        if constexpr (std::is_same_v<U, string> || std::is_same_v<U, string_view>)
+        if constexpr (std::is_same_v<U, std::string> || std::is_same_v<U, std::string_view>)
         {
             if (isString())
             {
@@ -1096,24 +1094,24 @@ namespace qcon
         return _type == Type::array && *_array == val;
     }
 
-    inline bool Value::operator==(const string & val) const
+    inline bool Value::operator==(const std::string & val) const
     {
-        return *this == string_view{val};
+        return *this == std::string_view{val};
     }
 
-    inline bool Value::operator==(const string_view val) const
+    inline bool Value::operator==(const std::string_view val) const
     {
         return _type == Type::string && *_string == val;
     }
 
     inline bool Value::operator==(const char * const val) const
     {
-        return *this == string_view{val};
+        return *this == std::string_view{val};
     }
 
     inline bool Value::operator==(const char val) const
     {
-        return *this == string_view{&val, 1u};
+        return *this == std::string_view{&val, 1u};
     }
 
     inline bool Value::operator==(const int64_t val) const
@@ -1238,7 +1236,7 @@ namespace qcon
         return arr;
     }
 
-    inline std::optional<Value> decode(const string_view qcon)
+    inline std::optional<Value> decode(const std::string_view qcon)
     {
         Value root{};
         _Composer::State rootState{&root, Container::none};
@@ -1253,7 +1251,7 @@ namespace qcon
         }
     }
 
-    inline std::optional<string> encode(const Value & val, const Density density, size_t indentSpaces, bool singleQuotes, bool identifiers)
+    inline std::optional<std::string> encode(const Value & val, const Density density, size_t indentSpaces, bool singleQuotes, bool identifiers)
     {
         Encoder encoder{density, indentSpaces, singleQuotes, identifiers};
         encoder << val;

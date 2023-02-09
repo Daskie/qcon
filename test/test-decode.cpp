@@ -13,7 +13,6 @@ using namespace std::string_view_literals;
 
 using qcon::decode;
 using qcon::DecodeResult;
-using qcon::Container;
 
 static qcon::DummyComposer dummyComposer{};
 
