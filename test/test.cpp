@@ -2,22 +2,22 @@
 
 #include <gtest/gtest.h>
 
-#include <qc-json.hpp>
+#include <qcon.hpp>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-using qc::json::Value;
-using qc::json::Object;
-using qc::json::Array;
-using qc::json::decode;
-using qc::json::encode;
-using qc::json::Type;
-using namespace qc::json::tokens;
-using qc::json::Density;
+using qcon::Value;
+using qcon::Object;
+using qcon::Array;
+using qcon::decode;
+using qcon::encode;
+using qcon::Type;
+using namespace qcon::tokens;
+using qcon::Density;
 
-using qc::json::makeObject;
-using qc::json::makeArray;
+using qcon::makeObject;
+using qcon::makeArray;
 
 struct CustomVal { int x, y; };
 
@@ -27,7 +27,7 @@ bool operator==(const CustomVal & cv1, const CustomVal & cv2)
 }
 
 template <>
-struct qc::json::ValueTo<CustomVal>
+struct qcon::ValueTo<CustomVal>
 {
     std::optional<CustomVal> operator()(const Value & val) const
     {
@@ -46,7 +46,7 @@ struct qc::json::ValueTo<CustomVal>
 };
 
 template <>
-struct qc::json::ValueFrom<CustomVal>
+struct qcon::ValueFrom<CustomVal>
 {
     Value operator()(const CustomVal & v) const
     {
@@ -54,7 +54,7 @@ struct qc::json::ValueFrom<CustomVal>
     }
 };
 
-TEST(json, encodeDecodeString)
+TEST(qcon, encodeDecodeString)
 {
     { // Empty
         const std::string_view val{""sv};
@@ -103,7 +103,7 @@ TEST(json, encodeDecodeString)
     }
 }
 
-TEST(json, encodeDecodeSignedInteger)
+TEST(qcon, encodeDecodeSignedInteger)
 {
     { // Zero
         int val{0};
@@ -197,7 +197,7 @@ TEST(json, encodeDecodeSignedInteger)
     }
 }
 
-TEST(json, encodeDecodeUnsignedInteger)
+TEST(qcon, encodeDecodeUnsignedInteger)
 {
     { // Zero
         unsigned int val{0u};
@@ -255,7 +255,7 @@ TEST(json, encodeDecodeUnsignedInteger)
     }
 }
 
-TEST(json, encodeDecodeFloater)
+TEST(qcon, encodeDecodeFloater)
 {
     uint64_t val64;
     uint32_t val32;
@@ -378,7 +378,7 @@ TEST(json, encodeDecodeFloater)
     }
 }
 
-TEST(json, encodeDecodeBoolean)
+TEST(qcon, encodeDecodeBoolean)
 {
     { // true
         const std::optional<std::string> encoded{encode(true)};
@@ -398,7 +398,7 @@ TEST(json, encodeDecodeBoolean)
     }
 }
 
-TEST(json, encodeDecodeNull)
+TEST(qcon, encodeDecodeNull)
 {
     const std::optional<std::string> encoded{encode(nullptr)};
     ASSERT_TRUE(encoded);
@@ -407,7 +407,7 @@ TEST(json, encodeDecodeNull)
     ASSERT_TRUE(decoded->isNull());
 }
 
-TEST(json, encodeDecodeCustom)
+TEST(qcon, encodeDecodeCustom)
 {
     CustomVal val{1, 2};
     const std::optional<std::string> encoded{encode(val)};
@@ -419,7 +419,7 @@ TEST(json, encodeDecodeCustom)
     ASSERT_EQ(val, *decodedVal);
 }
 
-TEST(json, valueToFromCustom)
+TEST(qcon, valueToFromCustom)
 {
     CustomVal c{1, 2};
 
@@ -449,7 +449,7 @@ TEST(json, valueToFromCustom)
     ASSERT_EQ(c, cVal);
 }
 
-TEST(json, valueConstruction)
+TEST(qcon, valueConstruction)
 {
     // Default
     ASSERT_EQ(Type::null, Value().type());
@@ -480,7 +480,7 @@ TEST(json, valueConstruction)
     ASSERT_EQ(Type::null, Value(nullptr).type());
 }
 
-TEST(json, valueMove)
+TEST(qcon, valueMove)
 {
     Value v1("abc"sv);
     ASSERT_TRUE(v1.isString());
@@ -497,7 +497,7 @@ TEST(json, valueMove)
     ASSERT_EQ("abc"sv, *v1.asString());
 }
 
-TEST(json, valueAssignAndEquality)
+TEST(qcon, valueAssignAndEquality)
 {
     Value v{};
 
@@ -599,7 +599,7 @@ TEST(json, valueAssignAndEquality)
     ASSERT_FALSE(v != nullptr);
 }
 
-TEST(json, swap)
+TEST(qcon, swap)
 {
     const Array arrRef{makeArray(0, "a", true)};
     Value v1{makeArray(0, "a", true)};
@@ -619,7 +619,7 @@ TEST(json, swap)
     ASSERT_EQ(arrRef, v2);
 }
 
-TEST(json, valueTypes)
+TEST(qcon, valueTypes)
 {
     { // Object
         Value v(Object{}, Density::uniline);
@@ -742,7 +742,7 @@ void testNumber(T v, bool isS64, bool isS32, bool isS16, bool isS08, bool isU64,
     if (isF32) ASSERT_EQ(   float(v), *val.get<   float>()); else ASSERT_FALSE(val.get<   float>());
 }
 
-TEST(json, valueNumbers)
+TEST(qcon, valueNumbers)
 {
     // Zero, given as signed integer
     testNumber(0, true, true, true, true, true, true, true, true, true, true);
@@ -820,7 +820,7 @@ TEST(json, valueNumbers)
     testNumber(123.4, false, false, false, false, false, false, false, false, true, true);
 }
 
-TEST(json, wrongValueType)
+TEST(qcon, wrongValueType)
 {
     // Safe
     ASSERT_FALSE((Value().asObject()));
@@ -848,7 +848,7 @@ TEST(json, wrongValueType)
     ASSERT_FALSE((Value(1).get<nullptr_t>()));
 }
 
-TEST(json, density)
+TEST(qcon, density)
 {
     ASSERT_EQ(R"([
     1,
@@ -859,7 +859,7 @@ TEST(json, density)
     ASSERT_EQ("[1,2,3]"s, encode(makeArray(1, 2, 3), Density::nospace));
 }
 
-TEST(json, makeObject)
+TEST(qcon, makeObject)
 {
     { // Generic
         Object obj1{makeObject("a", 1, "b"s, 2.0, "c"sv, true)};
@@ -892,7 +892,7 @@ TEST(json, makeObject)
     }
 }
 
-TEST(json, makeArray)
+TEST(qcon, makeArray)
 {
     { // Generic
         Array arr1{makeArray(1, 2.0, true)};
@@ -928,12 +928,12 @@ TEST(json, makeArray)
     }
 }
 
-TEST(json, comments)
+TEST(qcon, comments)
 {
     { // Encode object
-        Value json{makeObject("a", 1, "b", 2, "c", 3)};
-        json.setComment("Yada yada");
-        Object & obj{*json.asObject()};
+        Value qcon{makeObject("a", 1, "b", 2, "c", 3)};
+        qcon.setComment("Yada yada");
+        Object & obj{*qcon.asObject()};
         obj.at("a").setComment("How fascinating...");
         obj.at("c").setComment("Wow,\nso\n  incredible");
         ASSERT_EQ(R"(// Yada yada
@@ -945,18 +945,18 @@ TEST(json, comments)
     // so
     //   incredible
     "c": 3
-})"s, qc::json::encode(json, Density::multiline));
+})"s, qcon::encode(qcon, Density::multiline));
         ASSERT_EQ(R"(/* Yada yada */ { /* How fascinating... */ "a": 1, "b": 2, /* Wow,
 so
-  incredible */ "c": 3 })"s, qc::json::encode(json, Density::uniline));
+  incredible */ "c": 3 })"s, qcon::encode(qcon, Density::uniline));
         ASSERT_EQ(R"(/*Yada yada*/{/*How fascinating...*/"a":1,"b":2,/*Wow,
 so
-  incredible*/"c":3})"s, qc::json::encode(json, Density::nospace));
+  incredible*/"c":3})"s, qcon::encode(qcon, Density::nospace));
     }
     { // Encode array
-        Value json{makeArray(1, 2, 3)};
-        json.setComment("Yada yada");
-        Array & arr{*json.asArray()};
+        Value qcon{makeArray(1, 2, 3)};
+        qcon.setComment("Yada yada");
+        Array & arr{*qcon.asArray()};
         arr[0].setComment("How fascinating...");
         arr[2].setComment("Wow,\nso\n  incredible");
         ASSERT_EQ(R"(// Yada yada
@@ -968,16 +968,16 @@ so
     // so
     //   incredible
     3
-])"s, qc::json::encode(json, Density::multiline));
+])"s, qcon::encode(qcon, Density::multiline));
         ASSERT_EQ(R"(/* Yada yada */ [ /* How fascinating... */ 1, 2, /* Wow,
 so
-  incredible */ 3 ])"s, qc::json::encode(json, Density::uniline));
+  incredible */ 3 ])"s, qcon::encode(qcon, Density::uniline));
         ASSERT_EQ(R"(/*Yada yada*/[/*How fascinating...*/1,2,/*Wow,
 so
-  incredible*/3])"s, qc::json::encode(json, Density::nospace));
+  incredible*/3])"s, qcon::encode(qcon, Density::nospace));
     }
     { // Decode
-        const Value json{*decode(R"(// AAAAA
+        const Value qcon{*decode(R"(// AAAAA
 // BBBBB
 /* CCCCC */
 [
@@ -987,8 +987,8 @@ so
     { /* KKKKK */ /* LLLLL */ "k1": /* MMMMM */ "v1", /* NNNNN */ /* OOOOO */ "k2": "v2" /* PPPPP */ } // QQQQQ
     /* RRRRR */
 ] // SSSSS)"sv)};
-        ASSERT_EQ("CCCCC", *json.comment());
-        const Array & rootArr{*json.asArray()};
+        ASSERT_EQ("CCCCC", *qcon.comment());
+        const Array & rootArr{*qcon.asArray()};
         ASSERT_EQ(2u, rootArr.size());
         ASSERT_EQ("EEEEE", *rootArr.at(0).comment());
         const Array & innerArr{*rootArr.at(0).asArray()};
@@ -1003,7 +1003,7 @@ so
     }
 }
 
-TEST(json, encoderOptions)
+TEST(qcon, encoderOptions)
 {
     ASSERT_EQ(R"({
   k: [
@@ -1012,7 +1012,7 @@ TEST(json, encoderOptions)
 })", encode(makeObject("k", makeArray("v")), Density::multiline, 2u, true, true));
 }
 
-TEST(json, numberEquality)
+TEST(qcon, numberEquality)
 {
     { // Signed integer
         Value val{10};
@@ -1123,9 +1123,9 @@ TEST(json, numberEquality)
     }
 }
 
-TEST(json, general)
+TEST(qcon, general)
 {
-    std::string json(R"(// Third quarter summary document
+    std::string qcon(R"(// Third quarter summary document
 // Protected information, do not propagate!
 {
     "Dishes": [
@@ -1163,5 +1163,5 @@ TEST(json, general)
     // Pay no heed
     "Profit Margin": null
 })"s);
-    ASSERT_EQ(json, encode(*decode(json)));
+    ASSERT_EQ(qcon, encode(*decode(qcon)));
 }

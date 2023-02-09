@@ -6,17 +6,17 @@
 
 #include <gtest/gtest.h>
 
-#include <qc-json-decode.hpp>
+#include <qcon-decode.hpp>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-using qc::json::decode;
-using qc::json::DecodeResult;
-using qc::json::Density;
-using qc::json::Container;
+using qcon::decode;
+using qcon::DecodeResult;
+using qcon::Density;
+using qcon::Container;
 
-static qc::json::DummyComposer dummyComposer{};
+static qcon::DummyComposer dummyComposer{};
 
 class ExpectantComposer
 {

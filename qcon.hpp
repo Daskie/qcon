@@ -1,18 +1,10 @@
 #pragma once
 
 ///
-/// QC JSON 2.0.2
-///
-/// Quick and clean JSON5 header library for C++20
-///
-/// Austin Quick : 2019 - 2023
-///
-/// https://github.com/daskie/qc-json
-///
-/// This header provides a DOM interface for encoding and decoding JSON5
-///
-/// Uses `qc-json-encode.hpp` to do the encoding and `qc-json-decode.hpp` to do the decoding
-///
+/// QCON 0.0.0
+/// https://github.com/daskie/qcon
+/// This header provides a DOM encoder and decoder
+/// Uses `qcon-encode.hpp` to do the encoding and `qcon-decode.hpp` to do the decoding
 /// See the README for more info and examples!
 ///
 
@@ -29,10 +21,10 @@
 #include <utility>
 #include <variant>
 
-#include <qc-json-decode.hpp>
-#include <qc-json-encode.hpp>
+#include <qcon-decode.hpp>
+#include <qcon-encode.hpp>
 
-namespace qc::json
+namespace qcon
 {
     ///
     /// Required for low-order bit packing
@@ -40,7 +32,7 @@ namespace qc::json
     static_assert(__STDCPP_DEFAULT_NEW_ALIGNMENT__ >= 8);
 
     ///
-    /// The type of the JSON value
+    /// The type of the QCON value
     ///
     enum class Type : uint8_t
     {
@@ -60,40 +52,40 @@ namespace qc::json
 
     ///
     /// Convenience type alias
-    /// The internal representation for objects is `std::map<string, qc::json::value>`
+    /// The internal representation for objects is `std::map<string, qcon::value>`
     ///
     using Object = std::map<string, Value>;
 
     ///
     /// Convenience type alias
-    /// The internal representation for arrays is `std::vector<qc::json::Value>`
+    /// The internal representation for arrays is `std::vector<qcon::Value>`
     ///
     using Array = std::vector<Value>;
 
     ///
-    /// Specialize `qc::json::ValueFrom` to enable `Value` construction from custom types
+    /// Specialize `qcon::ValueFrom` to enable `Value` construction from custom types
     /// Example:
     ///     template <>
-    ///     struct qc::json::ValueFrom<std::pair<int, int>> {
-    ///         qc::json::Value operator()(const std::pair<int, int> & v) const {
-    ///             return qc::json::makeArray(v.first, f.second);
+    ///     struct qcon::ValueFrom<std::pair<int, int>> {
+    ///         qcon::Value operator()(const std::pair<int, int> & v) const {
+    ///             return qcon::makeArray(v.first, f.second);
     ///         }
     ///     };
     ///
     template <typename T> struct ValueFrom;
 
     ///
-    /// Concept describing a type for which `qc::json::ValueFrom` has been specialized
+    /// Concept describing a type for which `qcon::ValueFrom` has been specialized
     ///
-    template <typename T> concept ValueFromAble = requires (T v) { { ::qc::json::ValueFrom<T>{}(v) } -> std::same_as<Value>; };
+    template <typename T> concept ValueFromAble = requires (T v) { { ::qcon::ValueFrom<T>{}(v) } -> std::same_as<Value>; };
 
     ///
-    /// Specialize `qc::json::ValueTo` to enable `Value::as` for custom types
+    /// Specialize `qcon::ValueTo` to enable `Value::as` for custom types
     /// Example:
     ///     template <>
-    ///     struct qc::json::ValueTo<std::pair<int, int>> {
-    ///         std::optional<std::pair<int, int>> operator()(const qc::json::Value & v) const {
-    ///             const qc::json::Array * const arr{v.asArray()};
+    ///     struct qcon::ValueTo<std::pair<int, int>> {
+    ///         std::optional<std::pair<int, int>> operator()(const qcon::Value & v) const {
+    ///             const qcon::Array * const arr{v.asArray()};
     ///             if (arr && arr->size() == 2u)
     ///             {
     ///                 const std::optional<int> v1{(*arr)[0].get<int>()};
@@ -110,12 +102,12 @@ namespace qc::json
     template <typename T> struct ValueTo;
 
     ///
-    /// Concept describing a type for which `qc::json::ValueTo` has been specialized
+    /// Concept describing a type for which `qcon::ValueTo` has been specialized
     ///
-    template <typename T> concept ValueToAble = requires (Value v) { { ::qc::json::ValueTo<T>{}(v) } -> std::same_as<std::optional<T>>; };
+    template <typename T> concept ValueToAble = requires (Value v) { { ::qcon::ValueTo<T>{}(v) } -> std::same_as<std::optional<T>>; };
 
     ///
-    /// Represents one JSON value, which can be an object, array, string, number, boolean, or null
+    /// Represents one QCON value, which can be an object, array, string, number, boolean, or null
     ///
     class Value
     {
@@ -124,7 +116,7 @@ namespace qc::json
         ///
         /// Specialization of the encoder's `operator<<` for `Value`
         /// @param encoder the encoder
-        /// @param val the JSON value to encode
+        /// @param val the QCON value to encode
         /// @return `encoder`
         ///
         friend Encoder & operator<<(Encoder & encoder, const Value & val);
@@ -157,7 +149,7 @@ namespace qc::json
         Value(bool val);
 
         ///
-        /// Attempts to construct a value from a custom type `T` using a specialized `qc::json::ValueFrom` function,
+        /// Attempts to construct a value from a custom type `T` using a specialized `qcon::ValueFrom` function,
         /// details of which can be found below
         /// @tparam T the custom type
         /// @param val the custom type value
@@ -168,7 +160,7 @@ namespace qc::json
         Value(Value && other);
 
         ///
-        /// Assigns a new value to the json value
+        /// Assigns a new value to the qcon value
         /// @param val
         /// @return this
         ///
@@ -334,7 +326,7 @@ namespace qc::json
         ///   ...and the value is not an integer, it may only be accessed as a floater (`double`, `float`)
         /// If `T` is `bool`, this call is equivalent to `asBoolean` by value
         /// If `T` is `nullptr_t` simply returns `nullptr`
-        /// If `T` is an unrecognized type, then we attempt to use the specialized `qc::json::ValueTo` struct, details
+        /// If `T` is an unrecognized type, then we attempt to use the specialized `qcon::ValueTo` struct, details
         ///   of which can be found below
         ///
         template <typename T> std::optional<T> get() const;
@@ -427,7 +419,7 @@ namespace qc::json
     ///
     /// Efficiently creates an object from the given key and value arguments
     /// @param key the first key, forwarded to `std::string` constructor
-    /// @param val the first value, forwarded to `qc::json::Value` constructor
+    /// @param val the first value, forwarded to `qcon::Value` constructor
     /// @param more any number of additional key and value arguments
     /// @return the created object
     ///
@@ -436,31 +428,31 @@ namespace qc::json
 
     ///
     /// Efficiently creates an array from the given value arguments
-    /// @param vals the values, each forwarded to `qc::json::Value` constructor
+    /// @param vals the values, each forwarded to `qcon::Value` constructor
     /// @return the created array
     ///
     template <typename... Vs> Array makeArray(Vs &&... vals);
 
     ///
-    /// @param json the JSON string to decode
-    /// @return the decoded value of the JSON, or empty if the string is invalid or could otherwise not be parsed
+    /// @param qcon the QCON string to decode
+    /// @return the decoded value of the QCON, or empty if the string is invalid or could otherwise not be parsed
     ///
-    std::optional<Value> decode(string_view json);
+    std::optional<Value> decode(string_view qcon);
 
     ///
-    /// @param val the JSON value to encode
-    /// @param density the base density of the encoded JSON string
+    /// @param val the QCON value to encode
+    /// @param density the base density of the encoded QCON string
     /// @param indentSpaces the number of spaces to insert per level of indentation
     /// @param singleQuotes whether to use `'` instead of `"` for strings
     /// @param identifiers whether to encode all eligible keys as identifiers instead of strings
-    /// @return an encoded JSON string, or empty if there was an issue encoding the JSON
+    /// @return an encoded QCON string, or empty if there was an issue encoding the QCON
     ///
     std::optional<string> encode(const Value & val, Density density = Density::multiline, size_t indentSpaces = 4u, bool singleQuotes = false, bool identifiers = false);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-namespace qc::json
+namespace qcon
 {
     class _Composer
     {
@@ -725,7 +717,7 @@ namespace qc::json
 
     template <ValueFromAble T>
     inline Value::Value(const T & val) :
-        Value{::qc::json::ValueFrom<T>{}(val)}
+        Value{::qcon::ValueFrom<T>{}(val)}
     {}
 
     inline Value::Value(Value && other) :
@@ -1159,14 +1151,14 @@ namespace qc::json
     {
         using U = std::decay_t<T>;
 
-        // Type must not be `qc::json::Object`
-        static_assert(!std::is_same_v<U, Object>, "This function would have to make a copy of the object, use `qc::json::Value::asObject` instead");
+        // Type must not be `qcon::Object`
+        static_assert(!std::is_same_v<U, Object>, "This function would have to make a copy of the object, use `qcon::Value::asObject` instead");
 
-        // Type must not be `qc::json::Array`
-        static_assert(!std::is_same_v<U, Array>, "This function would have to make a copy of the array. Use `qc::json::Value::asArray` instead");
+        // Type must not be `qcon::Array`
+        static_assert(!std::is_same_v<U, Array>, "This function would have to make a copy of the array. Use `qcon::Value::asArray` instead");
 
         // Type must not be `char *`
-        static_assert(!std::is_same_v<U, char *>, "Mutable char pointer may not be accessed by const function. Use `qc::json::Value::asString` or `qc::json::Value::to<const char *>` instead");
+        static_assert(!std::is_same_v<U, char *>, "Mutable char pointer may not be accessed by const function. Use `qcon::Value::asString` or `qcon::Value::to<const char *>` instead");
 
         // String
         if constexpr (std::is_same_v<U, string> || std::is_same_v<U, string_view>)
@@ -1248,8 +1240,8 @@ namespace qc::json
         // Other
         else
         {
-            static_assert(ValueToAble<T>, "Must specialize `qc::json::ValueTo` to convert to custom type");
-            return ::qc::json::ValueTo<U>{}(*this);
+            static_assert(ValueToAble<T>, "Must specialize `qcon::ValueTo` to convert to custom type");
+            return ::qcon::ValueTo<U>{}(*this);
         }
     }
 
@@ -1508,12 +1500,12 @@ namespace qc::json
         return arr;
     }
 
-    inline std::optional<Value> decode(const string_view json)
+    inline std::optional<Value> decode(const string_view qcon)
     {
         Value root{};
         _Composer::State rootState{&root, Container::none};
         _Composer composer{};
-        if (decode(json, composer, rootState).success)
+        if (decode(qcon, composer, rootState).success)
         {
             return root;
         }

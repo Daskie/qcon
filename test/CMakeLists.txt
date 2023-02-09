@@ -1,28 +1,28 @@
 find_package(GTest CONFIG REQUIRED)
 
 qc_setup_target(
-    qc-json-test
+    qcon-test
     EXECUTABLE
     SOURCE_FILES
-        test-json.cpp
+        test.cpp
     PRIVATE_LINKS
-        qc-json
+        qcon
         GTest::gtest_main)
 
 qc_setup_target(
-    qc-json-decode-test
+    qcon-decode-test
     EXECUTABLE
     SOURCE_FILES
         test-decode.cpp
     PRIVATE_LINKS
-        qc-json
+        qcon
         GTest::gtest_main)
 
 qc_setup_target(
-    qc-json-encode-test
+    qcon-encode-test
     EXECUTABLE
     SOURCE_FILES
         test-encode.cpp
     PRIVATE_LINKS
-        qc-json
+        qcon
         GTest::gtest_main)

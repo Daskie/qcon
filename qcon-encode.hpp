@@ -1,16 +1,9 @@
 #pragma once
 
 ///
-/// QC JSON 2.0.2
-///
-/// Quick and clean JSON5 header library for C++20
-///
-/// Austin Quick : 2019 - 2023
-///
-/// https://github.com/daskie/qc-json
-///
-/// This standalone header provides a SAX interface for encoding JSON5
-///
+/// QCON 0.0.0
+/// https://github.com/daskie/qcon
+/// This standalone header provides a SAX encoder
 /// See the README for more info and examples!
 ///
 
@@ -24,10 +17,10 @@
 #include <utility>
 #include <vector>
 
-#ifndef QC_JSON_COMMON
-#define QC_JSON_COMMON
+#ifndef QCON_COMMON
+#define QCON_COMMON
 
-namespace qc::json
+namespace qcon
 {
     using std::string;
     using std::string_view;
@@ -37,7 +30,7 @@ namespace qc::json
     using uchar = unsigned char;
 
     ///
-    /// Simple enum representing a json container type
+    /// Simple enum representing a qcon container type
     ///
     enum class Container : int8_t
     {
@@ -58,9 +51,9 @@ namespace qc::json
     };
 }
 
-#endif // QC_JSON_COMMON
+#endif // QCON_COMMON
 
-namespace qc::json
+namespace qcon
 {
     // This weird struct/operator()/variable setup allows for both ` << object ` and ` << object(density) `
     struct _ObjectToken { Density density{Density::unspecified}; constexpr _ObjectToken operator()(Density density_) const { return _ObjectToken{density_}; } };
@@ -77,7 +70,7 @@ namespace qc::json
     struct _CommentToken { string_view comment{}; };
 
     ///
-    /// Namespace provided to allow the user to `using namespace qc::json::tokens` to avoid the verbosity of fully
+    /// Namespace provided to allow the user to `using namespace qcon::tokens` to avoid the verbosity of fully
     /// qualifying the tokens namespace
     ///
     inline namespace tokens
@@ -120,7 +113,7 @@ namespace qc::json
         ///
         /// Construct a new `Encoder` with the given options
         ///
-        /// @param density the starting density for the JSON
+        /// @param density the starting density for the QCON
         /// @param indentSpaces the number of spaces to insert per level of indentation
         /// @param singleQuotes whether to use `'` instead of `"` for strings
         /// @param identifiers whether to encode all eligible keys as identifiers instead of strings
@@ -202,7 +195,7 @@ namespace qc::json
         void operator<<(Density) = delete;
 
         ///
-        /// Encode a value into the JSON
+        /// Encode a value into the QCON
         ///
         /// @param v the value to encode
         /// @return this
@@ -236,10 +229,10 @@ namespace qc::json
         void reset();
 
         ///
-        /// Collapses the internal string stream into the encoded JSON string. This function resets the internal state
+        /// Collapses the internal string stream into the encoded QCON string. This function resets the internal state
         /// of the encoder to a "clean slate" such that it can be safely reused
         ///
-        /// @return the encoded JSON string
+        /// @return the encoded QCON string
         ///
         [[nodiscard]] std::optional<string> finish();
 
@@ -304,10 +297,10 @@ namespace qc::json
 }
 
 ///
-/// Specialize `qc::json::Encoder & operator<<(qc::json::Encoder &, const Custom &)` to enable encoding for `Custom` type
+/// Specialize `qcon::Encoder & operator<<(qcon::Encoder &, const Custom &)` to enable encoding for `Custom` type
 ///
 /// Example:
-///     qc::json::Encoder & operator<<(qc::json::Encoder & encoder, const std::pair<int, int> & v)
+///     qcon::Encoder & operator<<(qcon::Encoder & encoder, const std::pair<int, int> & v)
 ///     {
 ///         return encoder << array << v.first << v.second << end;
 ///     }
@@ -315,7 +308,7 @@ namespace qc::json
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-namespace qc::json
+namespace qcon
 {
     inline Encoder::Encoder(const Density density, const size_t indentSpaces, bool singleQuotes, bool preferIdentifiers) :
         _baseDensity{density},
@@ -629,7 +622,7 @@ namespace qc::json
 
     inline std::optional<string> Encoder::finish()
     {
-        // JSON is not yet complete
+        // QCON is not yet complete
         if (_container != Container::none || !_isContent)
         {
             _status = false;
@@ -653,7 +646,7 @@ namespace qc::json
         {
             return;
         }
-        // Cannot add to complete JSON
+        // Cannot add to complete QCON
         if (_container == Container::none && _isContent)
         {
             _status = false;
@@ -687,7 +680,7 @@ namespace qc::json
         {
             return;
         }
-        // Cannot add to complete JSON
+        // Cannot add to complete QCON
         if (_container == Container::none && _isContent)
         {
             _status = false;

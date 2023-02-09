@@ -2,14 +2,14 @@
 
 #include <gtest/gtest.h>
 
-#include <qc-json-encode.hpp>
+#include <qcon-encode.hpp>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-using qc::json::Encoder;
-using namespace qc::json::tokens;
-using qc::json::Density;
+using qcon::Encoder;
+using namespace qcon::tokens;
+using qcon::Density;
 
 struct CustomVal { int x, y; };
 

@@ -1,16 +1,9 @@
 #pragma once
 
 ///
-/// QC JSON 2.0.2
-///
-/// Quick and clean JSON5 header library for C++20
-///
-/// Austin Quick : 2019 - 2023
-///
-/// https://github.com/daskie/qc-json
-///
-/// This standalone header provides a SAX interface for decoding JSON5
-///
+/// QCON 0.0.0
+/// https://github.com/daskie/qcon
+/// This standalone header provides a SAX decoder
 /// See the README for more info and examples!
 ///
 
@@ -24,10 +17,10 @@
 #include <system_error>
 #include <utility>
 
-#ifndef QC_JSON_COMMON
-#define QC_JSON_COMMON
+#ifndef QCON_COMMON
+#define QCON_COMMON
 
-namespace qc::json
+namespace qcon
 {
     using std::string;
     using std::string_view;
@@ -37,7 +30,7 @@ namespace qc::json
     using uchar = unsigned char;
 
     ///
-    /// Simple enum representing a json container type
+    /// Simple enum representing a qcon container type
     ///
     enum class Container : int8_t
     {
@@ -58,9 +51,9 @@ namespace qc::json
     };
 }
 
-#endif // QC_JSON_COMMON
+#endif // QCON_COMMON
 
-namespace qc::json
+namespace qcon
 {
     struct DecodeResult
     {
@@ -70,7 +63,7 @@ namespace qc::json
     };
 
     ///
-    /// Decodes the JSON string
+    /// Decodes the QCON string
     ///
     /// A note on numbers:
     ///
@@ -79,12 +72,12 @@ namespace qc::json
     /// - `uint64_t` if the number is a positive integer, can fit in a `uint64_t`, but cannot fit in a `int64_t`
     /// - `double` if the number has a non-zero fractional component, has an exponent, or is an integer that is too large to fit in a `int64_t` or `uint64_t`
     ///
-    /// @param json the string to decode
-    /// @param composer the contents of the JSON are decoded in order and passed to this to do something with
+    /// @param qcon the string to decode
+    /// @param composer the contents of the QCON are decoded in order and passed to this to do something with
     /// @param initialState the initial state object to be passed to the composer
     ///
-    template <typename Composer, typename State> [[nodiscard]] DecodeResult decode(string_view json, Composer & composer, State & initialState);
-    template <typename Composer, typename State> [[nodiscard]] DecodeResult decode(string_view json, Composer & composer, State && initialState);
+    template <typename Composer, typename State> [[nodiscard]] DecodeResult decode(string_view qcon, Composer & composer, State & initialState);
+    template <typename Composer, typename State> [[nodiscard]] DecodeResult decode(string_view qcon, Composer & composer, State && initialState);
 
     ///
     /// An example composer whose operations are all no-ops
@@ -112,7 +105,7 @@ namespace qc::json
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-namespace qc::json
+namespace qcon
 {
     inline Density & operator&=(Density & d1, const Density d2)
     {
@@ -254,7 +247,7 @@ namespace qc::json
             bool isContinuation{false};
             Density density{Density::nospace};
 
-            // This comment ended with a newline (as opposed to the end of the json)
+            // This comment ended with a newline (as opposed to the end of the qcon)
             if (_pos < _end)
             {
                 // Skip newline
@@ -1015,7 +1008,7 @@ namespace qc::json
     template <typename Composer, typename State> concept _ComposerHasCommentMethod = requires (Composer composer, const string_view comment, State state) { composer.comment(comment, state); };
 
     template <typename Composer, typename State>
-    inline DecodeResult decode(const string_view json, Composer & composer, State & initialState)
+    inline DecodeResult decode(const string_view qcon, Composer & composer, State & initialState)
     {
         // Much more understandable compile errors than just letting the template code fly
         static_assert(_ComposerHasObjectMethod<Composer, State>);
@@ -1030,12 +1023,12 @@ namespace qc::json
         static_assert(_ComposerHasNullValMethod<Composer, State>);
         static_assert(_ComposerHasCommentMethod<Composer, State>);
 
-        return _Decoder<Composer, State>{json, composer}(initialState);
+        return _Decoder<Composer, State>{qcon, composer}(initialState);
     }
 
     template <typename Composer, typename State>
-    inline DecodeResult decode(string_view json, Composer & composer, State && initialState)
+    inline DecodeResult decode(string_view qcon, Composer & composer, State && initialState)
     {
-        return decode(json, composer, initialState);
+        return decode(qcon, composer, initialState);
     }
 }
