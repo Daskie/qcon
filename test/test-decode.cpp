@@ -137,6 +137,12 @@ TEST(decode, object)
     { // No colon after key
         ASSERT_FALSE(decode(R"({ "a" 0 })", dummyComposer, nullptr).success);
     }
+    { // Key with single quotes
+        ASSERT_FALSE(decode(R"({ 'a': 0 })", dummyComposer, nullptr).success);
+    }
+    { // Key without quotes
+        ASSERT_FALSE(decode(R"({ a: 0 })", dummyComposer, nullptr).success);
+    }
     { // Missing value
         ASSERT_FALSE(decode(R"({ "a": })", dummyComposer, nullptr).success);
     }
@@ -333,20 +339,8 @@ TEST(decode, string)
         decode("\"\\\r\n\\\n\\\r\n\"", composer, nullptr);
         ASSERT_TRUE(composer.isDone());
     }
-    { // Single/double quotes
-        ExpectantComposer composer{};
-        composer.expectString(R"(a'b"c)");
-        decode(R"('a\'b"c')", composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectString(R"(a'b"c)");
-        decode(R"("a'b\"c")", composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey(R"(""")").expectString(R"(''')").expectEnd();
-        decode(R"({ '"""': "'''" })", composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey(R"(''')").expectString(R"(""")").expectEnd();
-        decode(R"({ '\'\'\'': "\"\"\"" })", composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
+    { // Single quotes
+        ASSERT_FALSE(decode(R"('abc')", dummyComposer, nullptr).success);
     }
 }
 
@@ -915,60 +909,6 @@ TEST(decode, trailingComma)
     }
 }
 
-TEST(decode, identifiers)
-{
-    { // Valid
-        ExpectantComposer composer{};
-        composer.expectObject().expectKey("a"sv).expectSignedInteger(0).expectEnd();
-        decode(R"({a:0})"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("0"sv).expectSignedInteger(0).expectEnd();
-        decode(R"({0:0})"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("_"sv).expectSignedInteger(0).expectEnd();
-        decode(R"({_:0})"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("_"sv).expectSignedInteger(0).expectEnd();
-        decode(R"({ _ : 0 })"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("___"sv).expectSignedInteger(0).expectEnd();
-        decode(R"({ ___ : 0 })"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-    }
-    { // Multiple elements
-        ExpectantComposer composer{};
-        composer.expectObject().expectKey("a"sv).expectSignedInteger(0).expectKey("b"sv).expectSignedInteger(1).expectEnd();
-        decode(R"({ a: 0, b: 1 })"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("a"sv).expectSignedInteger(0).expectKey("b"sv).expectSignedInteger(1).expectEnd();
-        decode(R"({ "a": 0, b: 1 })"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("a"sv).expectSignedInteger(0).expectKey("b"sv).expectSignedInteger(1).expectEnd();
-        decode(R"({ a: 0, "b": 1 })"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-    }
-    { // All valid characters
-        ExpectantComposer composer{};
-        composer.expectObject().expectKey("_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"sv).expectSignedInteger(0).expectEnd();
-        decode(R"({_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz:0})"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-    }
-    { // All invalid characters
-        for (int i{0}; i < 256; ++i)
-        {
-            if (!std::isalnum(i) && i != '_')
-            {
-                ASSERT_FALSE(decode("{"s + char(i) + ":0}"s, dummyComposer, nullptr).success);
-            }
-        }
-    }
-    { // Invalid patterns
-        ASSERT_FALSE(decode(R"({"a:0})"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({a":0})"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({a b:0})"sv, dummyComposer, nullptr).success);
-    }
-}
-
 TEST(decode, comments)
 {
     { // Single comment
@@ -1013,8 +953,8 @@ R"([ # AAAAA
         composer.expectEnd();
         decode(
 R"({ # AAAAA
-    0: 0, # BBBBB
-    1: 1 # CCCCC
+    "0": 0, # BBBBB
+    "1": 1 # CCCCC
 } # DDDDD)"sv, composer, nullptr);
         ASSERT_TRUE(composer.isDone());
     }
@@ -1145,16 +1085,16 @@ R"(
     "Founded": 1964,
     # Not necessarily up to date
     "Employees": [
-        { Name: "Ol' Joe Fisher", Title: "Fisherman", Age: 69 },
-        { Name: "Mark Rower", Title: "Cook", Age: 41. },
-        { Name: "Phineas", Title: "Server Boy", Age: 19.0 },
+        { "Name": "Ol' Joe Fisher", "Title": "Fisherman", "Age": 69 },
+        { "Name": "Mark Rower", "Title": "Cook", "Age": 41. },
+        { "Name": "Phineas", "Title": "Server Boy", "Age": 19.0 },
     ],
     "Dishes": [
         {
-            'Name': 'Basket o\' Barnacles',
-            'Price': 5.45,
-            'Ingredients': [ '"Salt"', 'Barnacles' ],
-            'Gluten Free': false
+            "Name": "Basket o' Barnacles",
+            "Price": 5.45,
+            "Ingredients": [ "\"Salt\"", "Barnacles" ],
+            "Gluten Free": false
         },
         {
             "Name": "Two Tuna",

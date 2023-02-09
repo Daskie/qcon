@@ -257,11 +257,7 @@ namespace qcon
                 }
                 case '"':
                 {
-                    return _ingestString('"', state);
-                }
-                case '\'':
-                {
-                    return _ingestString('\'', state);
+                    return _ingestString(state);
                 }
             }
 
@@ -333,28 +329,18 @@ namespace qcon
             {
                 while (true)
                 {
-                    // Parse key
-                    if (_pos >= _end)
+                    if (_pos >= _end || *_pos != '"')
                     {
                         _error("Expected key", _pos);
                         return false;
                     }
-                    const char c{*_pos};
+
                     string_view key;
-                    if (c == '"' || c == '\'')
+                    if (!_consumeString(key))
                     {
-                        if (!_consumeString(key, c))
-                        {
-                            return false;
-                        }
+                        return false;
                     }
-                    else
-                    {
-                        if (!_consumeIdentifier(key))
-                        {
-                            return false;
-                        }
-                    }
+
                     _composer.key(key, innerState);
 
                     _skipSpaceAndComments();
@@ -444,10 +430,10 @@ namespace qcon
             return true;
         }
 
-        [[nodiscard]] bool _ingestString(const char quote, State & state)
+        [[nodiscard]] bool _ingestString(State & state)
         {
             string_view str;
-            if (!_consumeString(str, quote))
+            if (!_consumeString(str))
             {
                 return false;
             }
@@ -455,11 +441,11 @@ namespace qcon
             return true;
         }
 
-        [[nodiscard]] bool _consumeString(string_view & str, const char quote)
+        [[nodiscard]] bool _consumeString(string_view & str)
         {
             _stringBuffer.clear();
 
-            ++_pos; // We already know we have `"` or `'`
+            ++_pos; // We already know we have `"`
 
             while (true)
             {
@@ -470,7 +456,7 @@ namespace qcon
                 }
 
                 char c{*_pos};
-                if (c == quote)
+                if (c == '"')
                 {
                     ++_pos;
                     str = _stringBuffer;
@@ -569,45 +555,6 @@ namespace qcon
 
             c = char(val);
             return true;
-        }
-
-        [[nodiscard]] bool _consumeIdentifier(string_view & str)
-        {
-            _stringBuffer.clear();
-
-            // Ensure identifier is at least one character long
-            char c{*_pos};
-            if (std::isalnum(uchar(c)) || c == '_')
-            {
-                _stringBuffer.push_back(c);
-                ++_pos;
-            }
-            else
-            {
-                _error("Expected identifier", _pos);
-                return false;
-            }
-
-            while (true)
-            {
-                if (_pos >= _end)
-                {
-                    str = _stringBuffer;
-                    return true;
-                }
-
-                c = *_pos;
-                if (std::isalnum(uchar(c)) || c == '_')
-                {
-                    _stringBuffer.push_back(c);
-                    ++_pos;
-                }
-                else
-                {
-                    str = _stringBuffer;
-                    return true;
-                }
-            }
         }
 
         // Returns the string length of the number, including trailing decimal point & zeroes, or `0` if it's not an integer
