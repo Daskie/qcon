@@ -63,8 +63,7 @@ namespace qcon
         void end(State && /*innerState*/, State & /*outerState*/) {}
         void key(const std::string_view /*key*/, State & /*state*/) {}
         void val(const std::string_view /*val*/, State & /*state*/) {}
-        void val(const int64_t /*val*/, State & /*state*/) {}
-        void val(const uint64_t /*val*/, State & /*state*/) {}
+        void val(const int64_t /*val*/, const bool /*positive*/, State & /*state*/) {}
         void val(const double /*val*/, State & /*state*/) {}
         void val(const bool /*val*/, State & /*state*/) {}
         void val(const std::nullptr_t, State & /*state*/) {}
@@ -221,78 +220,110 @@ namespace qcon
                 return false;
             }
 
-            char c{*_pos};
-
-            // First check for typical easy values
-
+            const char c{*_pos};
             switch (c)
             {
-                case '{':
+                case '{': return _ingestObject(state);
+                case '[': return _ingestArray(state);
+                case '"': return _ingestString(state);
+                case '0': [[fallthrough]];
+                case '1': [[fallthrough]];
+                case '2': [[fallthrough]];
+                case '3': [[fallthrough]];
+                case '4': [[fallthrough]];
+                case '5': [[fallthrough]];
+                case '6': [[fallthrough]];
+                case '7': [[fallthrough]];
+                case '8': [[fallthrough]];
+                case '9': return _ingestNumber(0, state);
+                case '+': [[fallthrough]];
+                case '-':
                 {
-                    return _ingestObject(state);
+                    ++_pos;
+                    if (_pos < _end)
+                    {
+                        if (std::isdigit(*_pos))
+                        {
+                            return _ingestNumber((c == '+') - (c == '-'), state);
+                        }
+                        else if (*_pos == 'i' || *_pos == 'I')
+                        {
+                            ++_pos;
+                            if (_tryConsumeChars("nf"sv))
+                            {
+                                _tryConsumeChars("inity"sv);
+                                _composer.val(c == '+' ? std::numeric_limits<double>::infinity() : -std::numeric_limits<double>::infinity(), state);
+                                return true;
+                            }
+                            --_pos;
+                        }
+                    }
+                    --_pos;
+                    break;
                 }
-                case '[':
+                case 'i': [[fallthrough]];
+                case 'I':
                 {
-                    return _ingestArray(state);
+                    ++_pos;
+                    if (_tryConsumeChars("nf"sv))
+                    {
+                        _tryConsumeChars("inity"sv);
+                        _composer.val(std::numeric_limits<double>::infinity(), state);
+                        return true;
+                    }
+                    --_pos;
+                    break;
                 }
-                case '"':
+                case 't':
                 {
-                    return _ingestString(state);
+                    ++_pos;
+                    if (_tryConsumeChars("rue"sv))
+                    {
+                        _composer.val(true, state);
+                        return true;
+                    }
+                    --_pos;
+                    break;
+                }
+                case 'f':
+                {
+                    ++_pos;
+                    if (_tryConsumeChars("alse"sv))
+                    {
+                        _composer.val(false, state);
+                        return true;
+                    }
+                    --_pos;
+                    break;
+                }
+                case 'n':
+                {
+                    ++_pos;
+                    if (_tryConsumeChars("ull"sv)) {
+                        _composer.val(nullptr, state);
+                        return true;
+                    }
+                    else if (_tryConsumeChars("an"sv))
+                    {
+                        _composer.val(std::numeric_limits<double>::quiet_NaN(), state);
+                        return true;
+                    }
+                    --_pos;
+                    break;
+                }
+                case 'N':
+                {
+                    ++_pos;
+                    if (_tryConsumeChars("aN"sv))
+                    {
+                        _composer.val(std::numeric_limits<double>::quiet_NaN(), state);
+                        return true;
+                    }
+                    --_pos;
+                    break;
                 }
             }
 
-            // Now determine whether there is a +/- sign to narrow it down to numbers or not
-
-            const int sign{(c == '+') - (c == '-')};
-            if (sign)
-            {
-                // There was a sign, so we'll keep track of that and increment our position
-                ++_pos;
-                if (_pos >= _end)
-                {
-                    _error("Expected number", _pos);
-                    return false;
-                }
-                c = *_pos;
-            }
-            else
-            {
-                // There was no sign, so we can check the non-number keywords
-                if (_tryConsumeChars("true"sv))
-                {
-                    _composer.val(true, state);
-                    return true;
-                }
-                else if (_tryConsumeChars("false"sv))
-                {
-                    _composer.val(false, state);
-                    return true;
-                }
-                else if (_tryConsumeChars("null"sv))
-                {
-                    _composer.val(nullptr, state);
-                    return true;
-                }
-            }
-
-            // At this point, we know it is a number (or invalid)
-
-            if (std::isdigit(uchar(c)) || (c == '.' && _pos + 1 < _end && std::isdigit(_pos[1])))
-            {
-                return _ingestNumber(sign, state);
-            }
-            else if (_tryConsumeChars("nan"sv) || _tryConsumeChars("NaN"sv))
-            {
-                _composer.val(std::numeric_limits<double>::quiet_NaN(), state);
-                return true;
-            }
-            else if (_tryConsumeChars("inf"sv) || _tryConsumeChars("Infinity"sv))
-            {
-                _composer.val(sign < 0 ? -std::numeric_limits<double>::infinity() : std::numeric_limits<double>::infinity(), state);
-                return true;
-            }
-
-            // Nothing matched
             _error("Unknown value", _pos);
             return false;
         }
@@ -537,158 +568,114 @@ namespace qcon
             return true;
         }
 
-        // Returns the string length of the number, including trailing decimal point & zeroes, or `0` if it's not an integer
-        size_t _isInteger() const
-        {
-            const char * pos{_pos};
-            // Skip all leading digits
-            while (pos < _end && std::isdigit(uchar(*pos))) ++pos;
-            // If that's it, we're an integer
-            if (pos >= _end)
-            {
-                return size_t(pos - _pos);
-            }
-            // If instead there is a decimal point...
-            else if (*pos == '.')
-            {
-                ++pos;
-                // Skip all zeroes
-                while (pos < _end && *pos == '0') ++pos;
-                // If there's a digit or an exponent, we must be a floater
-                if (pos < _end && (std::isdigit(uchar(*pos)) || *pos == 'e' || *pos == 'E'))
-                {
-                    return 0;
-                }
-                // Otherwise, we're an integer
-                else
-                {
-                    return size_t(pos - _pos);
-                }
-            }
-            // If instead there is an exponent, we must be a floater
-            else if (*pos == 'e' || *pos == 'E')
-            {
-                return 0;
-            }
-            // Otherwise, that's the end of the number, and we're an integer
-            else
-            {
-                return size_t(pos - _pos);
-            }
-        }
-
         [[nodiscard]] bool _ingestNumber(const int sign, State & state)
         {
             // Check if hex/octal/binary
-            if (*_pos == '0' && _pos + 1 < _end)
+            if (*_pos == '0')
             {
-                int base{0};
-                switch (_pos[1])
+                ++_pos;
+
+                if (_pos < _end)
                 {
-                    case 'x': case 'X': base = 16; break;
-                    case 'o': case 'O': base =  8; break;
-                    case 'b': case 'B': base =  2; break;
+                    if (*_pos == 'b')
+                    {
+                        ++_pos;
+                        return _ingestInteger(sign, 2, state);
+                    }
+                    else if (*_pos == 'o')
+                    {
+                        ++_pos;
+                        return _ingestInteger(sign, 8, state);
+                    }
+                    else if (*_pos == 'x')
+                    {
+                        ++_pos;
+                        return _ingestInteger(sign, 16, state);
+                    }
                 }
 
-                if (base)
-                {
-                    if (sign)
-                    {
-                        _error("Hex, octal, and binary numbers must not be signed", _pos);
-                        return false;
-                    }
-                    _pos += 2;
-                    return _ingestHexOctalBinary(base, state);
-                }
+                --_pos;
             }
 
             // Determine if integer or floater
-            if (size_t length{_isInteger()}; length)
+            const char * integerEnd{_pos + 1};
+            for (; integerEnd < _end && std::isdigit(*integerEnd); ++integerEnd);
+            if (integerEnd >= _end)
             {
-                if (sign < 0)
+                return _ingestInteger(sign, 10, state);
+            }
+            else if (*integerEnd == 'e' || *integerEnd == 'E')
+            {
+                return _ingestFloater(sign, state);
+            }
+            else if (*integerEnd == '.')
+            {
+                if (integerEnd + 1 < _end && std::isdigit(integerEnd[1]))
                 {
-                    return _ingestInteger<true>(length, state);
+                    return _ingestFloater(sign, state);
                 }
                 else
                 {
-                    return _ingestInteger<false>(length, state);
+                    _error("Number must not have trailing decimal", integerEnd);
+                    return false;
                 }
             }
             else
             {
-                return _ingestFloater(sign < 0, state);
+                return _ingestInteger(sign, 10, state);
             }
         }
 
-        [[nodiscard]] bool _ingestHexOctalBinary(const int base, State & state)
+        [[nodiscard]] bool _ingestInteger(const int sign, const int base, State & state)
         {
             uint64_t val;
+
             const std::from_chars_result res{std::from_chars(_pos, _end, val, base)};
 
             // There was an issue parsing
             if (res.ec != std::errc{})
             {
-                _error(base == 2 ? "Invalid binary" : base == 8 ? "Invalid octal" : "Invalid hex", _pos);
-                return false;
+                // If too large, parse as a floater instead
+                if (res.ec == std::errc::result_out_of_range)
+                {
+                    _error("Integer too large", _pos);
+                    return false;
+                }
+                // Some other issue
+                else
+                {
+                    _error("Invalid integer", _pos);
+                    return false;
+                }
+            }
+
+            if (sign < 0)
+            {
+                // The integer is too large to fit in an `int64_t` when negative
+                if (val > uint64_t(std::numeric_limits<int64_t>::min()))
+                {
+                    _error("Negative integer too large", _pos);
+                    return false;
+                }
             }
 
             _pos = res.ptr;
 
-            _composer.val(val, state);
-            return true;
-        }
-
-        template <bool negative>
-        [[nodiscard]] bool _ingestInteger(const size_t length, State & state)
-        {
-            std::conditional_t<negative, int64_t, uint64_t> val;
-
-            // Edge case that `.0` should evaluate to the integer `0`
-            if (*_pos == '.')
+            if (sign >= 0)
             {
-                val = 0;
+                _composer.val(int64_t(val), true, state);
             }
             else
             {
-                const std::from_chars_result res{std::from_chars(_pos - negative, _end, val)};
-
-                // There was an issue parsing
-                if (res.ec != std::errc{})
-                {
-                    // If too large, parse as a floater instead
-                    if (res.ec == std::errc::result_out_of_range)
-                    {
-                        return _ingestFloater(negative, state);
-                    }
-                    // Some other issue
-                    else
-                    {
-                        _error("Invalid integer", _pos);
-                        return false;
-                    }
-                }
+                _composer.val(-int64_t(val), false, state);
             }
-
-            _pos += length;
-
-            // If unsigned and the most significant bit is not set, we default to reporting it as signed
-            if constexpr (!negative)
-            {
-                if (!(val & 0x8000000000000000u))
-                {
-                    _composer.val(int64_t(val), state);
-                    return true;
-                }
-            }
-
-            _composer.val(val, state);
             return true;
         }
 
-        [[nodiscard]] bool _ingestFloater(const bool negative, State & state)
+        [[nodiscard]] bool _ingestFloater(const int sign, State & state)
         {
             double val;
-            const std::from_chars_result res{std::from_chars(_pos - negative, _end, val)};
+            const std::from_chars_result res{std::from_chars(_pos, _end, val)};
 
             // There was an issue parsing
             if (res.ec != std::errc{})
@@ -698,7 +685,7 @@ namespace qcon
             }
 
             _pos = res.ptr;
-            _composer.val(val, state);
+            _composer.val(sign >= 0 ? val : -val, state);
             return true;
         }
     };
@@ -708,8 +695,7 @@ namespace qcon
     template <typename Composer, typename State> concept _ComposerHasEndMethod = requires (Composer composer, State innerState, State outerState) { composer.end(std::move(innerState), outerState); };
     template <typename Composer, typename State> concept _ComposerHasKeyMethod = requires (Composer composer, const std::string_view key, State state) { composer.key(key, state); };
     template <typename Composer, typename State> concept _ComposerHasStringValMethod = requires (Composer composer, const std::string_view val, State state) { composer.val(val, state); };
-    template <typename Composer, typename State> concept _ComposerHasSignedIntegerValMethod = requires (Composer composer, const int64_t val, State state) { composer.val(val, state); };
-    template <typename Composer, typename State> concept _ComposerHasUnsignedIntegerValMethod = requires (Composer composer, const uint64_t val, State state) { composer.val(val, state); };
+    template <typename Composer, typename State> concept _ComposerHasIntegerValMethod = requires (Composer composer, const int64_t val, const bool positive, State state) { composer.val(val, positive, state); };
     template <typename Composer, typename State> concept _ComposerHasFloaterValMethod = requires (Composer composer, const double val, State state) { composer.val(val, state); };
     template <typename Composer, typename State> concept _ComposerHasBooleanValMethod = requires (Composer composer, const bool val, State state) { composer.val(val, state); };
     template <typename Composer, typename State> concept _ComposerHasNullValMethod = requires (Composer composer, State state) { composer.val(nullptr, state); };
@@ -723,8 +709,7 @@ namespace qcon
         static_assert(_ComposerHasEndMethod<Composer, State>);
         static_assert(_ComposerHasKeyMethod<Composer, State>);
         static_assert(_ComposerHasStringValMethod<Composer, State>);
-        static_assert(_ComposerHasSignedIntegerValMethod<Composer, State>);
-        static_assert(_ComposerHasUnsignedIntegerValMethod<Composer, State>);
+        static_assert(_ComposerHasIntegerValMethod<Composer, State>);
         static_assert(_ComposerHasFloaterValMethod<Composer, State>);
         static_assert(_ComposerHasBooleanValMethod<Composer, State>);
         static_assert(_ComposerHasNullValMethod<Composer, State>);

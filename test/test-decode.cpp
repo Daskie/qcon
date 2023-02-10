@@ -1,5 +1,6 @@
 #include <cmath>
 
+#include <concepts>
 #include <deque>
 #include <format>
 #include <variant>
@@ -25,8 +26,7 @@ class ExpectantComposer
     struct End {};
     struct Key { std::string_view k; };
     struct String { std::string_view v; };
-    struct SignedInteger { int64_t v; };
-    struct UnsignedInteger { uint64_t v; };
+    struct Integer { int64_t v; bool positive; };
     struct Floater { double v; };
     struct Boolean { bool v; };
     struct Null {};
@@ -36,21 +36,19 @@ class ExpectantComposer
     friend bool operator==(const End &, const End &) { return true; }
     friend bool operator==(const Key & a, const Key & b) { return a.k == b.k; }
     friend bool operator==(const String & a, const String & b) { return a.v == b.v; }
-    friend bool operator==(const SignedInteger & a, const SignedInteger & b) { return a.v == b.v; }
-    friend bool operator==(const UnsignedInteger & a, const UnsignedInteger & b) { return a.v == b.v; }
+    friend bool operator==(const Integer & a, const Integer & b) { return a.v == b.v; }
     friend bool operator==(const Floater & a, const Floater & b) { return a.v == b.v || (std::isnan(a.v) && std::isnan(b.v)); }
     friend bool operator==(const Boolean & a, const Boolean & b) { return a.v == b.v; }
     friend bool operator==(const Null &, const Null &) { return true; }
 
-    using Element = std::variant<Object, Array, End, Key, String, SignedInteger, UnsignedInteger, Floater, Boolean, Null>;
+    using Element = std::variant<Object, Array, End, Key, String, Integer, Floater, Boolean, Null>;
 
     std::nullptr_t object(std::nullptr_t) { assertNextIs(Object{}); return nullptr; }
     std::nullptr_t array(std::nullptr_t) { assertNextIs(Array{}); return nullptr; }
     void end(std::nullptr_t, std::nullptr_t) { assertNextIs(End{}); }
     void key(std::string_view k, std::nullptr_t) { assertNextIs(Key{k}); }
     void val(std::string_view v, std::nullptr_t) { assertNextIs(String{v}); }
-    void val(int64_t v, std::nullptr_t) { assertNextIs(SignedInteger{v}); }
-    void val(uint64_t v, std::nullptr_t) { assertNextIs(UnsignedInteger{v}); }
+    void val(int64_t v, bool positive, std::nullptr_t) { assertNextIs(Integer{v, positive}); }
     void val(double v, std::nullptr_t) { assertNextIs(Floater{v}); }
     void val(bool v, std::nullptr_t) { assertNextIs(Boolean{v}); }
     void val(std::nullptr_t, std::nullptr_t) { assertNextIs(Null{}); }
@@ -60,8 +58,8 @@ class ExpectantComposer
     ExpectantComposer & expectEnd() { m_sequence.emplace_back(End{}); return *this; }
     ExpectantComposer & expectKey(std::string_view k) { m_sequence.emplace_back(Key{k}); return *this; }
     ExpectantComposer & expectString(std::string_view v) { m_sequence.emplace_back(String{v}); return *this; }
-    ExpectantComposer & expectSignedInteger(int64_t v) { m_sequence.emplace_back(SignedInteger{v}); return *this; }
-    ExpectantComposer & expectUnsignedInteger(uint64_t v) { m_sequence.emplace_back(UnsignedInteger{v}); return *this; }
+    ExpectantComposer & expectInteger(std::signed_integral auto v) { m_sequence.emplace_back(Integer{v, v >= 0}); return *this; }
+    ExpectantComposer & expectInteger(std::unsigned_integral auto v) { m_sequence.emplace_back(Integer{int64_t(v), true}); return *this; }
     ExpectantComposer & expectFloater(double v) { m_sequence.emplace_back(Floater{v}); return *this; }
     ExpectantComposer & expectBoolean(bool v) { m_sequence.emplace_back(Boolean{v}); return *this; }
     ExpectantComposer & expectNull() { m_sequence.emplace_back(Null{}); return *this; }
@@ -87,8 +85,7 @@ std::ostream & operator<<(std::ostream & os, const ExpectantComposer::Element & 
     if (std::holds_alternative<ExpectantComposer::End>(v)) return os << "End";
     if (std::holds_alternative<ExpectantComposer::Key>(v)) return os << "Key `" << std::get<ExpectantComposer::Key>(v).k << "`";
     if (std::holds_alternative<ExpectantComposer::String>(v)) return os << "String `" << std::get<ExpectantComposer::String>(v).v << "`";
-    if (std::holds_alternative<ExpectantComposer::SignedInteger>(v)) return os << "Signed Integer `" << std::get<ExpectantComposer::SignedInteger>(v).v << "`";
-    if (std::holds_alternative<ExpectantComposer::UnsignedInteger>(v)) return os << "Unsigned Integer `" << std::get<ExpectantComposer::UnsignedInteger>(v).v << "`";
+    if (std::holds_alternative<ExpectantComposer::Integer>(v)) { const ExpectantComposer::Integer & i{std::get<ExpectantComposer::Integer>(v)}; return i.positive ? (os << "Integer `" << uint64_t(i.v)) : (os << "Integer `" << i.v) << "`"; }
     if (std::holds_alternative<ExpectantComposer::Floater>(v)) return os << "Floater `" << std::get<ExpectantComposer::Floater>(v).v << "`";
     if (std::holds_alternative<ExpectantComposer::Boolean>(v)) return os << "Boolean `" << (std::get<ExpectantComposer::Boolean>(v).v ? "true" : "false") << "`";
     if (std::holds_alternative<ExpectantComposer::Null>(v)) return os << "Null";
@@ -106,31 +103,31 @@ TEST(decode, object)
     { // Single key
         ExpectantComposer composer{};
         composer.expectObject().expectKey("a"sv).expectNull().expectEnd();
-        decode(R"({ "a": null })"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"({ "a": null })"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Multiple keys
         ExpectantComposer composer{};
         composer.expectObject().expectKey("a"sv).expectNull().expectKey("b"sv).expectNull().expectKey("c"sv).expectNull().expectEnd();
-        decode(R"({ "a": null, "b": null, "c": null })"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"({ "a": null, "b": null, "c": null })"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // No space
         ExpectantComposer composer{};
         composer.expectObject().expectKey("a"sv).expectNull().expectKey("b"sv).expectNull().expectEnd();
-        decode(R"({"a":null,"b":null})"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"({"a":null,"b":null})"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Weird spacing
         ExpectantComposer composer{};
         composer.expectObject().expectKey("a"sv).expectNull().expectKey("b"sv).expectNull().expectEnd();
-        decode(R"({"a" :null ,"b" :null})"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"({"a" :null ,"b" :null})"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Empty key
         ExpectantComposer composer{};
         composer.expectObject().expectKey(""sv).expectNull().expectEnd();
-        decode(R"({ "": null })"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"({ "": null })"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // No colon after key
@@ -184,31 +181,31 @@ TEST(decode, array)
     { // Empty
         ExpectantComposer composer{};
         composer.expectArray().expectEnd();
-        decode(R"([])"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"([])"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Single element
         ExpectantComposer composer{};
         composer.expectArray().expectNull().expectEnd();
-        decode(R"([ null ])"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"([ null ])"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Multiple elements
         ExpectantComposer composer{};
         composer.expectArray().expectNull().expectNull().expectNull().expectEnd();
-        decode(R"([ null, null, null ])"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"([ null, null, null ])"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // No space
         ExpectantComposer composer{};
         composer.expectArray().expectNull().expectNull().expectEnd();
-        decode(R"([null,null])"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"([null,null])"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Weird spacing
         ExpectantComposer composer{};
         composer.expectArray().expectNull().expectNull().expectEnd();
-        decode(R"([null ,null])"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"([null ,null])"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // No comma between elements
@@ -234,13 +231,14 @@ TEST(decode, string)
     { // Empty string
         ExpectantComposer composer{};
         composer.expectString(""sv);
-        decode(R"("")"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"("")"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // All printable
         ExpectantComposer composer{};
         composer.expectString(R"( !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~)"sv);
-        decode(R"(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")"sv, composer, nullptr);
+        const bool success{decode(R"(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")"sv, composer, nullptr).success};
+        ASSERT_TRUE(success);
         ASSERT_TRUE(composer.isDone());
     }
     { // All non-printable
@@ -257,7 +255,7 @@ TEST(decode, string)
     { // Escape characters
         ExpectantComposer composer{};
         composer.expectString("\0\b\t\n\v\f\r"sv);
-        decode(R"("\0\b\t\n\v\f\r")"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"("\0\b\t\n\v\f\r")"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Missing escape sequence
@@ -281,7 +279,7 @@ TEST(decode, string)
             std::format_to_n(&decodeStr[1u + 4u * i], 4, "\\x{:02X}"sv, i);
         }
         composer.expectString(expectedStr);
-        decode(decodeStr, composer, nullptr);
+        ASSERT_TRUE(decode(decodeStr, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // 'u' code point
@@ -296,19 +294,20 @@ TEST(decode, string)
             std::format_to_n(&decodeStr[1u + 6u * i], 6, "\\u{:04X}"sv, i);
         }
         composer.expectString(expectedStr);
-        decode(decodeStr, composer, nullptr);
+        ASSERT_TRUE(decode(decodeStr, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // 'U' code point
         ExpectantComposer composer{};
         composer.expectString("\u0077\u00FF\u00FF");
-        decode(R"("\U00000077\U000000FF\UFFFFFFFF")", composer, nullptr);
+        const bool success{decode(R"("\U00000077\U000000FF\UFFFFFFFF")", composer, nullptr).success};
+        ASSERT_TRUE(success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Uppercase and lowercase code point hex digits
         ExpectantComposer composer{};
         composer.expectString("\u00AA\u00BB\u00CC\u00DD");
-        decode(R"("\u00aa\u00BB\u00cC\u00Dd")", composer, nullptr);
+        ASSERT_TRUE(decode(R"("\u00aa\u00BB\u00cC\u00Dd")", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Incorrect number of code point digits
@@ -327,15 +326,15 @@ TEST(decode, string)
     { // Escaped newlines
         ExpectantComposer composer{};
         composer.expectString("abc");
-        decode("\"a\\\nb\\\nc\"", composer, nullptr);
+        ASSERT_TRUE(decode("\"a\\\nb\\\nc\"", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectString("abc");
-        decode("\"a\\\r\nb\\\r\nc\"", composer, nullptr);
+        ASSERT_TRUE(decode("\"a\\\r\nb\\\r\nc\"", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectString("");
-        decode("\"\\\n\\\n\\\n\"", composer, nullptr);
+        ASSERT_TRUE(decode("\"\\\n\\\n\\\n\"", composer, nullptr).success);
         composer.expectString("");
-        decode("\"\\\r\n\\\n\\\r\n\"", composer, nullptr);
+        ASSERT_TRUE(decode("\"\\\r\n\\\n\\\r\n\"", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Single quotes
@@ -343,81 +342,81 @@ TEST(decode, string)
     }
 }
 
-TEST(decode, signedInteger)
+TEST(decode, decimal)
 {
     { // Zero
         ExpectantComposer composer{};
-        composer.expectSignedInteger(0);
-        decode(R"(0)"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(0)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Normal
         ExpectantComposer composer{};
-        composer.expectSignedInteger(123);
-        decode(R"(123)"sv, composer, nullptr);
+        composer.expectInteger(123);
+        ASSERT_TRUE(decode(R"(123)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Positive
         ExpectantComposer composer{};
-        composer.expectSignedInteger(123);
-        decode(R"(+123)"sv, composer, nullptr);
+        composer.expectInteger(123);
+        ASSERT_TRUE(decode(R"(+123)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Negative
         ExpectantComposer composer{};
-        composer.expectSignedInteger(-123);
-        decode(R"(-123)"sv, composer, nullptr);
+        composer.expectInteger(-123);
+        ASSERT_TRUE(decode(R"(-123)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Min
         ExpectantComposer composer{};
-        composer.expectSignedInteger(std::numeric_limits<int64_t>::min());
-        decode(R"(-9223372036854775808)"sv, composer, nullptr);
+        composer.expectInteger(std::numeric_limits<int64_t>::min());
+        ASSERT_TRUE(decode(R"(-9223372036854775808)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Max
         ExpectantComposer composer{};
-        composer.expectSignedInteger(std::numeric_limits<int64_t>::max());
-        decode(R"(9223372036854775807)"sv, composer, nullptr);
+        composer.expectInteger(std::numeric_limits<int64_t>::max());
+        ASSERT_TRUE(decode(R"(+9223372036854775807)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
-    { // Trailing decimal
+    { // Max unsigned
         ExpectantComposer composer{};
-        composer.expectSignedInteger(123);
-        decode(R"(123.)"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-    }
-    { // Trailing zeroes
-        ExpectantComposer composer{};
-        composer.expectSignedInteger(123);
-        decode(R"(123.000)"sv, composer, nullptr);
+        composer.expectInteger(std::numeric_limits<uint64_t>::max());
+        ASSERT_TRUE(decode(R"(+18446744073709551615)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Leading zeroes
         ExpectantComposer composer{};
-        composer.expectSignedInteger(123);
-        decode(R"(0123)"sv, composer, nullptr);
+        composer.expectInteger(123);
+        ASSERT_TRUE(decode(R"(0123)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectSignedInteger(0);
-        decode(R"(00)"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(00)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectSignedInteger(0);
-        decode(R"(+00)"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(+00)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectSignedInteger(0);
-        decode(R"(-00)"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(-00)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
-    { // Fractional zero
+    { // Min with leading zeroes
         ExpectantComposer composer{};
-        composer.expectSignedInteger(0);
-        decode(R"(.0)"sv, composer, nullptr);
+        composer.expectInteger(std::numeric_limits<int64_t>::min());
+        ASSERT_TRUE(decode(R"(-000000009223372036854775808)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectSignedInteger(0);
-        decode(R"(+.0)"sv, composer, nullptr);
+    }
+    { // Max with leading zeroes
+        ExpectantComposer composer{};
+        composer.expectInteger(std::numeric_limits<int64_t>::max());
+        ASSERT_TRUE(decode(R"(+000000009223372036854775807)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectSignedInteger(0);
-        decode(R"(-.0)"sv, composer, nullptr);
+    }
+    { // Max unsigned with leading zeroes
+        ExpectantComposer composer{};
+        composer.expectInteger(std::numeric_limits<uint64_t>::max());
+        ASSERT_TRUE(decode(R"(+0000000018446744073709551615)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Invalid minus sign
@@ -428,39 +427,11 @@ TEST(decode, signedInteger)
         ASSERT_FALSE(decode(R"(+)", dummyComposer, nullptr).success);
         ASSERT_FALSE(decode(R"([ + ])", dummyComposer, nullptr).success);
     }
-}
-
-TEST(decode, unsignedInteger)
-{
-    { // Min unsigned
-        ExpectantComposer composer{};
-        composer.expectUnsignedInteger(uint64_t(std::numeric_limits<int64_t>::max()) + 1u);
-        decode(R"(9223372036854775808)"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-    }
-    { // Max unsigned
-        ExpectantComposer composer{};
-        composer.expectUnsignedInteger(std::numeric_limits<uint64_t>::max());
-        decode(R"(18446744073709551615)"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-    }
-    { // Trailing decimal
-        ExpectantComposer composer{};
-        composer.expectUnsignedInteger(10000000000000000000u);
-        decode(R"(10000000000000000000.)"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-    }
-    { // Trailing zeroes
-        ExpectantComposer composer{};
-        composer.expectUnsignedInteger(10000000000000000000u);
-        decode(R"(10000000000000000000.000)"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-    }
-    { // Positive
-        ExpectantComposer composer{};
-        composer.expectUnsignedInteger(10000000000000000000u);
-        decode(R"(+10000000000000000000)"sv, composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
+    { // Multiple signs
+        ASSERT_FALSE(decode(R"(++0)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(--0)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(+-0)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(-+0)", dummyComposer, nullptr).success);
     }
 }
 
@@ -468,46 +439,69 @@ TEST(decode, hex)
 {
     { // Zero
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(0u);
-        decode(R"(0x0)"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(0x0)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Lowercase
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(26u);
-        decode(R"(0x1a)"sv, composer, nullptr);
+        composer.expectInteger(26);
+        ASSERT_TRUE(decode(R"(0x1a)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Uppercase
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(26u);
-        decode(R"(0X1A)"sv, composer, nullptr);
+        composer.expectInteger(26);
+        ASSERT_TRUE(decode(R"(0x1A)"sv, composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Positive
+        ExpectantComposer composer{};
+        composer.expectInteger(26);
+        ASSERT_TRUE(decode(R"(+0x1A)"sv, composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Negative
+        ExpectantComposer composer{};
+        composer.expectInteger(-26);
+        ASSERT_TRUE(decode(R"(-0x1A)"sv, composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Min
+        ExpectantComposer composer{};
+        composer.expectInteger(std::numeric_limits<int64_t>::min());
+        ASSERT_TRUE(decode(R"(-0x8000000000000000)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Max
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(std::numeric_limits<uint64_t>::max());
-        decode(R"(0xFFFFFFFFFFFFFFFF)"sv, composer, nullptr);
+        composer.expectInteger(std::numeric_limits<uint64_t>::max());
+        ASSERT_TRUE(decode(R"(+0xFFFFFFFFFFFFFFFF)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Leading zeroes
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(26u);
-        decode(R"(0x001A)"sv, composer, nullptr);
+        composer.expectInteger(26);
+        ASSERT_TRUE(decode(R"(0x001A)"sv, composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Min with leading zeroes
+        ExpectantComposer composer{};
+        composer.expectInteger(std::numeric_limits<int64_t>::min());
+        ASSERT_TRUE(decode(R"(-0x000000008000000000000000)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Max with leading zeroes
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(std::numeric_limits<uint64_t>::max());
-        decode(R"(0x00000000FFFFFFFFFFFFFFFF)"sv, composer, nullptr);
+        composer.expectInteger(std::numeric_limits<uint64_t>::max());
+        ASSERT_TRUE(decode(R"(+0x00000000FFFFFFFFFFFFFFFF)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Invalid digit
         ASSERT_FALSE(decode(R"(0x1G)", dummyComposer, nullptr).success);
     }
-    { // Signed
-        ASSERT_FALSE(decode(R"(+0x1A)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(-0x1A)", dummyComposer, nullptr).success);
+    { // Uppercase X
+        ASSERT_FALSE(decode(R"(0X1A)", dummyComposer, nullptr).success);
     }
     { // Prefix leading zero
         ASSERT_FALSE(decode(R"(00x1A)", dummyComposer, nullptr).success);
@@ -524,52 +518,69 @@ TEST(decode, octal)
 {
     { // Zero
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(0u);
-        decode(R"(0o0)"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(0o0)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
-    { // Lowercase
+    { // No sign
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(10u);
-        decode(R"(0o12)"sv, composer, nullptr);
+        composer.expectInteger(10);
+        ASSERT_TRUE(decode(R"(0o12)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
-    { // Uppercase
+    { // Positive
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(10u);
-        decode(R"(0O12)"sv, composer, nullptr);
+        composer.expectInteger(10);
+        ASSERT_TRUE(decode(R"(+0o12)"sv, composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Negative
+        ExpectantComposer composer{};
+        composer.expectInteger(-10);
+        ASSERT_TRUE(decode(R"(-0o12)"sv, composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Min
+        ExpectantComposer composer{};
+        composer.expectInteger(std::numeric_limits<int64_t>::min());
+        ASSERT_TRUE(decode(R"(-0o1000000000000000000000)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Max
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(std::numeric_limits<uint64_t>::max());
-        decode(R"(0o1777777777777777777777)"sv, composer, nullptr);
+        composer.expectInteger(std::numeric_limits<uint64_t>::max());
+        ASSERT_TRUE(decode(R"(+0o1777777777777777777777)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Leading zeroes
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(10u);
-        decode(R"(0o0012)"sv, composer, nullptr);
+        composer.expectInteger(10);
+        ASSERT_TRUE(decode(R"(0o0012)"sv, composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Min with leading zeroes
+        ExpectantComposer composer{};
+        composer.expectInteger(std::numeric_limits<int64_t>::min());
+        ASSERT_TRUE(decode(R"(-0o000000001000000000000000000000)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Max with leading zeroes
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(std::numeric_limits<uint64_t>::max());
-        decode(R"(0o000000001777777777777777777777)"sv, composer, nullptr);
+        composer.expectInteger(std::numeric_limits<uint64_t>::max());
+        ASSERT_TRUE(decode(R"(+0o000000001777777777777777777777)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Invalid digit
         ASSERT_FALSE(decode(R"(0o18)", dummyComposer, nullptr).success);
     }
-    { // Signed
-        ASSERT_FALSE(decode(R"(+0o12)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(-0o12)", dummyComposer, nullptr).success);
+    { // Uppercase O
+        ASSERT_FALSE(decode(R"(0O12)", dummyComposer, nullptr).success);
     }
     { // Prefix leading zero
-        ASSERT_FALSE(decode(R"(00o12)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(00x12)", dummyComposer, nullptr).success);
     }
     { // Decimal
-        ASSERT_FALSE(decode(R"(0o12.)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(0x12.)", dummyComposer, nullptr).success);
     }
     { // Too big
         ASSERT_FALSE(decode(R"(0o2000000000000000000000)", dummyComposer, nullptr).success);
@@ -580,46 +591,63 @@ TEST(decode, binary)
 {
     { // Zero
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(0u);
-        decode(R"(0b0)"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(0b0)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
-    { // Lowercase
+    { // No sign
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(5u);
-        decode(R"(0b101)"sv, composer, nullptr);
+        composer.expectInteger(5);
+        ASSERT_TRUE(decode(R"(0b101)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
-    { // Uppercase
+    { // Positive
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(5u);
-        decode(R"(0B101)"sv, composer, nullptr);
+        composer.expectInteger(5);
+        ASSERT_TRUE(decode(R"(+0b101)"sv, composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Negative
+        ExpectantComposer composer{};
+        composer.expectInteger(-5);
+        ASSERT_TRUE(decode(R"(-0b101)"sv, composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Min
+        ExpectantComposer composer{};
+        composer.expectInteger(std::numeric_limits<int64_t>::min());
+        ASSERT_TRUE(decode(R"(-0b1000000000000000000000000000000000000000000000000000000000000000)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Max
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(std::numeric_limits<uint64_t>::max());
-        decode(R"(0b1111111111111111111111111111111111111111111111111111111111111111)"sv, composer, nullptr);
+        composer.expectInteger(std::numeric_limits<uint64_t>::max());
+        ASSERT_TRUE(decode(R"(+0b1111111111111111111111111111111111111111111111111111111111111111)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Leading zeroes
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(5u);
-        decode(R"(0b00101)"sv, composer, nullptr);
+        composer.expectInteger(5);
+        ASSERT_TRUE(decode(R"(0b00101)"sv, composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Min with leading zeroes
+        ExpectantComposer composer{};
+        composer.expectInteger(std::numeric_limits<int64_t>::min());
+        ASSERT_TRUE(decode(R"(-0b000000001000000000000000000000000000000000000000000000000000000000000000)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Max with leading zeroes
         ExpectantComposer composer{};
-        composer.expectUnsignedInteger(std::numeric_limits<uint64_t>::max());
-        decode(R"(0b000000001111111111111111111111111111111111111111111111111111111111111111)"sv, composer, nullptr);
+        composer.expectInteger(std::numeric_limits<uint64_t>::max());
+        ASSERT_TRUE(decode(R"(+0b000000001111111111111111111111111111111111111111111111111111111111111111)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Invalid digit
         ASSERT_FALSE(decode(R"(0b121)", dummyComposer, nullptr).success);
     }
-    { // Signed
-        ASSERT_FALSE(decode(R"(+0b101)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(-0b101)", dummyComposer, nullptr).success);
+    { // Uppercase B
+        ASSERT_FALSE(decode(R"(0B101)", dummyComposer, nullptr).success);
     }
     { // Prefix leading zero
         ASSERT_FALSE(decode(R"(00b101)", dummyComposer, nullptr).success);
@@ -634,122 +662,137 @@ TEST(decode, binary)
 
 TEST(decode, floater)
 {
-    { // Fractional
+    { // Zero
+        ExpectantComposer composer{};
+        composer.expectFloater(0.0);
+        ASSERT_TRUE(decode(R"(0.0)", composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // No sign
         ExpectantComposer composer{};
         composer.expectFloater(123.456);
-        decode(R"(123.456)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(123.456)", composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Positive
+        ExpectantComposer composer{};
+        composer.expectFloater(123.456);
+        ASSERT_TRUE(decode(R"(+123.456)", composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+    }
+    { // Negative
+        ExpectantComposer composer{};
+        composer.expectFloater(-123.456);
+        ASSERT_TRUE(decode(R"(-123.456)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Exponent lowercase
         ExpectantComposer composer{};
         composer.expectFloater(123.456e17);
-        decode(R"(123.456e17)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(123.456e17)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Exponent uppercase
         ExpectantComposer composer{};
         composer.expectFloater(123.456e17);
-        decode(R"(123.456E17)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(123.456E17)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Positive exponent
         ExpectantComposer composer{};
         composer.expectFloater(123.456e17);
-        decode(R"(123.456e+17)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(123.456e+17)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Negative exponent
         ExpectantComposer composer{};
         composer.expectFloater(-123.456e-17);
-        decode(R"(-123.456e-17)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(-123.456e-17)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Exponent without fraction
         ExpectantComposer composer{};
         composer.expectFloater(123.0e34);
-        decode(R"(123e34)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(123e34)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Max integer
         ExpectantComposer composer{};
         composer.expectFloater(9007199254740991.0);
-        decode(R"(9007199254740991.0e0)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(9007199254740991.0e0)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
-    { // Oversized signed integer
-        ExpectantComposer composer{};
-        composer.expectFloater(-9223372036854775809.0);
-        decode(R"(-9223372036854775809)", composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-    }
-    { // Oversized unsigned integer
-        ExpectantComposer composer{};
-        composer.expectFloater(18446744073709551616.0);
-        decode(R"(18446744073709551616)", composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-    }
-    { // Leading decimal
-        ExpectantComposer composer{};
-        composer.expectFloater(0.456);
-        decode(R"(.456)", composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(0.456);
-        decode(R"(+.456)", composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(-0.456);
-        decode(R"(-.456)", composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
-    }
-    { // Trailing decimal
-        ExpectantComposer composer{};
-        composer.expectFloater(123);
-        decode(R"(123.e0)", composer, nullptr);
-        ASSERT_TRUE(composer.isDone());
+    { // Leading and trailing decimal
+        ASSERT_FALSE(decode(R"(.0)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(+.0)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(-.0)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(0.)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(+0.)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(-0.)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(1.e0)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(.)", dummyComposer, nullptr).success);
     }
     { // Leading zeroes
         ExpectantComposer composer{};
         composer.expectFloater(1.2);
-        decode(R"(01.2)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(01.2)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectFloater(0.2);
-        decode(R"(00.2)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(00.2)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectFloater(1e02);
-        decode(R"(1e02)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(1e02)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectFloater(1e+02);
-        decode(R"(1e+02)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(1e+02)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectFloater(1e-02);
-        decode(R"(1e-02)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(1e-02)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectFloater(1e00);
-        decode(R"(1e00)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(1e00)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Valid infinity
         ExpectantComposer composer{};
         composer.expectFloater(std::numeric_limits<double>::infinity());
-        decode(R"(inf)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(inf)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectFloater(-std::numeric_limits<double>::infinity());
-        decode(R"(-inf)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(-inf)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectFloater(std::numeric_limits<double>::infinity());
-        decode(R"(+inf)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(+inf)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectFloater(std::numeric_limits<double>::infinity());
-        decode(R"(Infinity)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(Inf)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectFloater(-std::numeric_limits<double>::infinity());
-        decode(R"(-Infinity)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(-Inf)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectFloater(std::numeric_limits<double>::infinity());
-        decode(R"(+Infinity)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(+Inf)", composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+        composer.expectFloater(std::numeric_limits<double>::infinity());
+        ASSERT_TRUE(decode(R"(infinity)", composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+        composer.expectFloater(-std::numeric_limits<double>::infinity());
+        ASSERT_TRUE(decode(R"(-infinity)", composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+        composer.expectFloater(std::numeric_limits<double>::infinity());
+        ASSERT_TRUE(decode(R"(+infinity)", composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+        composer.expectFloater(std::numeric_limits<double>::infinity());
+        ASSERT_TRUE(decode(R"(Infinity)", composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+        composer.expectFloater(-std::numeric_limits<double>::infinity());
+        ASSERT_TRUE(decode(R"(-Infinity)", composer, nullptr).success);
+        ASSERT_TRUE(composer.isDone());
+        composer.expectFloater(std::numeric_limits<double>::infinity());
+        ASSERT_TRUE(decode(R"(+Infinity)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Invalid infinity
-        ASSERT_FALSE(decode(R"(Inf)", dummyComposer, nullptr).success);
         ASSERT_FALSE(decode(R"(iNf)", dummyComposer, nullptr).success);
         ASSERT_FALSE(decode(R"(inF)", dummyComposer, nullptr).success);
         ASSERT_FALSE(decode(R"(INF)", dummyComposer, nullptr).success);
@@ -757,7 +800,6 @@ TEST(decode, floater)
         ASSERT_FALSE(decode(R"(infin)", dummyComposer, nullptr).success);
         ASSERT_FALSE(decode(R"(infini)", dummyComposer, nullptr).success);
         ASSERT_FALSE(decode(R"(infinit)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infinity)", dummyComposer, nullptr).success);
         ASSERT_FALSE(decode(R"(iNfinity)", dummyComposer, nullptr).success);
         ASSERT_FALSE(decode(R"(inFinity)", dummyComposer, nullptr).success);
         ASSERT_FALSE(decode(R"(infInity)", dummyComposer, nullptr).success);
@@ -778,15 +820,15 @@ TEST(decode, floater)
         ASSERT_FALSE(decode(R"(InfinitY)", dummyComposer, nullptr).success);
         ASSERT_FALSE(decode(R"(INFINITY)", dummyComposer, nullptr).success);
         ASSERT_FALSE(decode(R"(infstuff)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(Infinitystuff)", dummyComposer, nullptr).success);
+        ASSERT_FALSE(decode(R"(infinitystuff)", dummyComposer, nullptr).success);
     }
     { // Valid NaN
         ExpectantComposer composer{};
         composer.expectFloater(std::numeric_limits<double>::quiet_NaN());
-        decode(R"(nan)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(nan)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
         composer.expectFloater(std::numeric_limits<double>::quiet_NaN());
-        decode(R"(NaN)", composer, nullptr);
+        ASSERT_TRUE(decode(R"(NaN)", composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Invalid NaN
@@ -822,13 +864,13 @@ TEST(decode, boolean)
     { // True
         ExpectantComposer composer{};
         composer.expectBoolean(true);
-        decode(R"(true)"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"(true)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // False
         ExpectantComposer composer{};
         composer.expectBoolean(false);
-        decode(R"(false)"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"(false)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
 }
@@ -837,15 +879,15 @@ TEST(decode, null)
 {
     ExpectantComposer composer{};
     composer.expectNull();
-    decode(R"(null)"sv, composer, nullptr);
+    ASSERT_TRUE(decode(R"(null)"sv, composer, nullptr).success);
     ASSERT_TRUE(composer.isDone());
 }
 
 TEST(decode, noSpace)
 {
     ExpectantComposer composer{};
-    composer.expectObject().expectKey("a"sv).expectArray().expectString("abc"sv).expectSignedInteger(-123).expectFloater(-123.456e-78).expectBoolean(true).expectNull().expectEnd().expectEnd();
-    decode(R"({"a":["abc",-123,-123.456e-78,true,null]})"sv, composer, nullptr);
+    composer.expectObject().expectKey("a"sv).expectArray().expectString("abc"sv).expectInteger(-123).expectFloater(-123.456e-78).expectBoolean(true).expectNull().expectEnd().expectEnd();
+    ASSERT_TRUE(decode(R"({"a":["abc",-123,-123.456e-78,true,null]})"sv, composer, nullptr).success);
     ASSERT_TRUE(composer.isDone());
 }
 
@@ -853,7 +895,7 @@ TEST(decode, extraneousSpace)
 {
     ExpectantComposer composer{};
     composer.expectObject().expectEnd();
-    decode(" \t\n\r\v{} \t\n\r\v"sv, composer, nullptr);
+    ASSERT_TRUE(decode(" \t\n\r\v{} \t\n\r\v"sv, composer, nullptr).success);
     ASSERT_TRUE(composer.isDone());
 }
 
@@ -861,32 +903,32 @@ TEST(decode, trailingComma)
 {
     { // Valid
         ExpectantComposer composer{};
-        composer.expectSignedInteger(0);
-        decode(R"(0,)"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(0,)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectSignedInteger(0);
-        decode(R"(0, )"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(0, )"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectSignedInteger(0);
-        decode(R"(0 ,)"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(0 ,)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectArray().expectSignedInteger(0).expectEnd();
-        decode(R"([0,])"sv, composer, nullptr);
+        composer.expectArray().expectInteger(0).expectEnd();
+        ASSERT_TRUE(decode(R"([0,])"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectArray().expectSignedInteger(0).expectEnd();
-        decode(R"([0, ])"sv, composer, nullptr);
+        composer.expectArray().expectInteger(0).expectEnd();
+        ASSERT_TRUE(decode(R"([0, ])"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectArray().expectSignedInteger(0).expectEnd();
-        decode(R"([0 ,])"sv, composer, nullptr);
+        composer.expectArray().expectInteger(0).expectEnd();
+        ASSERT_TRUE(decode(R"([0 ,])"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("k"sv).expectSignedInteger(0).expectEnd();
-        decode(R"({"k":0,})"sv, composer, nullptr);
+        composer.expectObject().expectKey("k"sv).expectInteger(0).expectEnd();
+        ASSERT_TRUE(decode(R"({"k":0,})"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("k"sv).expectSignedInteger(0).expectEnd();
-        decode(R"({"k":0, })"sv, composer, nullptr);
+        composer.expectObject().expectKey("k"sv).expectInteger(0).expectEnd();
+        ASSERT_TRUE(decode(R"({"k":0, })"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("k"sv).expectSignedInteger(0).expectEnd();
-        decode(R"({"k":0 ,})"sv, composer, nullptr);
+        composer.expectObject().expectKey("k"sv).expectInteger(0).expectEnd();
+        ASSERT_TRUE(decode(R"({"k":0 ,})"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Invalid
@@ -912,97 +954,97 @@ TEST(decode, comments)
 {
     { // Single comment
         ExpectantComposer composer{};
-        composer.expectSignedInteger(0);
-        decode(R"(0 # AAAAA)"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(0 # AAAAA)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectSignedInteger(0);
-        decode(R"(0 # AAAAA # BBBBB 1)"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode(R"(0 # AAAAA # BBBBB 1)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Multiple comments
         ExpectantComposer composer{};
-        composer.expectSignedInteger(0);
-        decode("# AAAAA\n#  BBBBB \n #CCCCC\n\n# DD DD\n0"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode("# AAAAA\n#  BBBBB \n #CCCCC\n\n# DD DD\n0"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Comment in string
         ExpectantComposer composer{};
         composer.expectString("# AAAAA"sv);
-        decode(R"("# AAAAA")"sv, composer, nullptr);
+        ASSERT_TRUE(decode(R"("# AAAAA")"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Comments in array
         ExpectantComposer composer{};
         composer.expectArray();
-            composer.expectSignedInteger(0);
-            composer.expectSignedInteger(1);
+            composer.expectInteger(0);
+            composer.expectInteger(1);
         composer.expectEnd();
-        decode(
+        ASSERT_TRUE(decode(
 R"([ # AAAAA
     0, # BBBBB
     1 # CCCCC
-] # DDDDD)"sv, composer, nullptr);
+] # DDDDD)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Comments in object
         ExpectantComposer composer{};
         composer.expectObject();
-            composer.expectKey("0"sv).expectSignedInteger(0);
-            composer.expectKey("1"sv).expectSignedInteger(1);
+            composer.expectKey("0"sv).expectInteger(0);
+            composer.expectKey("1"sv).expectInteger(1);
         composer.expectEnd();
-        decode(
+        ASSERT_TRUE(decode(
 R"({ # AAAAA
     "0": 0, # BBBBB
     "1": 1 # CCCCC
-} # DDDDD)"sv, composer, nullptr);
+} # DDDDD)"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // CRLF
         ExpectantComposer composer{};
-        composer.expectArray().expectSignedInteger(0).expectSignedInteger(1).expectEnd();
-        decode("[ # AAAAA\r\n    0, # BBBBB\n    1 # CCCCC\r\n] # DDDDD \n"sv, composer, nullptr);
+        composer.expectArray().expectInteger(0).expectInteger(1).expectEnd();
+        ASSERT_TRUE(decode("[ # AAAAA\r\n    0, # BBBBB\n    1 # CCCCC\r\n] # DDDDD \n"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
-        composer.expectArray().expectSignedInteger(1).expectEnd();
-        decode("[ # AAAAA\r 0, # BBBBB\n    1 # CCCCC\r\n] # DDDDD \n"sv, composer, nullptr);
+        composer.expectArray().expectInteger(1).expectEnd();
+        ASSERT_TRUE(decode("[ # AAAAA\r 0, # BBBBB\n    1 # CCCCC\r\n] # DDDDD \n"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Weirdness
         ExpectantComposer composer{};
 
-        composer.expectSignedInteger(0);
-        decode("#\n0"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode("#\n0"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
 
-        composer.expectSignedInteger(0);
-        decode("# \n0"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode("# \n0"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
 
-        composer.expectSignedInteger(0);
-        decode("##\n0"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode("##\n0"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
 
-        composer.expectSignedInteger(0);
-        decode("# #\n0"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode("# #\n0"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
 
-        composer.expectSignedInteger(0);
-        decode("#\n#\n0"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode("#\n#\n0"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
 
-        composer.expectSignedInteger(0);
-        decode("0#"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode("0#"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
 
-        composer.expectSignedInteger(0);
-        decode("0# "sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode("0# "sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
 
-        composer.expectSignedInteger(0);
-        decode("0#\n"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode("0#\n"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
 
-        composer.expectSignedInteger(0);
-        decode("0#\n#"sv, composer, nullptr);
+        composer.expectInteger(0);
+        ASSERT_TRUE(decode("0#\n#"sv, composer, nullptr).success);
         ASSERT_TRUE(composer.isDone());
     }
     { // Nothing but comments
@@ -1035,11 +1077,11 @@ TEST(decode, general)
     ExpectantComposer composer{};
     composer.expectObject();
         composer.expectKey("Name"sv).expectString("Salt's Crust"sv);
-        composer.expectKey("Founded"sv).expectSignedInteger(1964);
+        composer.expectKey("Founded"sv).expectInteger(1964);
         composer.expectKey("Employees"sv).expectArray();
-            composer.expectObject().expectKey("Name"sv).expectString("Ol' Joe Fisher"sv).expectKey("Title"sv).expectString("Fisherman"sv).expectKey("Age"sv).expectSignedInteger(69).expectEnd();
-            composer.expectObject().expectKey("Name"sv).expectString("Mark Rower"sv).expectKey("Title"sv).expectString("Cook"sv).expectKey("Age"sv).expectSignedInteger(41).expectEnd();
-            composer.expectObject().expectKey("Name"sv).expectString("Phineas"sv).expectKey("Title"sv).expectString("Server Boy"sv).expectKey("Age"sv).expectSignedInteger(19).expectEnd();
+            composer.expectObject().expectKey("Name"sv).expectString("Ol' Joe Fisher"sv).expectKey("Title"sv).expectString("Fisherman"sv).expectKey("Age"sv).expectInteger(69).expectEnd();
+            composer.expectObject().expectKey("Name"sv).expectString("Mark Rower"sv).expectKey("Title"sv).expectString("Cook"sv).expectKey("Age"sv).expectInteger(41).expectEnd();
+            composer.expectObject().expectKey("Name"sv).expectString("Phineas"sv).expectKey("Title"sv).expectString("Server Boy"sv).expectKey("Age"sv).expectInteger(19).expectEnd();
         composer.expectEnd();
         composer.expectKey("Dishes"sv).expectArray();
             composer.expectObject();
@@ -1073,9 +1115,9 @@ I do not like them anywhere
 I do not like green eggs and ham
 I do not like them Sam I am
 )");
-        composer.expectKey("Magic Numbers"sv).expectArray().expectUnsignedInteger(777).expectUnsignedInteger(777).expectUnsignedInteger(777).expectEnd();
+        composer.expectKey("Magic Numbers"sv).expectArray().expectInteger(777).expectInteger(777).expectInteger(777).expectEnd();
     composer.expectEnd();
-    decode(
+    const std::string_view qcon{
 R"(
 # Third quarter summary document
 # Protected information, do not propagate!
@@ -1085,8 +1127,8 @@ R"(
     # Not necessarily up to date
     "Employees": [
         { "Name": "Ol' Joe Fisher", "Title": "Fisherman", "Age": 69 },
-        { "Name": "Mark Rower", "Title": "Cook", "Age": 41. },
-        { "Name": "Phineas", "Title": "Server Boy", "Age": 19.0 },
+        { "Name": "Mark Rower", "Title": "Cook", "Age": 41 },
+        { "Name": "Phineas", "Title": "Server Boy", "Age": 19 },
     ],
     "Dishes": [
         {
@@ -1103,7 +1145,7 @@ R"(
         },
         {
             "Name": "18 Leg Bouquet",
-            "Price": +nan,
+            "Price": nan,
             "Ingredients": [ "\"Salt\"", "Octopus", "Crab", ],
             "Gluten Free": false
         }
@@ -1122,6 +1164,8 @@ I do not like green eggs and ham\n\
 I do not like them Sam I am\n\
 ",
     "Magic Numbers": [0x309,0o1411,0b1100001001] # What could they mean?!
-})"sv, composer, nullptr);
+})"sv};
+    const DecodeResult result{decode(qcon, composer, nullptr)};
+    ASSERT_TRUE(result.success);
     ASSERT_TRUE(composer.isDone());
 }

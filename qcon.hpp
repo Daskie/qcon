@@ -34,7 +34,6 @@ namespace qcon
         array,
         string,
         integer,
-        unsigner,
         floater,
         boolean
     };
@@ -54,50 +53,6 @@ namespace qcon
     /// The internal representation for arrays is `std::vector<qcon::Value>`
     ///
     using Array = std::vector<Value>;
-
-    ///
-    /// Specialize `qcon::ValueFrom` to enable `Value` construction from custom types
-    /// Example:
-    ///     template <>
-    ///     struct qcon::ValueFrom<std::pair<int, int>> {
-    ///         qcon::Value operator()(const std::pair<int, int> & v) const {
-    ///             return qcon::makeArray(v.first, f.second);
-    ///         }
-    ///     };
-    ///
-    template <typename T> struct ValueFrom;
-
-    ///
-    /// Concept describing a type for which `qcon::ValueFrom` has been specialized
-    ///
-    template <typename T> concept ValueFromAble = requires (T v) { { ::qcon::ValueFrom<T>{}(v) } -> std::same_as<Value>; };
-
-    ///
-    /// Specialize `qcon::ValueTo` to enable `Value::as` for custom types
-    /// Example:
-    ///     template <>
-    ///     struct qcon::ValueTo<std::pair<int, int>> {
-    ///         std::optional<std::pair<int, int>> operator()(const qcon::Value & v) const {
-    ///             const qcon::Array * const arr{v.asArray()};
-    ///             if (arr && arr->size() == 2u)
-    ///             {
-    ///                 const std::optional<int> v1{(*arr)[0].get<int>()};
-    ///                 const std::optional<int> v2{(*arr)[1].get<int>()};
-    ///                 if (v1 && v2)
-    ///                 {
-    ///                     return std::pair<int, int>{*v1, *v2};
-    ///                 }
-    ///             }
-    ///             return {};
-    ///         }
-    ///     };
-    ///
-    template <typename T> struct ValueTo;
-
-    ///
-    /// Concept describing a type for which `qcon::ValueTo` has been specialized
-    ///
-    template <typename T> concept ValueToAble = requires (Value v) { { ::qcon::ValueTo<T>{}(v) } -> std::same_as<std::optional<T>>; };
 
     ///
     /// Represents one QCON value, which can be an object, array, string, number, boolean, or null
@@ -140,14 +95,6 @@ namespace qcon
         Value(double val);
         Value(float val);
         Value(bool val);
-
-        ///
-        /// Attempts to construct a value from a custom type `T` using a specialized `qcon::ValueFrom` function,
-        /// details of which can be found below
-        /// @tparam T the custom type
-        /// @param val the custom type value
-        ///
-        template <ValueFromAble T> Value(const T & val);
 
         Value(const Value &) = delete;
         Value(Value && other);
@@ -202,14 +149,9 @@ namespace qcon
         bool isString() const { return _type == Type::string; }
 
         ///
-        /// @return whether the value is a signed integer
+        /// @return whether the value is an integer
         ///
         bool isInteger() const { return _type == Type::integer; }
-
-        ///
-        /// @return whether the value is an unsigned integer
-        ///
-        bool isUnsigner() const { return _type == Type::unsigner; }
 
         ///
         /// @return whether the value is a floater
@@ -225,14 +167,6 @@ namespace qcon
         /// @return whether the value is null
         ///
         bool isNull() const { return _type == Type::null; }
-
-        ///
-        /// Determines if the value type is compatible with `T`, which is to say calling `get<T>()` would be valid
-        /// See the `get` method docs below for more details
-        /// @tparam T the type in question, e.g. `int` or `std::string`
-        /// @return whether the value type is compatible with type `T`
-        ///
-        template <typename T> bool is() const;
 
         ///
         /// @tparam safety whether to check if this value is actually an object
@@ -256,18 +190,11 @@ namespace qcon
         const std::string * asString() const;
 
         ///
-        /// @tparam safety whether to check if this value is actually a signed integer
-        /// @return this value as a signed integer if it is a signed integer, otherwise null
+        /// @tparam safety whether to check if this value is actually an integer
+        /// @return this value as an integer if it is an integer, otherwise null
         ///
         int64_t * asInteger();
         const int64_t * asInteger() const;
-
-        ///
-        /// @tparam safety whether to check if this value is actually an unsigned integer
-        /// @return this value as an unsigned integer if it is an unsigned integer, otherwise null
-        ///
-        uint64_t * asUnsigner();
-        const uint64_t * asUnsigner() const;
 
         ///
         /// @tparam safety whether to check if this value is actually a floater
@@ -282,31 +209,6 @@ namespace qcon
         ///
         bool * asBoolean();
         const bool * asBoolean() const;
-
-        ///
-        /// Retrieves the value as the given type
-        /// If the actual type does not match the requested type, returns empty
-        /// If `T` is `std::string`, this call is equivalent to `asString`, except a copy of the string is returnsd
-        /// If `T` is `std::string_view`, `const char *`, or `char *`, a view/pointer to the current string is returned
-        /// If `T` is `char`, the first/only character of the current string is returned. If the current string has more
-        ///   then one character, returns empty. Note that in c++ `char`, `signed char`, and `unsigned char` are
-        ///   distinct types. Asking for a `signed char` or `unsigned char` will instead try to fetch a number of type
-        ///   `int8_t` or `uint8_t` respectively
-        /// If `T` is a numeric type...
-        ///   ...and the value is a positive integer, it may be accessed as:
-        ///     - any floater type (`double`, `float`)
-        ///     - any signed integer type (`int64_t`, `int32_t`, `int16_t`, `int8_t`), but only if it can fit
-        ///     - any unsigned integer type (`uint64_t`, `uint32_t`, `uint16_t`, `uint8_t`), but only if it can fit
-        ///   ...and the value is a negative integer, it may be accessed as:
-        ///     - any floater type (`double`, `float`)
-        ///     - any signed integer type (`int64_t`, `int32_t`, `int16_t`, `int8_t`), but only if it can fit
-        ///   ...and the value is not an integer, it may only be accessed as a floater (`double`, `float`)
-        /// If `T` is `bool`, this call is equivalent to `asBoolean` by value
-        /// If `T` is `nullptr_t` simply returns `nullptr`
-        /// If `T` is an unrecognized type, then we attempt to use the specialized `qcon::ValueTo` struct, details
-        ///   of which can be found below
-        ///
-        template <typename T> std::optional<T> get() const;
 
         ///
         /// Compares if two values are equivalent, that is they have the same type and value
@@ -348,7 +250,6 @@ namespace qcon
             Array * _array;
             std::string * _string;
             int64_t _integer;
-            uint64_t _unsigner;
             double _floater;
             bool _boolean;
         };
@@ -388,7 +289,7 @@ namespace qcon
     /// @param identifiers whether to encode all eligible keys as identifiers instead of strings
     /// @return an encoded QCON string, or empty if there was an issue encoding the QCON
     ///
-    std::optional<std::string> encode(const Value & val, Density density = Density::multiline, size_t indentSpaces = 4u, bool singleQuotes = false, bool identifiers = false);
+    std::optional<std::string> encode(const Value & val, Density density = multiline, size_t indentSpaces = 4u);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -470,6 +371,25 @@ namespace qcon
             }
         }
 
+        // TODO: Remove
+        void val(const int64_t v, const bool /*positive*/, State & state)
+        {
+            Value * composedVal;
+
+            switch (state.container)
+            {
+                case Container::object:
+                    composedVal = &state.node->_object->emplace(std::move(_key), v).first->second;
+                    break;
+                case Container::array:
+                    composedVal = &state.node->_array->emplace_back(v);
+                    break;
+                default:
+                    *state.node = v;
+                    composedVal = state.node;
+            }
+        }
+
       private:
 
         std::string _key{};
@@ -512,11 +432,6 @@ namespace qcon
             case Type::integer:
             {
                 encoder << val._integer;
-                break;
-            }
-            case Type::unsigner:
-            {
-                encoder << val._unsigner;
                 break;
             }
             case Type::floater:
@@ -584,8 +499,7 @@ namespace qcon
     {}
 
     inline Value::Value(const uint64_t val) :
-        _unsigner{val},
-        _type{Type::unsigner}
+        Value{int64_t(val)}
     {}
 
     inline Value::Value(const uint32_t val) :
@@ -614,13 +528,8 @@ namespace qcon
         _type{Type::boolean}
     {}
 
-    template <ValueFromAble T>
-    inline Value::Value(const T & val) :
-        Value{::qcon::ValueFrom<T>{}(val)}
-    {}
-
     inline Value::Value(Value && other) :
-        _unsigner{std::exchange(other._unsigner, 0u)},
+        _integer{std::exchange(other._integer, 0)},
         _type{std::exchange(other._type, Type::null)}
     {}
 
@@ -722,13 +631,7 @@ namespace qcon
 
     inline Value & Value::operator=(const uint64_t val)
     {
-        if (_type != Type::unsigner)
-        {
-            _deleteValue();
-            _type = Type::unsigner;
-        }
-        _unsigner = val;
-        return *this;
+        return *this = int64_t(val);
     }
 
     inline Value & Value::operator=(const uint32_t val)
@@ -787,7 +690,7 @@ namespace qcon
     inline Value & Value::operator=(Value && other)
     {
         _deleteValue();
-        _unsigner = std::exchange(other._unsigner, 0u);
+        _integer = std::exchange(other._integer, 0u);
         _type = std::exchange(other._type, Type::null);
         return *this;
     }
@@ -795,108 +698,6 @@ namespace qcon
     inline Value::~Value()
     {
         _deleteValue();
-    }
-
-    template <typename T>
-    inline bool Value::is() const
-    {
-        using U = std::decay_t<T>;
-
-        // Object
-        if constexpr (std::is_same_v<U, Object>)
-        {
-            return isObject();
-        }
-        // Array
-        else if constexpr (std::is_same_v<U, Array>)
-        {
-            return isArray();
-        }
-        // String
-        else if constexpr (std::is_same_v<U, std::string> || std::is_same_v<U, std::string_view> || std::is_same_v<U, const char *> || std::is_same_v<U, char *>)
-        {
-            return isString();
-        }
-        // Character
-        else if constexpr (std::is_same_v<U, char>)
-        {
-            return isString() && _string->size() == 1u;
-        }
-        // Boolean
-        else if constexpr (std::is_same_v<U, bool>)
-        {
-            return isBoolean();
-        }
-        // Signed integer
-        else if constexpr (std::is_integral_v<U> && std::is_signed_v<U>)
-        {
-            switch (_type)
-            {
-                case Type::integer:
-                {
-                    if constexpr (std::is_same_v<U, int64_t>)
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        return _integer <= std::numeric_limits<U>::max() && _integer >= std::numeric_limits<U>::min();
-                    }
-                }
-                case Type::unsigner:
-                {
-                    return _unsigner <= uint64_t(std::numeric_limits<U>::max());
-                }
-                case Type::floater:
-                {
-                    return double(U(_floater)) == _floater;
-                }
-                default:
-                {
-                    return false;
-                }
-            }
-        }
-        // Unsigned integer
-        else if constexpr (std::is_integral_v<U> && std::is_unsigned_v<U>)
-        {
-            switch (_type)
-            {
-                case Type::integer:
-                {
-                    return _integer >= 0 && uint64_t(_integer) <= std::numeric_limits<U>::max();
-                }
-                case Type::unsigner:
-                {
-                    if constexpr (std::is_same_v<U, uint64_t>)
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        return _unsigner <= std::numeric_limits<U>::max();
-                    }
-                }
-                case Type::floater:
-                {
-                    return _floater >= 0.0 && double(U(_floater)) == _floater;
-                }
-                default:
-                {
-                    return false;
-                }
-            }
-        }
-        // Floater
-        else if constexpr (std::is_floating_point_v<U>)
-        {
-            return _type == Type::integer || _type == Type::unsigner || _type == Type::floater;
-        }
-        // Other
-        else
-        {
-            return false;
-        }
     }
 
     inline Object * Value::asObject()
@@ -939,16 +740,6 @@ namespace qcon
         return isInteger() ? &_integer : nullptr;
     }
 
-    inline uint64_t * Value::asUnsigner()
-    {
-        return isUnsigner() ? &_unsigner : nullptr;
-    }
-
-    inline const uint64_t * Value::asUnsigner() const
-    {
-        return isUnsigner() ? &_unsigner : nullptr;
-    }
-
     inline double * Value::asFloater()
     {
         return isFloater() ? &_floater : nullptr;
@@ -969,105 +760,6 @@ namespace qcon
         return isBoolean() ? &_boolean : nullptr;
     }
 
-    template <typename T>
-    inline std::optional<T> Value::get() const
-    {
-        using U = std::decay_t<T>;
-
-        // Type must not be `qcon::Object`
-        static_assert(!std::is_same_v<U, Object>, "This function would have to make a copy of the object, use `qcon::Value::asObject` instead");
-
-        // Type must not be `qcon::Array`
-        static_assert(!std::is_same_v<U, Array>, "This function would have to make a copy of the array. Use `qcon::Value::asArray` instead");
-
-        // Type must not be `char *`
-        static_assert(!std::is_same_v<U, char *>, "Mutable char pointer may not be accessed by const function. Use `qcon::Value::asString` or `qcon::Value::to<const char *>` instead");
-
-        // String
-        if constexpr (std::is_same_v<U, std::string> || std::is_same_v<U, std::string_view>)
-        {
-            if (isString())
-            {
-                return *_string;
-            }
-            else
-            {
-                return {};
-            }
-        }
-        else if constexpr (std::is_same_v<U, const char *>)
-        {
-            if (isString())
-            {
-                return _string->c_str();
-            }
-            else
-            {
-                return {};
-            }
-        }
-        // Character
-        else if constexpr (std::is_same_v<U, char>)
-        {
-            if (isString() && !_string->empty())
-            {
-                return _string->front();
-            }
-            else
-            {
-                return {};
-            }
-        }
-        // Boolean
-        else if constexpr (std::is_same_v<U, bool>)
-        {
-            if (isBoolean())
-            {
-                return _boolean;
-            }
-            else
-            {
-                return {};
-            }
-        }
-        // Number
-        else if constexpr (std::is_arithmetic_v<U>)
-        {
-            if (is<U>())
-            {
-                switch (_type)
-                {
-                    case Type::integer: return U(_integer);
-                    case Type::unsigner: return U(_unsigner);
-                    case Type::floater: return U(_floater);
-                    default: return {};
-                }
-            }
-            else
-            {
-                return {};
-            }
-        }
-        // Null
-        else if constexpr (std::is_same_v<U, nullptr_t>)
-        {
-            if (isNull())
-            {
-                return nullptr;
-            }
-            else
-            {
-                return {};
-            }
-        }
-        // Other
-        else
-        {
-            static_assert(ValueToAble<T>, "Must specialize `qcon::ValueTo` to convert to custom type");
-            return ::qcon::ValueTo<U>{}(*this);
-        }
-    }
-
     inline bool Value::operator==(const Value & other) const
     {
         switch (other._type)
@@ -1077,7 +769,6 @@ namespace qcon
             case Type::array: return *this == *other._array;
             case Type::string: return *this == *other._string;
             case Type::integer: return *this == other._integer;
-            case Type::unsigner: return *this == other._unsigner;
             case Type::floater: return *this == other._floater;
             case Type::boolean: return *this == other._boolean;
             default: return false;
@@ -1116,13 +807,7 @@ namespace qcon
 
     inline bool Value::operator==(const int64_t val) const
     {
-        switch (_type)
-        {
-            case Type::integer: return _integer == val;
-            case Type::unsigner: return val >= 0 && _unsigner == uint64_t(val);
-            case Type::floater: return _floater == double(val) && int64_t(_floater) == val;
-            default: return false;
-        }
+        return _type == Type::integer && _integer == val;
     }
 
     inline bool Value::operator==(const int32_t val) const
@@ -1142,13 +827,7 @@ namespace qcon
 
     inline bool Value::operator==(const uint64_t val) const
     {
-        switch (_type)
-        {
-            case Type::integer: return _integer >= 0 && uint64_t(_integer) == val;
-            case Type::unsigner: return _unsigner == val;
-            case Type::floater: return _floater == double(val) && uint64_t(_floater) == val;
-            default: return false;
-        }
+        return *this == int64_t(val);
     }
 
     inline bool Value::operator==(const uint32_t val) const
@@ -1168,13 +847,7 @@ namespace qcon
 
     inline bool Value::operator==(const double val) const
     {
-        switch (_type)
-        {
-            case Type::integer: return double(_integer) == val && _integer == int64_t(val);
-            case Type::unsigner: return double(_unsigner) == val && _unsigner == uint64_t(val);
-            case Type::floater: return _floater == val;
-            default: return false;
-        }
+        return _type == Type::floater && _floater == val;
     }
 
     inline bool Value::operator==(const float val) const
@@ -1239,7 +912,7 @@ namespace qcon
     inline std::optional<Value> decode(const std::string_view qcon)
     {
         Value root{};
-        _Composer::State rootState{&root, Container::none};
+        _Composer::State rootState{&root, end};
         _Composer composer{};
         if (decode(qcon, composer, rootState).success)
         {
@@ -1251,9 +924,9 @@ namespace qcon
         }
     }
 
-    inline std::optional<std::string> encode(const Value & val, const Density density, size_t indentSpaces, bool singleQuotes, bool identifiers)
+    inline std::optional<std::string> encode(const Value & val, const Density density, size_t indentSpaces)
     {
-        Encoder encoder{density, indentSpaces, singleQuotes, identifiers};
+        Encoder encoder{density, indentSpaces};
         encoder << val;
         return encoder.finish();
     }
