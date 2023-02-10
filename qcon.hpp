@@ -134,81 +134,46 @@ namespace qcon
         Type type() const { return _type; }
 
         ///
-        /// @return whether the value is an object
-        ///
-        bool isObject() const { return _type == Type::object; }
-
-        ///
-        /// @return whether the value is an array
-        ///
-        bool isArray() const { return _type == Type::array; }
-
-        ///
-        /// @return whether the value is a string
-        ///
-        bool isString() const { return _type == Type::string; }
-
-        ///
-        /// @return whether the value is an integer
-        ///
-        bool isInteger() const { return _type == Type::integer; }
-
-        ///
-        /// @return whether the value is a floater
-        ///
-        bool isFloater() const { return _type == Type::floater; }
-
-        ///
-        /// @return whether the value is a boolean
-        ///
-        bool isBoolean() const { return _type == Type::boolean; }
-
-        ///
-        /// @return whether the value is null
-        ///
-        bool isNull() const { return _type == Type::null; }
-
-        ///
-        /// @tparam safety whether to check if this value is actually an object
         /// @return this value as an object if it is an object, otherwise null
         ///
-        Object * asObject();
-        const Object * asObject() const;
+        Object * object();
+        const Object * object() const;
 
         ///
-        /// @tparam safety whether to check if this value is actually an array
         /// @return this value as an array if it is an array, otherwise null
         ///
-        Array * asArray();
-        const Array * asArray() const;
+        Array * array();
+        const Array * array() const;
 
         ///
-        /// @tparam safety whether to check if this value is actually a string
         /// @return this value as a string if it is a string, otherwise null
         ///
-        std::string * asString();
-        const std::string * asString() const;
+        std::string * string();
+        const std::string * string() const;
 
         ///
-        /// @tparam safety whether to check if this value is actually an integer
         /// @return this value as an integer if it is an integer, otherwise null
         ///
-        int64_t * asInteger();
-        const int64_t * asInteger() const;
+        int64_t * integer();
+        const int64_t * integer() const;
 
         ///
-        /// @tparam safety whether to check if this value is actually a floater
         /// @return this value as a floater if it is a floater, otherwise null
         ///
-        double * asFloater();
-        const double * asFloater() const;
+        double * floater();
+        const double * floater() const;
 
         ///
-        /// @tparam safety whether to check if this value is actually a boolean
         /// @return this value as a boolean if it is a boolean, otherwise null
         ///
-        bool * asBoolean();
-        const bool * asBoolean() const;
+        bool * boolean();
+        const bool * boolean() const;
+
+        ///
+        /// @return this value as a null if it is a null, otherwise null
+        ///
+        nullptr_t * null();
+        const nullptr_t * null() const;
 
         ///
         /// Compares if two values are equivalent, that is they have the same type and value
@@ -700,64 +665,74 @@ namespace qcon
         _deleteValue();
     }
 
-    inline Object * Value::asObject()
+    inline Object * Value::object()
     {
-        return isObject() ? _object : nullptr;
+        return _type == Type::object ? _object : nullptr;
     }
 
-    inline const Object * Value::asObject() const
+    inline const Object * Value::object() const
     {
-        return isObject() ? _object : nullptr;
+        return _type == Type::object ? _object : nullptr;
     }
 
-    inline Array * Value::asArray()
+    inline Array * Value::array()
     {
-        return isArray() ? _array : nullptr;
+        return _type == Type::array ? _array : nullptr;
     }
 
-    inline const Array * Value::asArray() const
+    inline const Array * Value::array() const
     {
-        return isArray() ? _array : nullptr;
+        return _type == Type::array ? _array : nullptr;
     }
 
-    inline std::string * Value::asString()
+    inline std::string * Value::string()
     {
-        return isString() ? _string : nullptr;
+        return _type == Type::string ? _string : nullptr;
     }
 
-    inline const std::string * Value::asString() const
+    inline const std::string * Value::string() const
     {
-        return isString() ? _string : nullptr;
+        return _type == Type::string ? _string : nullptr;
     }
 
-    inline int64_t * Value::asInteger()
+    inline int64_t * Value::integer()
     {
-        return isInteger() ? &_integer : nullptr;
+        return _type == Type::integer ? &_integer : nullptr;
     }
 
-    inline const int64_t * Value::asInteger() const
+    inline const int64_t * Value::integer() const
     {
-        return isInteger() ? &_integer : nullptr;
+        return _type == Type::integer ? &_integer : nullptr;
     }
 
-    inline double * Value::asFloater()
+    inline double * Value::floater()
     {
-        return isFloater() ? &_floater : nullptr;
+        return _type == Type::floater ? &_floater : nullptr;
     }
 
-    inline const double * Value::asFloater() const
+    inline const double * Value::floater() const
     {
-        return isFloater() ? &_floater : nullptr;
+        return _type == Type::floater ? &_floater : nullptr;
     }
 
-    inline bool * Value::asBoolean()
+    inline bool * Value::boolean()
     {
-        return isBoolean() ? &_boolean : nullptr;
+        return _type == Type::boolean ? &_boolean : nullptr;
     }
 
-    inline const bool * Value::asBoolean() const
+    inline const bool * Value::boolean() const
     {
-        return isBoolean() ? &_boolean : nullptr;
+        return _type == Type::boolean ? &_boolean : nullptr;
+    }
+
+    inline nullptr_t * Value::null()
+    {
+        return _type == Type::null ? &_null : nullptr;
+    }
+
+    inline const nullptr_t * Value::null() const
+    {
+        return _type == Type::null ? &_null : nullptr;
     }
 
     inline bool Value::operator==(const Value & other) const

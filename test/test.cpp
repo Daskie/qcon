@@ -27,8 +27,8 @@ TEST(qcon, encodeDecodeString)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isString());
-        ASSERT_EQ(val, *decoded->asString());
+        ASSERT_TRUE(decoded->string());
+        ASSERT_EQ(val, *decoded->string());
     }
     { // Typical
         std::string_view val{"abc"sv};
@@ -36,8 +36,8 @@ TEST(qcon, encodeDecodeString)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isString());
-        ASSERT_EQ(val, *decoded->asString());
+        ASSERT_TRUE(decoded->string());
+        ASSERT_EQ(val, *decoded->string());
     }
     { // Printable characters
         std::string_view val{R"( !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~)"sv};
@@ -45,8 +45,8 @@ TEST(qcon, encodeDecodeString)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isString());
-        ASSERT_EQ(val, *decoded->asString());
+        ASSERT_TRUE(decoded->string());
+        ASSERT_EQ(val, *decoded->string());
     }
     { // Escape characters
         std::string_view val{"\b\f\n\r\t"sv};
@@ -54,8 +54,8 @@ TEST(qcon, encodeDecodeString)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isString());
-        ASSERT_EQ(val, *decoded->asString());
+        ASSERT_TRUE(decoded->string());
+        ASSERT_EQ(val, *decoded->string());
     }
     { // Unicode
         std::string_view val{"\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\u000B\u000E\u000F\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001A\u001B\u001C\u001D\u001E\u001F\u007F"sv};
@@ -63,8 +63,8 @@ TEST(qcon, encodeDecodeString)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isString());
-        ASSERT_EQ(val, *decoded->asString());
+        ASSERT_TRUE(decoded->string());
+        ASSERT_EQ(val, *decoded->string());
     }
 }
 
@@ -76,8 +76,8 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, *decoded->asInteger());
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, *decoded->integer());
     }
     { // Typical
         int val{123};
@@ -85,8 +85,8 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, *decoded->asInteger());
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, *decoded->integer());
     }
     { // Max 64
         int64_t val{std::numeric_limits<int64_t>::max()};
@@ -94,8 +94,8 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, *decoded->asInteger());
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, *decoded->integer());
     }
     { // Min 64
         int64_t val{std::numeric_limits<int64_t>::min()};
@@ -103,8 +103,8 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, *decoded->asInteger());
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, *decoded->integer());
     }
     { // Max 32
         int32_t val{std::numeric_limits<int32_t>::max()};
@@ -112,8 +112,8 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, *decoded->asInteger());
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, *decoded->integer());
     }
     { // Min 32
         int32_t val{std::numeric_limits<int32_t>::min()};
@@ -121,8 +121,8 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, *decoded->asInteger());
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, *decoded->integer());
     }
     { // Max 16
         int16_t val{std::numeric_limits<int16_t>::max()};
@@ -130,8 +130,8 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, *decoded->asInteger());
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, *decoded->integer());
     }
     { // Min 16
         int16_t val{std::numeric_limits<int16_t>::min()};
@@ -139,8 +139,8 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, *decoded->asInteger());
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, *decoded->integer());
     }
     { // Max 8
         int8_t val{std::numeric_limits<int8_t>::max()};
@@ -148,8 +148,8 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, *decoded->asInteger());
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, *decoded->integer());
     }
     { // Min 8
         int8_t val{std::numeric_limits<int8_t>::min()};
@@ -157,8 +157,8 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, *decoded->asInteger());
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, *decoded->integer());
     }
 }
 
@@ -170,8 +170,8 @@ TEST(qcon, encodeDecodeUnsignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, uint64_t(*decoded->asInteger()));
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, uint64_t(*decoded->integer()));
     }
     { // Typical
         unsigned int val{123u};
@@ -179,8 +179,8 @@ TEST(qcon, encodeDecodeUnsignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, uint64_t(*decoded->asInteger()));
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, uint64_t(*decoded->integer()));
     }
     { // Max 64
         uint64_t val{std::numeric_limits<uint64_t>::max()};
@@ -188,8 +188,8 @@ TEST(qcon, encodeDecodeUnsignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, uint64_t(*decoded->asInteger()));
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, uint64_t(*decoded->integer()));
     }
     { // Max 32
         uint32_t val{std::numeric_limits<uint32_t>::max()};
@@ -197,8 +197,8 @@ TEST(qcon, encodeDecodeUnsignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, uint64_t(*decoded->asInteger()));
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, uint64_t(*decoded->integer()));
     }
     { // Max 16
         uint16_t val{std::numeric_limits<uint16_t>::max()};
@@ -206,8 +206,8 @@ TEST(qcon, encodeDecodeUnsignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, uint64_t(*decoded->asInteger()));
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, uint64_t(*decoded->integer()));
     }
     { // Max 8
         uint8_t val{std::numeric_limits<uint8_t>::max()};
@@ -215,8 +215,8 @@ TEST(qcon, encodeDecodeUnsignedInteger)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isInteger());
-        ASSERT_EQ(val, *decoded->asInteger());
+        ASSERT_TRUE(decoded->integer());
+        ASSERT_EQ(val, *decoded->integer());
     }
 }
 
@@ -231,8 +231,8 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // Typical
         double val{123.45};
@@ -240,8 +240,8 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // Max integer 64
         double val{reinterpret_cast<const double &>(val64 = 0b0'10000110011'1111111111111111111111111111111111111111111111111111u)};
@@ -249,8 +249,8 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // Max integer 32
         double val{reinterpret_cast<const float &>(val32 = 0b0'10010110'11111111111111111111111u)};
@@ -258,8 +258,8 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // Max 64
         double val{reinterpret_cast<const double &>(val64 = 0b0'11111111110'1111111111111111111111111111111111111111111111111111u)};
@@ -267,8 +267,8 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // Max 32
         double val{reinterpret_cast<const float &>(val32 = 0b0'11111110'11111111111111111111111u)};
@@ -276,8 +276,8 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // Min normal 64
         double val{reinterpret_cast<const double &>(val64 = 0b0'00000000001'0000000000000000000000000000000000000000000000000000u)};
@@ -285,8 +285,8 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // Min normal 32
         double val{reinterpret_cast<const float &>(val32 = 0b0'00000001'00000000000000000000000u)};
@@ -294,8 +294,8 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // Min subnormal 64
         double val{reinterpret_cast<const double &>(val64 = 0b0'00000000000'0000000000000000000000000000000000000000000000000001u)};
@@ -303,8 +303,8 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // Min subnormal 32
         double val{reinterpret_cast<const float &>(val32 = 0b0'00000000'00000000000000000000001u)};
@@ -312,8 +312,8 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // Positive infinity
         double val{std::numeric_limits<double>::infinity()};
@@ -321,8 +321,8 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // Negative infinity
         double val{-std::numeric_limits<double>::infinity()};
@@ -330,16 +330,16 @@ TEST(qcon, encodeDecodeFloater)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_EQ(val, *decoded->asFloater());
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_EQ(val, *decoded->floater());
     }
     { // NaN
         const std::optional<std::string> encoded{encode(std::numeric_limits<double>::quiet_NaN())};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isFloater());
-        ASSERT_TRUE(std::isnan(*decoded->asFloater()));
+        ASSERT_TRUE(decoded->floater());
+        ASSERT_TRUE(std::isnan(*decoded->floater()));
     }
 }
 
@@ -350,16 +350,16 @@ TEST(qcon, encodeDecodeBoolean)
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isBoolean());
-        ASSERT_EQ(true, *decoded->asBoolean());
+        ASSERT_TRUE(decoded->boolean());
+        ASSERT_EQ(true, *decoded->boolean());
     }
     { // false
         const std::optional<std::string> encoded{encode(false)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->isBoolean());
-        ASSERT_EQ(false, *decoded->asBoolean());
+        ASSERT_TRUE(decoded->boolean());
+        ASSERT_EQ(false, *decoded->boolean());
     }
 }
 
@@ -369,7 +369,7 @@ TEST(qcon, encodeDecodeNull)
     ASSERT_TRUE(encoded);
     const std::optional<Value> decoded{decode(*encoded)};
     ASSERT_TRUE(decoded);
-    ASSERT_TRUE(decoded->isNull());
+    ASSERT_TRUE(decoded->null());
 }
 
 TEST(qcon, valueConstruction)
@@ -406,18 +406,18 @@ TEST(qcon, valueConstruction)
 TEST(qcon, valueMove)
 {
     Value v1("abc"sv);
-    ASSERT_TRUE(v1.isString());
-    ASSERT_EQ("abc"sv, *v1.asString());
+    ASSERT_TRUE(v1.string());
+    ASSERT_EQ("abc"sv, *v1.string());
 
     Value v2(std::move(v1));
-    ASSERT_TRUE(v1.isNull());
-    ASSERT_TRUE(v2.isString());
-    ASSERT_EQ("abc"sv, *v2.asString());
+    ASSERT_TRUE(v1.null());
+    ASSERT_TRUE(v2.string());
+    ASSERT_EQ("abc"sv, *v2.string());
 
     v1 = std::move(v2);
-    ASSERT_TRUE(v1.isString());
-    ASSERT_TRUE(v2.isNull());
-    ASSERT_EQ("abc"sv, *v1.asString());
+    ASSERT_TRUE(v1.string());
+    ASSERT_TRUE(v2.null());
+    ASSERT_EQ("abc"sv, *v1.string());
 }
 
 TEST(qcon, valueAssignAndEquality)
@@ -547,67 +547,59 @@ TEST(qcon, valueTypes)
     { // Object
         Value v(Object{});
         ASSERT_EQ(Type::object, v.type());
-        ASSERT_TRUE(v.isObject());
-        ASSERT_TRUE(v.asObject());
+        ASSERT_TRUE(v.object());
     }
     { // Array
         Value v(Array{});
         ASSERT_EQ(Type::array, v.type());
-        ASSERT_TRUE(v.isArray());
-        ASSERT_TRUE(v.asArray());
+        ASSERT_TRUE(v.array());
     }
     { // String
         Value v("abc"sv);
         ASSERT_EQ(Type::string, v.type());
-        ASSERT_TRUE(v.isString());
-        ASSERT_TRUE(v.asString());
+        ASSERT_TRUE(v.string());
     }
     { // Character
         Value v('a');
         ASSERT_EQ(Type::string, v.type());
-        ASSERT_TRUE(v.isString());
-        ASSERT_TRUE(v.asString());
+        ASSERT_TRUE(v.string());
     }
     { // Signed integer
         Value v(123);
         ASSERT_EQ(Type::integer, v.type());
-        ASSERT_TRUE(v.isInteger());
-        ASSERT_TRUE(v.asInteger());
+        ASSERT_TRUE(v.integer());
     }
     { // Unsigned integer
         Value v(123u);
         ASSERT_EQ(Type::integer, v.type());
-        ASSERT_TRUE(v.isInteger());
-        ASSERT_TRUE(v.asInteger());
+        ASSERT_TRUE(v.integer());
     }
     { // Floater
         Value v(123.0);
         ASSERT_EQ(Type::floater, v.type());
-        ASSERT_TRUE(v.isFloater());
-        ASSERT_TRUE(v.asFloater());
+        ASSERT_TRUE(v.floater());
     }
     { // Boolean
         Value v(false);
         ASSERT_EQ(Type::boolean, v.type());
-        ASSERT_TRUE(v.isBoolean());
-        ASSERT_TRUE(v.asBoolean());
+        ASSERT_TRUE(v.boolean());
     }
     { // Null
         Value v(nullptr);
         ASSERT_EQ(Type::null, v.type());
-        ASSERT_TRUE(v.isNull());
+        ASSERT_TRUE(v.null());
     }
 }
 
 TEST(qcon, wrongValueType)
 {
     // Safe
-    ASSERT_FALSE((Value().asObject()));
-    ASSERT_FALSE((Value().asArray()));
-    ASSERT_FALSE((Value().asString()));
-    ASSERT_FALSE((Value().asInteger()));
-    ASSERT_FALSE((Value().asFloater()));
-    ASSERT_FALSE((Value().asBoolean()));
+    ASSERT_FALSE((Value().object()));
+    ASSERT_FALSE((Value().array()));
+    ASSERT_FALSE((Value().string()));
+    ASSERT_FALSE((Value().integer()));
+    ASSERT_FALSE((Value().floater()));
+    ASSERT_FALSE((Value().boolean()));
 }
 
 TEST(qcon, density)
@@ -629,22 +621,22 @@ TEST(qcon, makeObject)
         ASSERT_EQ(1u, obj2.size());
         ASSERT_TRUE(obj2.contains("d"));
 
-        const Object * innerObj{obj2["d"].asObject()};
+        const Object * innerObj{obj2["d"].object()};
         ASSERT_TRUE(innerObj);
         ASSERT_EQ(3u, innerObj->size());
 
         ASSERT_TRUE(innerObj->contains("a"));
-        const int64_t * aVal{innerObj->at("a").asInteger()};
+        const int64_t * aVal{innerObj->at("a").integer()};
         ASSERT_TRUE(aVal);
         ASSERT_EQ(1, *aVal);
 
         ASSERT_TRUE(innerObj->contains("b"));
-        const double * bVal{innerObj->at("b").asFloater()};
+        const double * bVal{innerObj->at("b").floater()};
         ASSERT_TRUE(aVal);
         ASSERT_EQ(2.0, *bVal);
 
         ASSERT_TRUE(innerObj->contains("c"));
-        const bool * cVal{innerObj->at("c").asBoolean()};
+        const bool * cVal{innerObj->at("c").boolean()};
         ASSERT_TRUE(aVal);
         ASSERT_EQ(true, *cVal);
     }
@@ -662,24 +654,24 @@ TEST(qcon, makeArray)
         ASSERT_EQ(2u, arr2.size());
         ASSERT_EQ(2u, arr2.capacity());
 
-        const std::string * v1{arr2[0].asString()};
+        const std::string * v1{arr2[0].string()};
         ASSERT_TRUE(v1);
         ASSERT_EQ("ok", *v1);
 
-        const Array * innerArr{arr2[1].asArray()};
+        const Array * innerArr{arr2[1].array()};
         ASSERT_TRUE(innerArr);
         ASSERT_EQ(3u, innerArr->size());
         ASSERT_EQ(3u, innerArr->capacity());
 
-        const int64_t * v2{(*innerArr)[0].asInteger()};
+        const int64_t * v2{(*innerArr)[0].integer()};
         ASSERT_TRUE(v2);
         ASSERT_EQ(1, *v2);
 
-        const double * v3{(*innerArr)[1].asFloater()};
+        const double * v3{(*innerArr)[1].floater()};
         ASSERT_TRUE(v3);
         ASSERT_EQ(2.0, *v3);
 
-        const bool * v4{(*innerArr)[2].asBoolean()};
+        const bool * v4{(*innerArr)[2].boolean()};
         ASSERT_TRUE(v4);
         ASSERT_EQ(true, *v4);
     }
@@ -719,11 +711,11 @@ TEST(qcon, comments)
     # Blah
 ] # Blah
 # Blah)"sv)};
-        const Array & rootArr{*qcon.asArray()};
+        const Array & rootArr{*qcon.array()};
         ASSERT_EQ(2u, rootArr.size());
-        const Array & innerArr{*rootArr.at(0).asArray()};
+        const Array & innerArr{*rootArr.at(0).array()};
         ASSERT_EQ(2u, innerArr.size());
-        const Object & innerObj{*rootArr.at(1).asObject()};
+        const Object & innerObj{*rootArr.at(1).object()};
         ASSERT_EQ(2u, innerObj.size());
     }
 }
