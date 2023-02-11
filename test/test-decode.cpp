@@ -9,6 +9,17 @@
 
 #include <qcon-decode.hpp>
 
+using s8 = int8_t;
+using s16 = int16_t;
+using s32 = int32_t;
+using s64 = int64_t;
+using u8 = uint8_t;
+using u16 = uint16_t;
+using u32 = uint32_t;
+using u64 = uint64_t;
+
+using unat = size_t;
+
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
@@ -259,7 +270,7 @@ TEST(decode, string)
         std::string decodeStr(1 + 256 * 4 + 1, '\0');
         decodeStr.front() = '"';
         decodeStr.back() = '"';
-        for (size_t i{0u}; i < 256u; ++i)
+        for (unat i{0u}; i < 256u; ++i)
         {
             expectedStr[i] = char(i);
             std::format_to_n(&decodeStr[1u + 4u * i], 4, "\\x{:02X}"sv, i);
@@ -274,7 +285,7 @@ TEST(decode, string)
         std::string decodeStr(1 + 256 * 6 + 1, '\0');
         decodeStr.front() = '"';
         decodeStr.back() = '"';
-        for (size_t i{0u}; i < 256u; ++i)
+        for (unat i{0u}; i < 256u; ++i)
         {
             expectedStr[i] = char(i);
             std::format_to_n(&decodeStr[1u + 6u * i], 6, "\\u{:04X}"sv, i);
@@ -370,21 +381,21 @@ TEST(decode, decimal)
     { // Min
         Decoder decoder{R"(-9223372036854775808)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
         ASSERT_FALSE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
         Decoder decoder{R"(+9223372036854775807)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::max());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::max());
         ASSERT_TRUE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max unsigned
         Decoder decoder{R"(+18446744073709551615)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
         ASSERT_TRUE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
@@ -418,21 +429,21 @@ TEST(decode, decimal)
     { // Min with leading zeroes
         Decoder decoder{R"(-000000009223372036854775808)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
         ASSERT_FALSE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
         Decoder decoder{R"(+000000009223372036854775807)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::max());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::max());
         ASSERT_TRUE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max unsigned with leading zeroes
         Decoder decoder{R"(+0000000018446744073709551615)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
         ASSERT_TRUE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
@@ -492,14 +503,14 @@ TEST(decode, hex)
     { // Min
         Decoder decoder{R"(-0x8000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
         ASSERT_FALSE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
         Decoder decoder{R"(+0xFFFFFFFFFFFFFFFF)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
         ASSERT_TRUE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
@@ -513,14 +524,14 @@ TEST(decode, hex)
     { // Min with leading zeroes
         Decoder decoder{R"(-0x000000008000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
         ASSERT_FALSE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
         Decoder decoder{R"(+0x00000000FFFFFFFFFFFFFFFF)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
         ASSERT_TRUE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
@@ -574,14 +585,14 @@ TEST(decode, octal)
     { // Min
         Decoder decoder{R"(-0o1000000000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
         ASSERT_FALSE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
         Decoder decoder{R"(+0o1777777777777777777777)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
         ASSERT_TRUE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
@@ -595,14 +606,14 @@ TEST(decode, octal)
     { // Min with leading zeroes
         Decoder decoder{R"(-0o000000001000000000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
         ASSERT_FALSE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
         Decoder decoder{R"(+0o000000001777777777777777777777)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
         ASSERT_TRUE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
@@ -656,14 +667,14 @@ TEST(decode, binary)
     { // Min
         Decoder decoder{R"(-0b1000000000000000000000000000000000000000000000000000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
         ASSERT_FALSE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
         Decoder decoder{R"(+0b1111111111111111111111111111111111111111111111111111111111111111)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
         ASSERT_TRUE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
@@ -677,14 +688,14 @@ TEST(decode, binary)
     { // Min with leading zeroes
         Decoder decoder{R"(-0b000000001000000000000000000000000000000000000000000000000000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
         ASSERT_FALSE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
         Decoder decoder{R"(+0b000000001111111111111111111111111111111111111111111111111111111111111111)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
         ASSERT_TRUE(decoder.boolean);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }

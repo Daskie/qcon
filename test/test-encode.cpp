@@ -4,6 +4,17 @@
 
 #include <qcon-encode.hpp>
 
+using s8 = int8_t;
+using s16 = int16_t;
+using s32 = int32_t;
+using s64 = int64_t;
+using u8 = uint8_t;
+using u16 = uint16_t;
+using u32 = uint32_t;
+using u64 = uint64_t;
+
+using unat = size_t;
+
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
@@ -191,18 +202,18 @@ TEST(encode, string)
         std::string expectedStr(1 + 154 * 4 + 1, '\0');
         expectedStr.front() = '"';
         expectedStr.back() = '"';
-        size_t i{0u};
-        for (size_t cp{1u}; cp < 8u; ++cp, ++i)
+        unat i{0u};
+        for (unat cp{1u}; cp < 8u; ++cp, ++i)
         {
             decodeStr[i] = char(cp);
             std::format_to_n(&expectedStr[1u + 4u * i], 6, "\\x{:02X}"sv, cp);
         }
-        for (size_t cp{14u}; cp < 32u; ++cp, ++i)
+        for (unat cp{14u}; cp < 32u; ++cp, ++i)
         {
             decodeStr[i] = char(cp);
             std::format_to_n(&expectedStr[1u + 4u * i], 6, "\\x{:02X}"sv, cp);
         }
-        for (size_t cp{127u}; cp < 256u; ++cp, ++i)
+        for (unat cp{127u}; cp < 256u; ++cp, ++i)
         {
             decodeStr[i] = char(cp);
             std::format_to_n(&expectedStr[1u + 4u * i], 6, "\\x{:02X}"sv, cp);
@@ -235,7 +246,7 @@ TEST(encode, signedInteger)
 {
     { // Zero
         Encoder encoder{};
-        encoder << int64_t(0);
+        encoder << s64(0);
         ASSERT_EQ(R"(0)"s, encoder.finish());
     }
     { // Typical
@@ -245,42 +256,42 @@ TEST(encode, signedInteger)
     }
     { // Max 64
         Encoder encoder{};
-        encoder << std::numeric_limits<int64_t>::max();
+        encoder << std::numeric_limits<s64>::max();
         ASSERT_EQ(R"(9223372036854775807)"s, encoder.finish());
     }
     { // Min 64
         Encoder encoder{};
-        encoder << std::numeric_limits<int64_t>::min();
+        encoder << std::numeric_limits<s64>::min();
         ASSERT_EQ(R"(-9223372036854775808)"s, encoder.finish());
     }
     { // Max 32
         Encoder encoder{};
-        encoder << std::numeric_limits<int32_t>::max();
+        encoder << std::numeric_limits<s32>::max();
         ASSERT_EQ(R"(2147483647)"s, encoder.finish());
     }
     { // Min 32
         Encoder encoder{};
-        encoder << std::numeric_limits<int32_t>::min();
+        encoder << std::numeric_limits<s32>::min();
         ASSERT_EQ(R"(-2147483648)"s, encoder.finish());
     }
     { // Max 16
         Encoder encoder{};
-        encoder << std::numeric_limits<int16_t>::max();
+        encoder << std::numeric_limits<s16>::max();
         ASSERT_EQ(R"(32767)"s, encoder.finish());
     }
     { // Min 16
         Encoder encoder{};
-        encoder << std::numeric_limits<int16_t>::min();
+        encoder << std::numeric_limits<s16>::min();
         ASSERT_EQ(R"(-32768)"s, encoder.finish());
     }
     { // Max 8
         Encoder encoder{};
-        encoder << std::numeric_limits<int8_t>::max();
+        encoder << std::numeric_limits<s8>::max();
         ASSERT_EQ(R"(127)"s, encoder.finish());
     }
     { // Min 8
         Encoder encoder{};
-        encoder << std::numeric_limits<int8_t>::min();
+        encoder << std::numeric_limits<s8>::min();
         ASSERT_EQ(R"(-128)"s, encoder.finish());
     }
 }
@@ -299,22 +310,22 @@ TEST(encode, unsignedInteger)
     }
     { // Max 64
         Encoder encoder{};
-        encoder << std::numeric_limits<uint64_t>::max();
+        encoder << std::numeric_limits<u64>::max();
         ASSERT_EQ(R"(18446744073709551615)"s, encoder.finish());
     }
     { // Max 32
         Encoder encoder{};
-        encoder << std::numeric_limits<uint32_t>::max();
+        encoder << std::numeric_limits<u32>::max();
         ASSERT_EQ(R"(4294967295)"s, encoder.finish());
     }
     { // Max 16
         Encoder encoder{};
-        encoder << std::numeric_limits<uint16_t>::max();
+        encoder << std::numeric_limits<u16>::max();
         ASSERT_EQ(R"(65535)"s, encoder.finish());
     }
     { // Max 8
         Encoder encoder{};
-        encoder << std::numeric_limits<uint8_t>::max();
+        encoder << std::numeric_limits<u8>::max();
         ASSERT_EQ(R"(255)"s, encoder.finish());
     }
 }
@@ -333,18 +344,18 @@ TEST(encode, hex)
     }
     { // Max unsigned
         Encoder encoder{};
-        encoder << hex << std::numeric_limits<uint64_t>::max();
+        encoder << hex << std::numeric_limits<u64>::max();
         ASSERT_EQ(R"(0xFFFFFFFFFFFFFFFF)"s, encoder.finish());
     }
     { // Min signed
         Encoder encoder{};
-        encoder << hex << uint64_t(std::numeric_limits<int64_t>::min());
+        encoder << hex << u64(std::numeric_limits<s64>::min());
         ASSERT_EQ(R"(0x8000000000000000)"s, encoder.finish());
     }
     { // -1
         Encoder encoder{};
         #pragma warning(suppress: 4245)
-        encoder << hex << uint64_t(int64_t(-1));
+        encoder << hex << u64(s64(-1));
         ASSERT_EQ(R"(0xFFFFFFFFFFFFFFFF)"s, encoder.finish());
     }
 }
@@ -363,18 +374,18 @@ TEST(encode, octal)
     }
     { // Max unsigned
         Encoder encoder{};
-        encoder << octal << std::numeric_limits<uint64_t>::max();
+        encoder << octal << std::numeric_limits<u64>::max();
         ASSERT_EQ(R"(0o1777777777777777777777)"s, encoder.finish());
     }
     { // Min signed
         Encoder encoder{};
-        encoder << octal << uint64_t(std::numeric_limits<int64_t>::min());
+        encoder << octal << u64(std::numeric_limits<s64>::min());
         ASSERT_EQ(R"(0o1000000000000000000000)"s, encoder.finish());
     }
     { // -1
         Encoder encoder{};
         #pragma warning(suppress: 4245)
-        encoder << octal << uint64_t(int64_t(-1));
+        encoder << octal << u64(s64(-1));
         ASSERT_EQ(R"(0o1777777777777777777777)"s, encoder.finish());
     }
 }
@@ -393,18 +404,18 @@ TEST(encode, binary)
     }
     { // Max unsigned
         Encoder encoder{};
-        encoder << binary << std::numeric_limits<uint64_t>::max();
+        encoder << binary << std::numeric_limits<u64>::max();
         ASSERT_EQ(R"(0b1111111111111111111111111111111111111111111111111111111111111111)"s, encoder.finish());
     }
     { // Min signed
         Encoder encoder{};
-        encoder << binary << uint64_t(std::numeric_limits<int64_t>::min());
+        encoder << binary << u64(std::numeric_limits<s64>::min());
         ASSERT_EQ(R"(0b1000000000000000000000000000000000000000000000000000000000000000)"s, encoder.finish());
     }
     { // -1
         Encoder encoder{};
         #pragma warning(suppress: 4245)
-        encoder << binary << uint64_t(int64_t(-1));
+        encoder << binary << u64(s64(-1));
         ASSERT_EQ(R"(0b1111111111111111111111111111111111111111111111111111111111111111)"s, encoder.finish());
     }
 }
@@ -423,49 +434,49 @@ TEST(encode, floater)
     }
     { // Max integer 64
         Encoder encoder{};
-        uint64_t val{0b0'10000110011'1111111111111111111111111111111111111111111111111111u};
+        u64 val{0b0'10000110011'1111111111111111111111111111111111111111111111111111u};
         encoder << reinterpret_cast<const double &>(val);
         ASSERT_EQ(R"(9007199254740991.0)"s, encoder.finish());
     }
     { // Max integer 32
         Encoder encoder{};
-        uint32_t val{0b0'10010110'11111111111111111111111u};
+        u32 val{0b0'10010110'11111111111111111111111u};
         encoder << reinterpret_cast<const float &>(val);
         ASSERT_EQ(R"(16777215.0)"s, encoder.finish());
     }
     { // Max 64
         Encoder encoder{};
-        uint64_t val{0b0'11111111110'1111111111111111111111111111111111111111111111111111u};
+        u64 val{0b0'11111111110'1111111111111111111111111111111111111111111111111111u};
         encoder << reinterpret_cast<const double &>(val);
         ASSERT_EQ(R"(1.7976931348623157e+308)"s, encoder.finish());
     }
     { // Max 32
         Encoder encoder{};
-        uint32_t val{0b0'11111110'11111111111111111111111u};
+        u32 val{0b0'11111110'11111111111111111111111u};
         encoder << reinterpret_cast<const float &>(val);
         ASSERT_EQ(R"(3.4028234663852886e+38)"s, encoder.finish());
     }
     { // Min normal 64
         Encoder encoder{};
-        uint64_t val{0b0'00000000001'0000000000000000000000000000000000000000000000000000u};
+        u64 val{0b0'00000000001'0000000000000000000000000000000000000000000000000000u};
         encoder << reinterpret_cast<const double &>(val);
         ASSERT_EQ(R"(2.2250738585072014e-308)"s, encoder.finish());
     }
     { // Min normal 32
         Encoder encoder{};
-        uint32_t val{0b0'00000001'00000000000000000000000u};
+        u32 val{0b0'00000001'00000000000000000000000u};
         encoder << reinterpret_cast<const float &>(val);
         ASSERT_EQ(R"(1.1754943508222875e-38)"s, encoder.finish());
     }
     { // Min subnormal 64
         Encoder encoder{};
-        uint64_t val{0b0'00000000000'0000000000000000000000000000000000000000000000000001u};
+        u64 val{0b0'00000000000'0000000000000000000000000000000000000000000000000001u};
         encoder << reinterpret_cast<const double &>(val);
         ASSERT_EQ(R"(5e-324)"s, encoder.finish());
     }
     { // Min subnormal 32
         Encoder encoder{};
-        uint64_t val{0b0'00000000'00000000000000000000001u};
+        u64 val{0b0'00000000'00000000000000000000001u};
         encoder << reinterpret_cast<const float &>(val);
         ASSERT_EQ(R"(1.401298464324817e-45)"s, encoder.finish());
     }

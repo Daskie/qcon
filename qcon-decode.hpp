@@ -19,7 +19,16 @@
 
 namespace qcon
 {
-    using uchar = unsigned char;
+    using s8 = int8_t;
+    using s16 = int16_t;
+    using s32 = int32_t;
+    using s64 = int64_t;
+    using u8 = uint8_t;
+    using u16 = uint16_t;
+    using u32 = uint32_t;
+    using u64 = uint64_t;
+
+    using unat = size_t;
 
     using namespace std::string_literals;
     using namespace std::string_view_literals;
@@ -44,7 +53,7 @@ namespace qcon
 
         std::string key;
         std::string string;
-        int64_t integer;
+        s64 integer;
         double floater;
         bool boolean;
 
@@ -61,8 +70,8 @@ namespace qcon
         const char * _start{};
         const char * _end{};
         const char * _pos{};
-        uint64_t _stack{};
-        size_t _depth{};
+        u64 _stack{};
+        unat _depth{};
 
         void _skipSpace();
 
@@ -380,7 +389,7 @@ namespace qcon
 
     inline void Decoder::_skipSpace()
     {
-        for (; _pos < _end && std::isspace(uchar(*_pos)); ++_pos);
+        for (; _pos < _end && std::isspace(u8(*_pos)); ++_pos);
     }
 
     inline void Decoder::_skipSpaceAndComments()
@@ -415,9 +424,9 @@ namespace qcon
 
     inline bool Decoder::_tryConsumeChars(const std::string_view str)
     {
-        if (size_t(_end - _pos) >= str.length())
+        if (unat(_end - _pos) >= str.length())
         {
-            for (size_t i{0u}; i < str.length(); ++i)
+            for (unat i{0u}; i < str.length(); ++i)
             {
                 if (_pos[i] != str[i])
                 {
@@ -455,7 +464,7 @@ namespace qcon
             return false;
         }
 
-        uint32_t val;
+        u32 val;
         const std::from_chars_result res{std::from_chars(_pos, _pos + digits, val, 16)};
         if (res.ec != std::errc{})
         {
@@ -494,7 +503,7 @@ namespace qcon
             case 'U': { return _consumeCodePoint(c, 8); }
             default:
             {
-                if (std::isprint(uchar(c)))
+                if (std::isprint(u8(c)))
                 {
                     return true;
                 }
@@ -549,7 +558,7 @@ namespace qcon
                     dst.push_back(c);
                 }
             }
-            else if (std::isprint(uchar(c)))
+            else if (std::isprint(u8(c)))
             {
                 dst.push_back(c);
                 ++_pos;
@@ -587,7 +596,7 @@ namespace qcon
 
     inline bool Decoder::_consumeInteger(const int sign, const int base)
     {
-        uint64_t val;
+        u64 val;
 
         const std::from_chars_result res{std::from_chars(_pos, _end, val, base)};
 
@@ -609,19 +618,19 @@ namespace qcon
 
         if (sign >= 0)
         {
-            integer = int64_t(val);
+            integer = s64(val);
             boolean = true;
         }
         else
         {
-            // The integer is too large to fit in an `int64_t` when negative
-            if (val > uint64_t(std::numeric_limits<int64_t>::min()))
+            // The integer is too large to fit in an `s64` when negative
+            if (val > u64(std::numeric_limits<s64>::min()))
             {
                 string = "Negative integer too large"sv;
                 return false;
             }
 
-            integer = -int64_t(val);
+            integer = -s64(val);
             boolean = false;
         }
 

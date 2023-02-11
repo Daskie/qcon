@@ -8,7 +8,6 @@
 ///
 
 #include <cctype>
-#include <cstddef>
 
 #include <charconv>
 #include <concepts>
@@ -21,10 +20,19 @@
 
 namespace qcon
 {
+    using s8 = int8_t;
+    using s16 = int16_t;
+    using s32 = int32_t;
+    using s64 = int64_t;
+    using u8 = uint8_t;
+    using u16 = uint16_t;
+    using u32 = uint32_t;
+    using u64 = uint64_t;
+
+    using unat = size_t;
+
     using namespace std::string_literals;
     using namespace std::string_view_literals;
-
-    using uchar = unsigned char;
 
     ///
     /// Namespace provided to allow the user to `using namespace qcon::tokens` to avoid the verbosity of fully
@@ -83,7 +91,7 @@ namespace qcon
         /// @param density the starting density for the QCON
         /// @param indentSpaces the number of spaces to insert per level of indentation
         ///
-        Encoder(Density density = multiline, size_t indentSpaces = 4u);
+        Encoder(Density density = multiline, unat indentSpaces = 4u);
 
         Encoder(const Encoder &) = delete;
 
@@ -140,14 +148,14 @@ namespace qcon
         Encoder & operator<<(const char * v);
         Encoder & operator<<(char * v);
         Encoder & operator<<(char v);
-        Encoder & operator<<(int64_t v);
-        Encoder & operator<<(int32_t v);
-        Encoder & operator<<(int16_t v);
-        Encoder & operator<<(int8_t v);
-        Encoder & operator<<(uint64_t v);
-        Encoder & operator<<(uint32_t v);
-        Encoder & operator<<(uint16_t v);
-        Encoder & operator<<(uint8_t v);
+        Encoder & operator<<(s64 v);
+        Encoder & operator<<(s32 v);
+        Encoder & operator<<(s16 v);
+        Encoder & operator<<(s8 v);
+        Encoder & operator<<(u64 v);
+        Encoder & operator<<(u32 v);
+        Encoder & operator<<(u16 v);
+        Encoder & operator<<(u8 v);
         Encoder & operator<<(double v);
         Encoder & operator<<(float v);
         Encoder & operator<<(bool v);
@@ -205,13 +213,13 @@ namespace qcon
         };
 
         Density _baseDensity;
-        size_t _indentSpaces;
+        unat _indentSpaces;
 
         std::string _str;
         std::vector<_ScopeInfo> _scopeInfos;
         Container _container;
         Density _density;
-        size_t _indentation;
+        unat _indentation;
         Density _nextDensity;
         Base _nextBase;
         _Expect _expect;
@@ -227,12 +235,12 @@ namespace qcon
         void _putSpace();
 
         void _encode(std::string_view v);
-        void _encode(int64_t v);
-        void _encode(uint64_t v);
-        void _encodeDecimal(uint64_t v);
-        void _encodeBinary(uint64_t v);
-        void _encodeOctal(uint64_t v);
-        void _encodeHex(uint64_t v);
+        void _encode(s64 v);
+        void _encode(u64 v);
+        void _encodeDecimal(u64 v);
+        void _encodeBinary(u64 v);
+        void _encodeOctal(u64 v);
+        void _encodeHex(u64 v);
         void _encode(double v);
         void _encode(bool v);
         void _encode(std::nullptr_t);
@@ -253,7 +261,7 @@ namespace qcon
 
 namespace qcon
 {
-    inline Encoder::Encoder(const Density density, const size_t indentSpaces) :
+    inline Encoder::Encoder(const Density density, const unat indentSpaces) :
         _baseDensity{density},
         _indentSpaces{indentSpaces}
     {
@@ -367,7 +375,7 @@ namespace qcon
         return operator<<(std::string_view{&v, 1u});
     }
 
-    inline Encoder & Encoder::operator<<(const int64_t v)
+    inline Encoder & Encoder::operator<<(const s64 v)
     {
         if (_expect == _Expect::any || _expect == _Expect::integer)
         {
@@ -382,22 +390,22 @@ namespace qcon
         return *this;
     }
 
-    inline Encoder & Encoder::operator<<(const int32_t v)
+    inline Encoder & Encoder::operator<<(const s32 v)
     {
-        return operator<<(int64_t(v));
+        return operator<<(s64(v));
     }
 
-    inline Encoder & Encoder::operator<<(const int16_t v)
+    inline Encoder & Encoder::operator<<(const s16 v)
     {
-        return operator<<(int64_t(v));
+        return operator<<(s64(v));
     }
 
-    inline Encoder & Encoder::operator<<(const int8_t v)
+    inline Encoder & Encoder::operator<<(const s8 v)
     {
-        return operator<<(int64_t(v));
+        return operator<<(s64(v));
     }
 
-    inline Encoder & Encoder::operator<<(const uint64_t v)
+    inline Encoder & Encoder::operator<<(const u64 v)
     {
         if (_expect == _Expect::any || _expect == _Expect::integer)
         {
@@ -412,19 +420,19 @@ namespace qcon
         return *this;
     }
 
-    inline Encoder & Encoder::operator<<(const uint32_t v)
+    inline Encoder & Encoder::operator<<(const u32 v)
     {
-        return operator<<(uint64_t(v));
+        return operator<<(u64(v));
     }
 
-    inline Encoder & Encoder::operator<<(const uint16_t v)
+    inline Encoder & Encoder::operator<<(const u16 v)
     {
-        return operator<<(uint64_t(v));
+        return operator<<(u64(v));
     }
 
-    inline Encoder & Encoder::operator<<(const uint8_t v)
+    inline Encoder & Encoder::operator<<(const u8 v)
     {
-        return operator<<(uint64_t(v));
+        return operator<<(u64(v));
     }
 
     inline Encoder & Encoder::operator<<(const double v)
@@ -606,7 +614,7 @@ namespace qcon
 
         for (const char c : v)
         {
-            if (std::isprint(uchar(c)))
+            if (std::isprint(u8(c)))
             {
                 if (c == '"' || c == '\\') _str += '\\';
                 _str += c;
@@ -624,8 +632,8 @@ namespace qcon
                     case '\r': _str += R"(\r)"; break;
                     default:
                         _str += "\\x"sv;
-                        _str += hexChars[(uchar(c) >> 4) & 0xF];
-                        _str += hexChars[uchar(c) & 0xF];
+                        _str += hexChars[(u8(c) >> 4) & 0xF];
+                        _str += hexChars[u8(c) & 0xF];
                 }
             }
         }
@@ -633,7 +641,7 @@ namespace qcon
         _str += '"';
     }
 
-    inline void Encoder::_encode(int64_t v)
+    inline void Encoder::_encode(s64 v)
     {
         if (v < 0)
         {
@@ -641,10 +649,10 @@ namespace qcon
             v = -v;
         }
 
-        _encode(uint64_t(v));
+        _encode(u64(v));
     }
 
-    inline void Encoder::_encode(const uint64_t v)
+    inline void Encoder::_encode(const u64 v)
     {
         switch (_nextBase)
         {
@@ -655,31 +663,31 @@ namespace qcon
         }
     }
 
-    inline void Encoder::_encodeDecimal(const uint64_t v)
+    inline void Encoder::_encodeDecimal(const u64 v)
     {
         static thread_local char buffer[24u];
 
         const std::to_chars_result res{std::to_chars(buffer, buffer + sizeof(buffer), v)};
-        _str.append(buffer, size_t(res.ptr - buffer));
+        _str.append(buffer, unat(res.ptr - buffer));
     }
 
-    inline void Encoder::_encodeBinary(const uint64_t v)
+    inline void Encoder::_encodeBinary(const u64 v)
     {
         static thread_local char buffer[66u]{'0', 'b'};
 
         const std::to_chars_result res{std::to_chars(buffer + 2, buffer + sizeof(buffer), v, 2)};
-        _str.append(buffer, size_t(res.ptr - buffer));
+        _str.append(buffer, unat(res.ptr - buffer));
     }
 
-    inline void Encoder::_encodeOctal(const uint64_t v)
+    inline void Encoder::_encodeOctal(const u64 v)
     {
         static thread_local char buffer[26u]{'0', 'o'};
 
         const std::to_chars_result res{std::to_chars(buffer + 2, buffer + sizeof(buffer), v, 8)};
-        _str.append(buffer, size_t(res.ptr - buffer));
+        _str.append(buffer, unat(res.ptr - buffer));
     }
 
-    inline void Encoder::_encodeHex(uint64_t v)
+    inline void Encoder::_encodeHex(u64 v)
     {
         // We're hand rolling this because `std::to_chars` doesn't support uppercase hex
         static constexpr char hexTable[16u]{
@@ -690,7 +698,7 @@ namespace qcon
 
         static thread_local char buffer[18u];
 
-        size_t bufferI{sizeof(buffer)};
+        unat bufferI{sizeof(buffer)};
 
         if (v)
         {
@@ -723,14 +731,14 @@ namespace qcon
         }
 
         const std::to_chars_result res{std::to_chars(buffer, buffer + sizeof(buffer), v)};
-        const size_t length{size_t(res.ptr - buffer)};
+        const unat length{unat(res.ptr - buffer)};
         _str.append(buffer, length);
 
         // Add trailing `.0` if necessary
         if (std::isdigit(buffer[length - 1u]))
         {
             bool needsZero{true};
-            for (size_t i{0u}; i < length; ++i)
+            for (unat i{0u}; i < length; ++i)
             {
                 if (buffer[i] == '.' || buffer[i] == 'e')
                 {

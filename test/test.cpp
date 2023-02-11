@@ -4,17 +4,27 @@
 
 #include <qcon.hpp>
 
+using s8 = int8_t;
+using s16 = int16_t;
+using s32 = int32_t;
+using s64 = int64_t;
+using u8 = uint8_t;
+using u16 = uint16_t;
+using u32 = uint32_t;
+using u64 = uint64_t;
+
+using unat = size_t;
+
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
+using qcon::Type;
 using qcon::Value;
 using qcon::Object;
 using qcon::Array;
 using qcon::decode;
 using qcon::encode;
-using qcon::Type;
 using namespace qcon::tokens;
-using qcon::Density;
 
 using qcon::makeObject;
 using qcon::makeArray;
@@ -89,7 +99,7 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_EQ(val, *decoded->integer());
     }
     { // Max 64
-        int64_t val{std::numeric_limits<int64_t>::max()};
+        s64 val{std::numeric_limits<s64>::max()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -98,7 +108,7 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_EQ(val, *decoded->integer());
     }
     { // Min 64
-        int64_t val{std::numeric_limits<int64_t>::min()};
+        s64 val{std::numeric_limits<s64>::min()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -107,7 +117,7 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_EQ(val, *decoded->integer());
     }
     { // Max 32
-        int32_t val{std::numeric_limits<int32_t>::max()};
+        s32 val{std::numeric_limits<s32>::max()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -116,7 +126,7 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_EQ(val, *decoded->integer());
     }
     { // Min 32
-        int32_t val{std::numeric_limits<int32_t>::min()};
+        s32 val{std::numeric_limits<s32>::min()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -125,7 +135,7 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_EQ(val, *decoded->integer());
     }
     { // Max 16
-        int16_t val{std::numeric_limits<int16_t>::max()};
+        s16 val{std::numeric_limits<s16>::max()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -134,7 +144,7 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_EQ(val, *decoded->integer());
     }
     { // Min 16
-        int16_t val{std::numeric_limits<int16_t>::min()};
+        s16 val{std::numeric_limits<s16>::min()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -143,7 +153,7 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_EQ(val, *decoded->integer());
     }
     { // Max 8
-        int8_t val{std::numeric_limits<int8_t>::max()};
+        s8 val{std::numeric_limits<s8>::max()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -152,7 +162,7 @@ TEST(qcon, encodeDecodeSignedInteger)
         ASSERT_EQ(val, *decoded->integer());
     }
     { // Min 8
-        int8_t val{std::numeric_limits<int8_t>::min()};
+        s8 val{std::numeric_limits<s8>::min()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -171,7 +181,7 @@ TEST(qcon, encodeDecodeUnsignedInteger)
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
         ASSERT_TRUE(decoded->integer());
-        ASSERT_EQ(val, uint64_t(*decoded->integer()));
+        ASSERT_EQ(val, u64(*decoded->integer()));
     }
     { // Typical
         unsigned int val{123u};
@@ -180,37 +190,37 @@ TEST(qcon, encodeDecodeUnsignedInteger)
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
         ASSERT_TRUE(decoded->integer());
-        ASSERT_EQ(val, uint64_t(*decoded->integer()));
+        ASSERT_EQ(val, u64(*decoded->integer()));
     }
     { // Max 64
-        uint64_t val{std::numeric_limits<uint64_t>::max()};
+        u64 val{std::numeric_limits<u64>::max()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
         ASSERT_TRUE(decoded->integer());
-        ASSERT_EQ(val, uint64_t(*decoded->integer()));
+        ASSERT_EQ(val, u64(*decoded->integer()));
     }
     { // Max 32
-        uint32_t val{std::numeric_limits<uint32_t>::max()};
+        u32 val{std::numeric_limits<u32>::max()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
         ASSERT_TRUE(decoded->integer());
-        ASSERT_EQ(val, uint64_t(*decoded->integer()));
+        ASSERT_EQ(val, u64(*decoded->integer()));
     }
     { // Max 16
-        uint16_t val{std::numeric_limits<uint16_t>::max()};
+        u16 val{std::numeric_limits<u16>::max()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
         ASSERT_TRUE(decoded->integer());
-        ASSERT_EQ(val, uint64_t(*decoded->integer()));
+        ASSERT_EQ(val, u64(*decoded->integer()));
     }
     { // Max 8
-        uint8_t val{std::numeric_limits<uint8_t>::max()};
+        u8 val{std::numeric_limits<u8>::max()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -222,8 +232,8 @@ TEST(qcon, encodeDecodeUnsignedInteger)
 
 TEST(qcon, encodeDecodeFloater)
 {
-    uint64_t val64;
-    uint32_t val32;
+    u64 val64;
+    u32 val32;
 
     { // Zero
         double val{0.0};
@@ -387,26 +397,26 @@ TEST(qcon, valueConstruction)
     ASSERT_EQ(Type::string, Value(const_cast<char *>("abc")).type());
     ASSERT_EQ(Type::string, Value('a').type());
     // Integer
-    ASSERT_EQ(Type::integer, Value(int64_t(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<int64_t>::max()).positive());
-    ASSERT_FALSE(Value(std::numeric_limits<int64_t>::min()).positive());
-    ASSERT_EQ(Type::integer, Value(int32_t(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<int32_t>::max()).positive());
-    ASSERT_FALSE(Value(std::numeric_limits<int32_t>::min()).positive());
-    ASSERT_EQ(Type::integer, Value(int16_t(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<int16_t>::max()).positive());
-    ASSERT_FALSE(Value(std::numeric_limits<int16_t>::min()).positive());
-    ASSERT_EQ(Type::integer, Value(int8_t(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<int8_t>::max()).positive());
-    ASSERT_FALSE(Value(std::numeric_limits<int8_t>::min()).positive());
-    ASSERT_EQ(Type::integer, Value(uint64_t(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<uint64_t>::max()).positive());
-    ASSERT_EQ(Type::integer, Value(uint32_t(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<uint32_t>::max()).positive());
-    ASSERT_EQ(Type::integer, Value(uint16_t(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<uint16_t>::max()).positive());
-    ASSERT_EQ(Type::integer, Value(uint8_t(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<uint8_t>::max()).positive());
+    ASSERT_EQ(Type::integer, Value(s64(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<s64>::max()).positive());
+    ASSERT_FALSE(Value(std::numeric_limits<s64>::min()).positive());
+    ASSERT_EQ(Type::integer, Value(s32(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<s32>::max()).positive());
+    ASSERT_FALSE(Value(std::numeric_limits<s32>::min()).positive());
+    ASSERT_EQ(Type::integer, Value(s16(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<s16>::max()).positive());
+    ASSERT_FALSE(Value(std::numeric_limits<s16>::min()).positive());
+    ASSERT_EQ(Type::integer, Value(s8(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<s8>::max()).positive());
+    ASSERT_FALSE(Value(std::numeric_limits<s8>::min()).positive());
+    ASSERT_EQ(Type::integer, Value(u64(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<u64>::max()).positive());
+    ASSERT_EQ(Type::integer, Value(u32(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<u32>::max()).positive());
+    ASSERT_EQ(Type::integer, Value(u16(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<u16>::max()).positive());
+    ASSERT_EQ(Type::integer, Value(u8(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<u8>::max()).positive());
     // Floater
     ASSERT_EQ(Type::floater, Value(0.0).type());
     ASSERT_TRUE(Value(1.0).positive());
@@ -478,68 +488,68 @@ TEST(qcon, valueAssignAndEquality)
     ASSERT_TRUE(v == 'h');
     ASSERT_FALSE(v != 'h');
 
-    v = int64_t(5);
+    v = s64(5);
     ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == int64_t(5));
-    ASSERT_FALSE(v != int64_t(5));
-    v = std::numeric_limits<int64_t>::max();
+    ASSERT_TRUE(v == s64(5));
+    ASSERT_FALSE(v != s64(5));
+    v = std::numeric_limits<s64>::max();
     ASSERT_TRUE(v.positive());
-    v = std::numeric_limits<int64_t>::min();
+    v = std::numeric_limits<s64>::min();
     ASSERT_FALSE(v.positive());
 
-    v = int32_t(6);
+    v = s32(6);
     ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == int32_t(6));
-    ASSERT_FALSE(v != int32_t(6));
-    v = std::numeric_limits<int32_t>::max();
+    ASSERT_TRUE(v == s32(6));
+    ASSERT_FALSE(v != s32(6));
+    v = std::numeric_limits<s32>::max();
     ASSERT_TRUE(v.positive());
-    v = std::numeric_limits<int32_t>::min();
+    v = std::numeric_limits<s32>::min();
     ASSERT_FALSE(v.positive());
 
-    v = int16_t(7);
+    v = s16(7);
     ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == int16_t(7));
-    ASSERT_FALSE(v != int16_t(7));
-    v = std::numeric_limits<int16_t>::max();
+    ASSERT_TRUE(v == s16(7));
+    ASSERT_FALSE(v != s16(7));
+    v = std::numeric_limits<s16>::max();
     ASSERT_TRUE(v.positive());
-    v = std::numeric_limits<int16_t>::min();
+    v = std::numeric_limits<s16>::min();
     ASSERT_FALSE(v.positive());
 
-    v = int8_t(8);
+    v = s8(8);
     ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == int8_t(8));
-    ASSERT_FALSE(v != int8_t(8));
-    v = std::numeric_limits<int8_t>::max();
+    ASSERT_TRUE(v == s8(8));
+    ASSERT_FALSE(v != s8(8));
+    v = std::numeric_limits<s8>::max();
     ASSERT_TRUE(v.positive());
-    v = std::numeric_limits<int8_t>::min();
+    v = std::numeric_limits<s8>::min();
     ASSERT_FALSE(v.positive());
 
-    v = uint64_t(10u);
+    v = u64(10u);
     ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == uint64_t(10u));
-    ASSERT_FALSE(v != uint64_t(10u));
-    v = std::numeric_limits<uint64_t>::max();
+    ASSERT_TRUE(v == u64(10u));
+    ASSERT_FALSE(v != u64(10u));
+    v = std::numeric_limits<u64>::max();
     ASSERT_TRUE(v.positive());
 
-    v = uint32_t(11u);
+    v = u32(11u);
     ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == uint32_t(11u));
-    ASSERT_FALSE(v != uint32_t(11u));
-    v = std::numeric_limits<uint32_t>::max();
+    ASSERT_TRUE(v == u32(11u));
+    ASSERT_FALSE(v != u32(11u));
+    v = std::numeric_limits<u32>::max();
     ASSERT_TRUE(v.positive());
 
-    v = uint16_t(12u);
+    v = u16(12u);
     ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == uint16_t(12u));
-    ASSERT_FALSE(v != uint16_t(12u));
-    v = std::numeric_limits<uint16_t>::max();
+    ASSERT_TRUE(v == u16(12u));
+    ASSERT_FALSE(v != u16(12u));
+    v = std::numeric_limits<u16>::max();
     ASSERT_TRUE(v.positive());
 
-    v = uint8_t(13u);
+    v = u8(13u);
     ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == uint8_t(13u));
-    ASSERT_FALSE(v != uint8_t(13u));
-    v = std::numeric_limits<uint8_t>::max();
+    ASSERT_TRUE(v == u8(13u));
+    ASSERT_FALSE(v != u8(13u));
+    v = std::numeric_limits<u8>::max();
     ASSERT_TRUE(v.positive());
 
     v = 7.7;
@@ -667,7 +677,7 @@ TEST(qcon, makeObject)
         ASSERT_EQ(3u, innerObj->size());
 
         ASSERT_TRUE(innerObj->contains("a"));
-        const int64_t * aVal{innerObj->at("a").integer()};
+        const s64 * aVal{innerObj->at("a").integer()};
         ASSERT_TRUE(aVal);
         ASSERT_EQ(1, *aVal);
 
@@ -704,7 +714,7 @@ TEST(qcon, makeArray)
         ASSERT_EQ(3u, innerArr->size());
         ASSERT_EQ(3u, innerArr->capacity());
 
-        const int64_t * v2{(*innerArr)[0].integer()};
+        const s64 * v2{(*innerArr)[0].integer()};
         ASSERT_TRUE(v2);
         ASSERT_EQ(1, *v2);
 
@@ -813,11 +823,11 @@ TEST(qcon, numberEquality)
         ASSERT_TRUE(11.0 != val);
     }
     { // Special cases
-        Value val{std::numeric_limits<uint64_t>::max()};
+        Value val{std::numeric_limits<u64>::max()};
         ASSERT_TRUE(val == -1);
 
         val = -1;
-        ASSERT_TRUE(val == std::numeric_limits<uint64_t>::max());
+        ASSERT_TRUE(val == std::numeric_limits<u64>::max());
 
         val = std::numeric_limits<double>::infinity();
         ASSERT_TRUE(val == std::numeric_limits<double>::infinity());

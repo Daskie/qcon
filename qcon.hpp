@@ -8,11 +8,8 @@
 /// See the README for more info and examples!
 ///
 
-#include <cstring>
-
 #include <concepts>
 #include <map>
-#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -83,14 +80,14 @@ namespace qcon
         Value(const char * val);
         Value(char * val);
         Value(char val);
-        Value(int64_t val);
-        Value(int32_t val);
-        Value(int16_t val);
-        Value(int8_t val);
-        Value(uint64_t val);
-        Value(uint32_t val);
-        Value(uint16_t val);
-        Value(uint8_t val);
+        Value(s64 val);
+        Value(s32 val);
+        Value(s16 val);
+        Value(s8 val);
+        Value(u64 val);
+        Value(u32 val);
+        Value(u16 val);
+        Value(u8 val);
         Value(double val);
         Value(float val);
         Value(bool val);
@@ -109,14 +106,14 @@ namespace qcon
         Value & operator=(std::string_view val);
         Value & operator=(const char * val);
         Value & operator=(char val);
-        Value & operator=(int64_t val);
-        Value & operator=(int32_t val);
-        Value & operator=(int16_t val);
-        Value & operator=(int8_t val);
-        Value & operator=(uint64_t val);
-        Value & operator=(uint32_t val);
-        Value & operator=(uint16_t val);
-        Value & operator=(uint8_t val);
+        Value & operator=(s64 val);
+        Value & operator=(s32 val);
+        Value & operator=(s16 val);
+        Value & operator=(s8 val);
+        Value & operator=(u64 val);
+        Value & operator=(u32 val);
+        Value & operator=(u16 val);
+        Value & operator=(u8 val);
         Value & operator=(double val);
         Value & operator=(float val);
         Value & operator=(bool val);
@@ -153,8 +150,8 @@ namespace qcon
         ///
         /// @return this value as an integer if it is an integer, otherwise null
         ///
-        int64_t * integer();
-        const int64_t * integer() const;
+        s64 * integer();
+        const s64 * integer() const;
 
         ///
         /// @return this value as a floater if it is a floater, otherwise null
@@ -175,7 +172,7 @@ namespace qcon
         const nullptr_t * null() const;
 
         ///
-        /// @return whether the number was positive; useful for unsigned integers too large to fit in a int64_t
+        /// @return whether the number was positive; useful for unsigned integers too large to fit in a s64
         ///
         bool positive() const { return _positive; }
 
@@ -195,14 +192,14 @@ namespace qcon
         bool operator==(std::string_view val) const;
         bool operator==(const char * val) const;
         bool operator==(char val) const;
-        bool operator==(int64_t val) const;
-        bool operator==(int32_t val) const;
-        bool operator==(int16_t val) const;
-        bool operator==(int8_t val) const;
-        bool operator==(uint64_t val) const;
-        bool operator==(uint32_t val) const;
-        bool operator==(uint16_t val) const;
-        bool operator==(uint8_t val) const;
+        bool operator==(s64 val) const;
+        bool operator==(s32 val) const;
+        bool operator==(s16 val) const;
+        bool operator==(s8 val) const;
+        bool operator==(u64 val) const;
+        bool operator==(u32 val) const;
+        bool operator==(u16 val) const;
+        bool operator==(u8 val) const;
         bool operator==(double val) const;
         bool operator==(float val) const;
         bool operator==(bool val) const;
@@ -216,7 +213,7 @@ namespace qcon
             Object * _object;
             Array * _array;
             std::string * _string;
-            int64_t _integer;
+            s64 _integer;
             double _floater;
             bool _boolean;
         };
@@ -259,7 +256,7 @@ namespace qcon
     /// @param identifiers whether to encode all eligible keys as identifiers instead of strings
     /// @return an encoded QCON string, or empty if there was an issue encoding the QCON
     ///
-    std::optional<std::string> encode(const Value & val, Density density = multiline, size_t indentSpaces = 4u);
+    std::optional<std::string> encode(const Value & val, Density density = multiline, unat indentSpaces = 4u);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -304,7 +301,7 @@ namespace qcon
             {
                 if (val._positive)
                 {
-                    encoder << uint64_t(val._integer);
+                    encoder << u64(val._integer);
                 }
                 else
                 {
@@ -359,40 +356,40 @@ namespace qcon
         Value{std::string_view{&val, 1u}}
     {}
 
-    inline Value::Value(const int64_t val) :
+    inline Value::Value(const s64 val) :
         _integer{val},
         _type{Type::integer},
         _positive{_integer >= 0}
     {}
 
-    inline Value::Value(const int32_t val) :
-        Value{int64_t{val}}
+    inline Value::Value(const s32 val) :
+        Value{s64{val}}
     {}
 
-    inline Value::Value(const int16_t val) :
-        Value{int64_t{val}}
+    inline Value::Value(const s16 val) :
+        Value{s64{val}}
     {}
 
-    inline Value::Value(const int8_t val) :
-        Value{int64_t{val}}
+    inline Value::Value(const s8 val) :
+        Value{s64{val}}
     {}
 
-    inline Value::Value(const uint64_t val) :
-        _integer{int64_t(val)},
+    inline Value::Value(const u64 val) :
+        _integer{s64(val)},
         _type{Type::integer},
         _positive{true}
     {}
 
-    inline Value::Value(const uint32_t val) :
-        Value{uint64_t{val}}
+    inline Value::Value(const u32 val) :
+        Value{u64{val}}
     {}
 
-    inline Value::Value(const uint16_t val) :
-        Value{uint64_t{val}}
+    inline Value::Value(const u16 val) :
+        Value{u64{val}}
     {}
 
-    inline Value::Value(const uint8_t val) :
-        Value{uint64_t{val}}
+    inline Value::Value(const u8 val) :
+        Value{u64{val}}
     {}
 
     inline Value::Value(const double val) :
@@ -488,7 +485,7 @@ namespace qcon
         return *this = std::string_view{&val, 1u};
     }
 
-    inline Value & Value::operator=(const int64_t val)
+    inline Value & Value::operator=(const s64 val)
     {
         if (_type != Type::integer)
         {
@@ -500,46 +497,46 @@ namespace qcon
         return *this;
     }
 
-    inline Value & Value::operator=(const int32_t val)
+    inline Value & Value::operator=(const s32 val)
     {
-        return *this = int64_t{val};
+        return *this = s64{val};
     }
 
-    inline Value & Value::operator=(const int16_t val)
+    inline Value & Value::operator=(const s16 val)
     {
-        return *this = int64_t{val};
+        return *this = s64{val};
     }
 
-    inline Value & Value::operator=(const int8_t val)
+    inline Value & Value::operator=(const s8 val)
     {
-        return *this = int64_t{val};
+        return *this = s64{val};
     }
 
-    inline Value & Value::operator=(const uint64_t val)
+    inline Value & Value::operator=(const u64 val)
     {
         if (_type != Type::integer)
         {
             _deleteValue();
             _type = Type::integer;
         }
-        _integer = int64_t(val);
+        _integer = s64(val);
         _positive = true;
         return *this;
     }
 
-    inline Value & Value::operator=(const uint32_t val)
+    inline Value & Value::operator=(const u32 val)
     {
-        return *this = uint64_t{val};
+        return *this = u64{val};
     }
 
-    inline Value & Value::operator=(const uint16_t val)
+    inline Value & Value::operator=(const u16 val)
     {
-        return *this = uint64_t{val};
+        return *this = u64{val};
     }
 
-    inline Value & Value::operator=(const uint8_t val)
+    inline Value & Value::operator=(const u8 val)
     {
-        return *this = uint64_t{val};
+        return *this = u64{val};
     }
 
     inline Value & Value::operator=(const double val)
@@ -626,12 +623,12 @@ namespace qcon
         return _type == Type::string ? _string : nullptr;
     }
 
-    inline int64_t * Value::integer()
+    inline s64 * Value::integer()
     {
         return _type == Type::integer ? &_integer : nullptr;
     }
 
-    inline const int64_t * Value::integer() const
+    inline const s64 * Value::integer() const
     {
         return _type == Type::integer ? &_integer : nullptr;
     }
@@ -711,44 +708,44 @@ namespace qcon
         return *this == std::string_view{&val, 1u};
     }
 
-    inline bool Value::operator==(const int64_t val) const
+    inline bool Value::operator==(const s64 val) const
     {
         return _type == Type::integer && _integer == val;
     }
 
-    inline bool Value::operator==(const int32_t val) const
+    inline bool Value::operator==(const s32 val) const
     {
-        return *this == int64_t{val};
+        return *this == s64{val};
     }
 
-    inline bool Value::operator==(const int16_t val) const
+    inline bool Value::operator==(const s16 val) const
     {
-        return *this == int64_t{val};
+        return *this == s64{val};
     }
 
-    inline bool Value::operator==(const int8_t val) const
+    inline bool Value::operator==(const s8 val) const
     {
-        return *this == int64_t{val};
+        return *this == s64{val};
     }
 
-    inline bool Value::operator==(const uint64_t val) const
+    inline bool Value::operator==(const u64 val) const
     {
-        return *this == int64_t(val);
+        return *this == s64(val);
     }
 
-    inline bool Value::operator==(const uint32_t val) const
+    inline bool Value::operator==(const u32 val) const
     {
-        return *this == uint64_t{val};
+        return *this == u64{val};
     }
 
-    inline bool Value::operator==(const uint16_t val) const
+    inline bool Value::operator==(const u16 val) const
     {
-        return *this == uint64_t{val};
+        return *this == u64{val};
     }
 
-    inline bool Value::operator==(const uint8_t val) const
+    inline bool Value::operator==(const u8 val) const
     {
-        return *this == uint64_t{val};
+        return *this == u64{val};
     }
 
     inline bool Value::operator==(const double val) const
@@ -854,7 +851,7 @@ namespace qcon
                 {
                     if (decoder.boolean)
                     {
-                        object.emplace(std::move(decoder.key), uint64_t(decoder.integer));
+                        object.emplace(std::move(decoder.key), u64(decoder.integer));
                     }
                     else
                     {
@@ -922,7 +919,7 @@ namespace qcon
                 {
                     if (decoder.boolean)
                     {
-                        array.push_back(uint64_t(decoder.integer));
+                        array.push_back(u64(decoder.integer));
                     }
                     else
                     {
@@ -989,7 +986,7 @@ namespace qcon
             {
                 if (decoder.boolean)
                 {
-                    value = uint64_t(decoder.integer);
+                    value = u64(decoder.integer);
                 }
                 else
                 {
@@ -1027,7 +1024,7 @@ namespace qcon
         }
     }
 
-    inline std::optional<std::string> encode(const Value & val, const Density density, size_t indentSpaces)
+    inline std::optional<std::string> encode(const Value & val, const Density density, unat indentSpaces)
     {
         Encoder encoder{density, indentSpaces};
         encoder << val;
