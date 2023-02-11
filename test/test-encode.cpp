@@ -1,8 +1,8 @@
+#include <qcon-encode.hpp>
+
 #include <format>
 
 #include <gtest/gtest.h>
-
-#include <qcon-encode.hpp>
 
 using s8 = int8_t;
 using s16 = int16_t;

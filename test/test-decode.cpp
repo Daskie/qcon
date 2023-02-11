@@ -1,13 +1,6 @@
-#include <cmath>
-
-#include <concepts>
-#include <deque>
-#include <format>
-#include <variant>
+#include <qcon-decode.hpp>
 
 #include <gtest/gtest.h>
-
-#include <qcon-decode.hpp>
 
 using s8 = int8_t;
 using s16 = int16_t;
