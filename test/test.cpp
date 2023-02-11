@@ -847,5 +847,8 @@ TEST(qcon, general)
     "Name": "Salt's Crust",
     "Profit Margin": null
 })"s);
-    ASSERT_EQ(qcon, encode(*decode(qcon)));
+    const std::optional<Value> decoded{decode(qcon)};
+    ASSERT_TRUE(decoded);
+    const std::optional<std::string> encoded{encode(*decoded)};
+    ASSERT_EQ(qcon, encoded);
 }

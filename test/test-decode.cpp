@@ -12,234 +12,221 @@
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
-using qcon::decode;
-using qcon::DecodeResult;
+using qcon::Decoder;
+using qcon::DecodeState;
 
-static qcon::DummyComposer dummyComposer{};
-
-class ExpectantComposer
+std::ostream & operator<<(std::ostream & os, const DecodeState state)
 {
-  public:
-
-    struct Object {};
-    struct Array {};
-    struct End {};
-    struct Key { std::string_view k; };
-    struct String { std::string_view v; };
-    struct Integer { int64_t v; bool positive; };
-    struct Floater { double v; };
-    struct Boolean { bool v; };
-    struct Null {};
-
-    friend bool operator==(const Object &, const Object &) { return true; }
-    friend bool operator==(const Array &, const Array &) { return true; }
-    friend bool operator==(const End &, const End &) { return true; }
-    friend bool operator==(const Key & a, const Key & b) { return a.k == b.k; }
-    friend bool operator==(const String & a, const String & b) { return a.v == b.v; }
-    friend bool operator==(const Integer & a, const Integer & b) { return a.v == b.v; }
-    friend bool operator==(const Floater & a, const Floater & b) { return a.v == b.v || (std::isnan(a.v) && std::isnan(b.v)); }
-    friend bool operator==(const Boolean & a, const Boolean & b) { return a.v == b.v; }
-    friend bool operator==(const Null &, const Null &) { return true; }
-
-    using Element = std::variant<Object, Array, End, Key, String, Integer, Floater, Boolean, Null>;
-
-    std::nullptr_t object(std::nullptr_t) { assertNextIs(Object{}); return nullptr; }
-    std::nullptr_t array(std::nullptr_t) { assertNextIs(Array{}); return nullptr; }
-    void end(std::nullptr_t, std::nullptr_t) { assertNextIs(End{}); }
-    void key(std::string_view k, std::nullptr_t) { assertNextIs(Key{k}); }
-    void val(std::string_view v, std::nullptr_t) { assertNextIs(String{v}); }
-    void val(int64_t v, bool positive, std::nullptr_t) { assertNextIs(Integer{v, positive}); }
-    void val(double v, std::nullptr_t) { assertNextIs(Floater{v}); }
-    void val(bool v, std::nullptr_t) { assertNextIs(Boolean{v}); }
-    void val(std::nullptr_t, std::nullptr_t) { assertNextIs(Null{}); }
-
-    ExpectantComposer & expectObject() { m_sequence.emplace_back(Object{}); return *this; }
-    ExpectantComposer & expectArray() { m_sequence.emplace_back(Array{}); return *this; }
-    ExpectantComposer & expectEnd() { m_sequence.emplace_back(End{}); return *this; }
-    ExpectantComposer & expectKey(std::string_view k) { m_sequence.emplace_back(Key{k}); return *this; }
-    ExpectantComposer & expectString(std::string_view v) { m_sequence.emplace_back(String{v}); return *this; }
-    ExpectantComposer & expectInteger(std::signed_integral auto v) { m_sequence.emplace_back(Integer{v, v >= 0}); return *this; }
-    ExpectantComposer & expectInteger(std::unsigned_integral auto v) { m_sequence.emplace_back(Integer{int64_t(v), true}); return *this; }
-    ExpectantComposer & expectFloater(double v) { m_sequence.emplace_back(Floater{v}); return *this; }
-    ExpectantComposer & expectBoolean(bool v) { m_sequence.emplace_back(Boolean{v}); return *this; }
-    ExpectantComposer & expectNull() { m_sequence.emplace_back(Null{}); return *this; }
-
-    bool isDone() const { return m_sequence.empty(); }
-
-  private:
-
-    std::deque<Element> m_sequence;
-
-    void assertNextIs(const Element & e)
+    switch (state)
     {
-        ASSERT_FALSE(m_sequence.empty());
-        ASSERT_EQ(m_sequence.front(), e);
-        m_sequence.pop_front();
+        case DecodeState::error: os << "error"; break;
+        case DecodeState::object: os << "object"; break;
+        case DecodeState::array: os << "array"; break;
+        case DecodeState::end: os << "end"; break;
+        case DecodeState::string: os << "string"; break;
+        case DecodeState::integer: os << "integer"; break;
+        case DecodeState::floater: os << "floater"; break;
+        case DecodeState::boolean: os << "boolean"; break;
+        case DecodeState::null: os << "null"; break;
+        case DecodeState::done: os << "done"; break;
     }
-};
 
-std::ostream & operator<<(std::ostream & os, const ExpectantComposer::Element & v)
+    return os;
+}
+
+bool fails(const std::string_view str)
 {
-    if (std::holds_alternative<ExpectantComposer::Object>(v)) return os << "Object";
-    if (std::holds_alternative<ExpectantComposer::Array>(v)) return os << "Array";
-    if (std::holds_alternative<ExpectantComposer::End>(v)) return os << "End";
-    if (std::holds_alternative<ExpectantComposer::Key>(v)) return os << "Key `" << std::get<ExpectantComposer::Key>(v).k << "`";
-    if (std::holds_alternative<ExpectantComposer::String>(v)) return os << "String `" << std::get<ExpectantComposer::String>(v).v << "`";
-    if (std::holds_alternative<ExpectantComposer::Integer>(v)) { const ExpectantComposer::Integer & i{std::get<ExpectantComposer::Integer>(v)}; return i.positive ? (os << "Integer `" << uint64_t(i.v)) : (os << "Integer `" << i.v) << "`"; }
-    if (std::holds_alternative<ExpectantComposer::Floater>(v)) return os << "Floater `" << std::get<ExpectantComposer::Floater>(v).v << "`";
-    if (std::holds_alternative<ExpectantComposer::Boolean>(v)) return os << "Boolean `" << (std::get<ExpectantComposer::Boolean>(v).v ? "true" : "false") << "`";
-    if (std::holds_alternative<ExpectantComposer::Null>(v)) return os << "Null";
-    return os << "Unknown Element";
+    Decoder decoder{str};
+    DecodeState state;
+
+    while (true)
+    {
+        state = decoder.step();
+
+        if (state == DecodeState::error)
+        {
+            return true;
+        }
+        else if (state == DecodeState::done)
+        {
+            return false;
+        }
+    }
 }
 
 TEST(decode, object)
 {
     { // Empty
-        ExpectantComposer composer{};
-        composer.expectObject().expectEnd();
-        ASSERT_TRUE(decode(R"({})"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"({})"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Single key
-        ExpectantComposer composer{};
-        composer.expectObject().expectKey("a"sv).expectNull().expectEnd();
-        ASSERT_TRUE(decode(R"({ "a": null })"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"({ "a": null })"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.key, "a"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Multiple keys
-        ExpectantComposer composer{};
-        composer.expectObject().expectKey("a"sv).expectNull().expectKey("b"sv).expectNull().expectKey("c"sv).expectNull().expectEnd();
-        ASSERT_TRUE(decode(R"({ "a": null, "b": null, "c": null })"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"({ "a": null, "b": null, "c": null })"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.key, "a"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.key, "b"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.key, "c"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // No space
-        ExpectantComposer composer{};
-        composer.expectObject().expectKey("a"sv).expectNull().expectKey("b"sv).expectNull().expectEnd();
-        ASSERT_TRUE(decode(R"({"a":null,"b":null})"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"({"a":null,"b":null})"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.key, "a"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.key, "b"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Weird spacing
-        ExpectantComposer composer{};
-        composer.expectObject().expectKey("a"sv).expectNull().expectKey("b"sv).expectNull().expectEnd();
-        ASSERT_TRUE(decode(R"({"a" :null ,"b" :null})"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"({"a" :null ,"b" :null})"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.key, "a"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.key, "b"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Empty key
-        ExpectantComposer composer{};
-        composer.expectObject().expectKey(""sv).expectNull().expectEnd();
-        ASSERT_TRUE(decode(R"({ "": null })"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"({ "": null })"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.key, ""sv);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // No colon after key
-        ASSERT_FALSE(decode(R"({ "a" 0 })", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"({ "a" 0 })"));
     }
     { // Key with single quotes
-        ASSERT_FALSE(decode(R"({ 'a': 0 })", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"({ 'a': 0 })"));
     }
     { // Key without quotes
-        ASSERT_FALSE(decode(R"({ a: 0 })", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"({ a: 0 })"));
     }
     { // Missing value
-        ASSERT_FALSE(decode(R"({ "a": })", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"({ "a": })"));
     }
     { // No comma between elements
-        ASSERT_FALSE(decode(R"({ "a": 0 "b": 1 })", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"({ "a": 0 "b": 1 })"));
     }
     { // Empty entry
-        ASSERT_FALSE(decode(R"({ "a": 0, , "b": 1 })", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"({ "a": 0, , "b": 1 })"));
     }
     { // Cut off
-        ASSERT_FALSE(decode(R"({)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({")", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"a)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"a")", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"a":)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"a":0)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"a":0,)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"a":0,")", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"a":0,"b)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"a":0,"b")", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"a":0,"b":)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"a":0,"b":1)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"("a":0,"b":1})", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(a":0,"b":1})", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(":0,"b":1})", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(:0,"b":1})", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(0,"b":1})", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(,"b":1})", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"("b":1})", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(b":1})", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(":1})", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(:1})", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(1})", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(})", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"({)"));
+        ASSERT_TRUE(fails(R"({")"));
+        ASSERT_TRUE(fails(R"({"a)"));
+        ASSERT_TRUE(fails(R"({"a")"));
+        ASSERT_TRUE(fails(R"({"a":)"));
+        ASSERT_TRUE(fails(R"({"a":0)"));
+        ASSERT_TRUE(fails(R"({"a":0,)"));
+        ASSERT_TRUE(fails(R"({"a":0,")"));
+        ASSERT_TRUE(fails(R"({"a":0,"b)"));
+        ASSERT_TRUE(fails(R"({"a":0,"b")"));
+        ASSERT_TRUE(fails(R"({"a":0,"b":)"));
+        ASSERT_TRUE(fails(R"({"a":0,"b":1)"));
+        ASSERT_TRUE(fails(R"("a":0,"b":1})"));
+        ASSERT_TRUE(fails(R"(a":0,"b":1})"));
+        ASSERT_TRUE(fails(R"(":0,"b":1})"));
+        ASSERT_TRUE(fails(R"(:0,"b":1})"));
+        ASSERT_TRUE(fails(R"(0,"b":1})"));
+        ASSERT_TRUE(fails(R"(,"b":1})"));
+        ASSERT_TRUE(fails(R"("b":1})"));
+        ASSERT_TRUE(fails(R"(b":1})"));
+        ASSERT_TRUE(fails(R"(":1})"));
+        ASSERT_TRUE(fails(R"(:1})"));
+        ASSERT_TRUE(fails(R"(1})"));
+        ASSERT_TRUE(fails(R"(})"));
     }
 }
 
 TEST(decode, array)
 {
     { // Empty
-        ExpectantComposer composer{};
-        composer.expectArray().expectEnd();
-        ASSERT_TRUE(decode(R"([])"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"([])"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Single element
-        ExpectantComposer composer{};
-        composer.expectArray().expectNull().expectEnd();
-        ASSERT_TRUE(decode(R"([ null ])"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"([ null ])"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Multiple elements
-        ExpectantComposer composer{};
-        composer.expectArray().expectNull().expectNull().expectNull().expectEnd();
-        ASSERT_TRUE(decode(R"([ null, null, null ])"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"([ null, null, null ])"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // No space
-        ExpectantComposer composer{};
-        composer.expectArray().expectNull().expectNull().expectEnd();
-        ASSERT_TRUE(decode(R"([null,null])"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"([null,null])"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Weird spacing
-        ExpectantComposer composer{};
-        composer.expectArray().expectNull().expectNull().expectEnd();
-        ASSERT_TRUE(decode(R"([null ,null])"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"([null ,null])"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // No comma between elements
-        ASSERT_FALSE(decode(R"([ 0 1 ])", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"([ 0 1 ])"));
     }
     { // Empty entry
-        ASSERT_FALSE(decode(R"([ 0, , 1 ])", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"([ 0, , 1 ])"));
     }
     { // Cut off
-        ASSERT_FALSE(decode(R"([)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"([0)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"([0,)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"([0,1)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(0,1])", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(,1])", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(1])", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(])", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"([)"));
+        ASSERT_TRUE(fails(R"([0)"));
+        ASSERT_TRUE(fails(R"([0,)"));
+        ASSERT_TRUE(fails(R"([0,1)"));
+        ASSERT_TRUE(fails(R"(0,1])"));
+        ASSERT_TRUE(fails(R"(,1])"));
+        ASSERT_TRUE(fails(R"(1])"));
+        ASSERT_TRUE(fails(R"(])"));
     }
 }
 
 TEST(decode, string)
 {
     { // Empty string
-        ExpectantComposer composer{};
-        composer.expectString(""sv);
-        ASSERT_TRUE(decode(R"("")"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"("")"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, ""sv);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // All printable
-        ExpectantComposer composer{};
-        composer.expectString(R"( !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~)"sv);
-        const bool success{decode(R"(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")"sv, composer, nullptr).success};
-        ASSERT_TRUE(success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, R"( !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~)"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // All non-printable
         std::string decodeStr{R"(" ")"};
@@ -248,27 +235,26 @@ TEST(decode, string)
             if (!std::isprint(i))
             {
                 decodeStr[1] = char(i);
-                ASSERT_FALSE(decode(decodeStr, dummyComposer, nullptr).success);
+                ASSERT_TRUE(fails(decodeStr));
             }
         }
     }
     { // Escape characters
-        ExpectantComposer composer{};
-        composer.expectString("\0\b\t\n\v\f\r"sv);
-        ASSERT_TRUE(decode(R"("\0\b\t\n\v\f\r")"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"("\0\b\t\n\v\f\r")"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\0\b\t\n\v\f\r"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Missing escape sequence
         const std::string_view brokenSeq{R"("\\\")"};
-        ASSERT_FALSE(decode(brokenSeq, dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(brokenSeq));
         const std::string_view brokenSeqInArray{R"([ "\\\" ])"};
-        ASSERT_FALSE(decode(brokenSeqInArray, dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(brokenSeqInArray));
     }
     { // Unknown escape sequence
-        ASSERT_FALSE(decode("\"\\\0\"", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails("\"\\\0\""));
     }
     { // 'x' code point
-        ExpectantComposer composer{};
         std::string expectedStr(256, '\0');
         std::string decodeStr(1 + 256 * 4 + 1, '\0');
         decodeStr.front() = '"';
@@ -278,12 +264,12 @@ TEST(decode, string)
             expectedStr[i] = char(i);
             std::format_to_n(&decodeStr[1u + 4u * i], 4, "\\x{:02X}"sv, i);
         }
-        composer.expectString(expectedStr);
-        ASSERT_TRUE(decode(decodeStr, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{decodeStr};
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, expectedStr);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // 'u' code point
-        ExpectantComposer composer{};
         std::string expectedStr(256, '\0');
         std::string decodeStr(1 + 256 * 6 + 1, '\0');
         decodeStr.front() = '"';
@@ -293,830 +279,940 @@ TEST(decode, string)
             expectedStr[i] = char(i);
             std::format_to_n(&decodeStr[1u + 6u * i], 6, "\\u{:04X}"sv, i);
         }
-        composer.expectString(expectedStr);
-        ASSERT_TRUE(decode(decodeStr, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{decodeStr};
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, expectedStr);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // 'U' code point
-        ExpectantComposer composer{};
-        composer.expectString("\u0077\u00FF\u00FF");
-        const bool success{decode(R"("\U00000077\U000000FF\UFFFFFFFF")", composer, nullptr).success};
-        ASSERT_TRUE(success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"("\U00000077\U000000FF\UFFFFFFFF")"};
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\u0077\u00FF\u00FF");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Uppercase and lowercase code point hex digits
-        ExpectantComposer composer{};
-        composer.expectString("\u00AA\u00BB\u00CC\u00DD");
-        ASSERT_TRUE(decode(R"("\u00aa\u00BB\u00cC\u00Dd")", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"("\u00aa\u00BB\u00cC\u00Dd")"};
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\u00AA\u00BB\u00CC\u00DD");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Incorrect number of code point digits
         // Raw strings, `\x`/`\u`, and macros don't play nice together
-        ASSERT_FALSE(decode("\"\\x\"", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode("\"\\x1\"", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode("\"\\u\"", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode("\"\\u1\"", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode("\"\\u11\"", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode("\"\\u111\"", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails("\"\\x\""));
+        ASSERT_TRUE(fails("\"\\x1\""));
+        ASSERT_TRUE(fails("\"\\u\""));
+        ASSERT_TRUE(fails("\"\\u1\""));
+        ASSERT_TRUE(fails("\"\\u11\""));
+        ASSERT_TRUE(fails("\"\\u111\""));
     }
     { // Missing end quote
-        ASSERT_FALSE(decode(R"("abc)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"([ "abc ])", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"("abc)"));
+        ASSERT_TRUE(fails(R"([ "abc ])"));
     }
     { // Escaped newlines
-        ExpectantComposer composer{};
-        composer.expectString("abc");
-        ASSERT_TRUE(decode("\"a\\\nb\\\nc\"", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectString("abc");
-        ASSERT_TRUE(decode("\"a\\\r\nb\\\r\nc\"", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectString("");
-        ASSERT_TRUE(decode("\"\\\n\\\n\\\n\"", composer, nullptr).success);
-        composer.expectString("");
-        ASSERT_TRUE(decode("\"\\\r\n\\\n\\\r\n\"", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{};
+
+        decoder.load("\"a\\\nb\\\nc\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "abc");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("\"a\\\r\nb\\\r\nc\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "abc");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("\"\\\n\\\n\\\n\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("\"\\\r\n\\\n\\\r\n\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Single quotes
-        ASSERT_FALSE(decode(R"('abc')", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"('abc')"));
     }
 }
 
 TEST(decode, decimal)
 {
     { // Zero
-        ExpectantComposer composer{};
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(0)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Normal
-        ExpectantComposer composer{};
-        composer.expectInteger(123);
-        ASSERT_TRUE(decode(R"(123)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(123)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 123);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive
-        ExpectantComposer composer{};
-        composer.expectInteger(123);
-        ASSERT_TRUE(decode(R"(+123)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+123)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer,123);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative
-        ExpectantComposer composer{};
-        composer.expectInteger(-123);
-        ASSERT_TRUE(decode(R"(-123)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-123)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, -123);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<int64_t>::min());
-        ASSERT_TRUE(decode(R"(-9223372036854775808)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-9223372036854775808)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<int64_t>::max());
-        ASSERT_TRUE(decode(R"(+9223372036854775807)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+9223372036854775807)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::max());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max unsigned
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<uint64_t>::max());
-        ASSERT_TRUE(decode(R"(+18446744073709551615)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+18446744073709551615)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(123);
-        ASSERT_TRUE(decode(R"(0123)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(00)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(+00)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(-00)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{};
+
+        decoder.load(R"(0123)"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 123);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(00)"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(+00)"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(-00)"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min with leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<int64_t>::min());
-        ASSERT_TRUE(decode(R"(-000000009223372036854775808)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-000000009223372036854775808)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<int64_t>::max());
-        ASSERT_TRUE(decode(R"(+000000009223372036854775807)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+000000009223372036854775807)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::max());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max unsigned with leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<uint64_t>::max());
-        ASSERT_TRUE(decode(R"(+0000000018446744073709551615)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+0000000018446744073709551615)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid minus sign
-        ASSERT_FALSE(decode(R"(-)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"([ - ])", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(-)"));
+        ASSERT_TRUE(fails(R"([ - ])"));
     }
     { // Invalid plus sign
-        ASSERT_FALSE(decode(R"(+)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"([ + ])", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(+)"));
+        ASSERT_TRUE(fails(R"([ + ])"));
     }
     { // Multiple signs
-        ASSERT_FALSE(decode(R"(++0)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(--0)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(+-0)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(-+0)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(++0)"));
+        ASSERT_TRUE(fails(R"(--0)"));
+        ASSERT_TRUE(fails(R"(+-0)"));
+        ASSERT_TRUE(fails(R"(-+0)"));
     }
 }
 
 TEST(decode, hex)
 {
     { // Zero
-        ExpectantComposer composer{};
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(0x0)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0x0)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Lowercase
-        ExpectantComposer composer{};
-        composer.expectInteger(26);
-        ASSERT_TRUE(decode(R"(0x1a)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0x1a)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 26);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Uppercase
-        ExpectantComposer composer{};
-        composer.expectInteger(26);
-        ASSERT_TRUE(decode(R"(0x1A)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0x1A)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 26);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive
-        ExpectantComposer composer{};
-        composer.expectInteger(26);
-        ASSERT_TRUE(decode(R"(+0x1A)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+0x1A)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 26);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative
-        ExpectantComposer composer{};
-        composer.expectInteger(-26);
-        ASSERT_TRUE(decode(R"(-0x1A)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-0x1A)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, -26);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<int64_t>::min());
-        ASSERT_TRUE(decode(R"(-0x8000000000000000)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-0x8000000000000000)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<uint64_t>::max());
-        ASSERT_TRUE(decode(R"(+0xFFFFFFFFFFFFFFFF)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+0xFFFFFFFFFFFFFFFF)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(26);
-        ASSERT_TRUE(decode(R"(0x001A)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0x001A)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 26);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min with leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<int64_t>::min());
-        ASSERT_TRUE(decode(R"(-0x000000008000000000000000)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-0x000000008000000000000000)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<uint64_t>::max());
-        ASSERT_TRUE(decode(R"(+0x00000000FFFFFFFFFFFFFFFF)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+0x00000000FFFFFFFFFFFFFFFF)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid digit
-        ASSERT_FALSE(decode(R"(0x1G)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0x1G)"));
     }
     { // Uppercase X
-        ASSERT_FALSE(decode(R"(0X1A)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0X1A)"));
     }
     { // Prefix leading zero
-        ASSERT_FALSE(decode(R"(00x1A)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(00x1A)"));
     }
     { // Decimal
-        ASSERT_FALSE(decode(R"(0x1A.)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0x1A.)"));
     }
     { // Too big
-        ASSERT_FALSE(decode(R"(0x10000000000000000)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0x10000000000000000)"));
     }
 }
 
 TEST(decode, octal)
 {
     { // Zero
-        ExpectantComposer composer{};
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(0o0)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0o0)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // No sign
-        ExpectantComposer composer{};
-        composer.expectInteger(10);
-        ASSERT_TRUE(decode(R"(0o12)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0o12)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 10);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive
-        ExpectantComposer composer{};
-        composer.expectInteger(10);
-        ASSERT_TRUE(decode(R"(+0o12)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+0o12)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 10);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative
-        ExpectantComposer composer{};
-        composer.expectInteger(-10);
-        ASSERT_TRUE(decode(R"(-0o12)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-0o12)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, -10);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<int64_t>::min());
-        ASSERT_TRUE(decode(R"(-0o1000000000000000000000)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-0o1000000000000000000000)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<uint64_t>::max());
-        ASSERT_TRUE(decode(R"(+0o1777777777777777777777)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+0o1777777777777777777777)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(10);
-        ASSERT_TRUE(decode(R"(0o0012)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0o0012)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 10);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min with leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<int64_t>::min());
-        ASSERT_TRUE(decode(R"(-0o000000001000000000000000000000)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-0o000000001000000000000000000000)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<uint64_t>::max());
-        ASSERT_TRUE(decode(R"(+0o000000001777777777777777777777)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+0o000000001777777777777777777777)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid digit
-        ASSERT_FALSE(decode(R"(0o18)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0o18)"));
     }
     { // Uppercase O
-        ASSERT_FALSE(decode(R"(0O12)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0O12)"));
     }
     { // Prefix leading zero
-        ASSERT_FALSE(decode(R"(00x12)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(00x12)"));
     }
     { // Decimal
-        ASSERT_FALSE(decode(R"(0x12.)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0x12.)"));
     }
     { // Too big
-        ASSERT_FALSE(decode(R"(0o2000000000000000000000)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0o2000000000000000000000)"));
     }
 }
 
 TEST(decode, binary)
 {
     { // Zero
-        ExpectantComposer composer{};
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(0b0)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0b0)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // No sign
-        ExpectantComposer composer{};
-        composer.expectInteger(5);
-        ASSERT_TRUE(decode(R"(0b101)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0b101)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 5);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive
-        ExpectantComposer composer{};
-        composer.expectInteger(5);
-        ASSERT_TRUE(decode(R"(+0b101)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+0b101)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 5);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative
-        ExpectantComposer composer{};
-        composer.expectInteger(-5);
-        ASSERT_TRUE(decode(R"(-0b101)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-0b101)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, -5);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<int64_t>::min());
-        ASSERT_TRUE(decode(R"(-0b1000000000000000000000000000000000000000000000000000000000000000)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-0b1000000000000000000000000000000000000000000000000000000000000000)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<uint64_t>::max());
-        ASSERT_TRUE(decode(R"(+0b1111111111111111111111111111111111111111111111111111111111111111)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+0b1111111111111111111111111111111111111111111111111111111111111111)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(5);
-        ASSERT_TRUE(decode(R"(0b00101)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0b00101)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 5);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min with leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<int64_t>::min());
-        ASSERT_TRUE(decode(R"(-0b000000001000000000000000000000000000000000000000000000000000000000000000)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-0b000000001000000000000000000000000000000000000000000000000000000000000000)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<int64_t>::min());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
-        ExpectantComposer composer{};
-        composer.expectInteger(std::numeric_limits<uint64_t>::max());
-        ASSERT_TRUE(decode(R"(+0b000000001111111111111111111111111111111111111111111111111111111111111111)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+0b000000001111111111111111111111111111111111111111111111111111111111111111)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, std::numeric_limits<uint64_t>::max());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid digit
-        ASSERT_FALSE(decode(R"(0b121)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0b121)"));
     }
     { // Uppercase B
-        ASSERT_FALSE(decode(R"(0B101)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0B101)"));
     }
     { // Prefix leading zero
-        ASSERT_FALSE(decode(R"(00b101)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(00b101)"));
     }
     { // Decimal
-        ASSERT_FALSE(decode(R"(0b101.)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0b101.)"));
     }
     { // Too big
-        ASSERT_FALSE(decode(R"(0b10000000000000000000000000000000000000000000000000000000000000000)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0b10000000000000000000000000000000000000000000000000000000000000000)"));
     }
 }
 
 TEST(decode, floater)
 {
     { // Zero
-        ExpectantComposer composer{};
-        composer.expectFloater(0.0);
-        ASSERT_TRUE(decode(R"(0.0)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(0.0)"};
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 0.0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // No sign
-        ExpectantComposer composer{};
-        composer.expectFloater(123.456);
-        ASSERT_TRUE(decode(R"(123.456)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(123.456)"};
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 123.456);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive
-        ExpectantComposer composer{};
-        composer.expectFloater(123.456);
-        ASSERT_TRUE(decode(R"(+123.456)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(+123.456)"};
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 123.456);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative
-        ExpectantComposer composer{};
-        composer.expectFloater(-123.456);
-        ASSERT_TRUE(decode(R"(-123.456)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-123.456)"};
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, -123.456);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Exponent lowercase
-        ExpectantComposer composer{};
-        composer.expectFloater(123.456e17);
-        ASSERT_TRUE(decode(R"(123.456e17)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(123.456e17)"};
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 123.456e17);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Exponent uppercase
-        ExpectantComposer composer{};
-        composer.expectFloater(123.456e17);
-        ASSERT_TRUE(decode(R"(123.456E17)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(123.456E17)"};
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 123.456e17);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive exponent
-        ExpectantComposer composer{};
-        composer.expectFloater(123.456e17);
-        ASSERT_TRUE(decode(R"(123.456e+17)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(123.456e+17)"};
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 123.456e17);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative exponent
-        ExpectantComposer composer{};
-        composer.expectFloater(-123.456e-17);
-        ASSERT_TRUE(decode(R"(-123.456e-17)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(-123.456e-17)"};
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, -123.456e-17);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Exponent without fraction
-        ExpectantComposer composer{};
-        composer.expectFloater(123.0e34);
-        ASSERT_TRUE(decode(R"(123e34)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(123e34)"};
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 123.0e34);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max integer
-        ExpectantComposer composer{};
-        composer.expectFloater(9007199254740991.0);
-        ASSERT_TRUE(decode(R"(9007199254740991.0e0)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(9007199254740991.0e0)"};
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 9007199254740991.0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Leading and trailing decimal
-        ASSERT_FALSE(decode(R"(.0)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(+.0)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(-.0)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(0.)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(+0.)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(-0.)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(1.e0)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(.)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(.0)"));
+        ASSERT_TRUE(fails(R"(+.0)"));
+        ASSERT_TRUE(fails(R"(-.0)"));
+        ASSERT_TRUE(fails(R"(0.)"));
+        ASSERT_TRUE(fails(R"(+0.)"));
+        ASSERT_TRUE(fails(R"(-0.)"));
+        ASSERT_TRUE(fails(R"(1.e0)"));
+        ASSERT_TRUE(fails(R"(.)"));
     }
     { // Leading zeroes
-        ExpectantComposer composer{};
-        composer.expectFloater(1.2);
-        ASSERT_TRUE(decode(R"(01.2)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(0.2);
-        ASSERT_TRUE(decode(R"(00.2)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(1e02);
-        ASSERT_TRUE(decode(R"(1e02)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(1e+02);
-        ASSERT_TRUE(decode(R"(1e+02)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(1e-02);
-        ASSERT_TRUE(decode(R"(1e-02)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(1e00);
-        ASSERT_TRUE(decode(R"(1e00)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{};
+
+        decoder.load(R"(01.2)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 1.2);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(00.2)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 0.2);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(1e02)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 1e02);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(1e+02)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 1e+02);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(1e-02)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 1e-02);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(1e00)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, 1e00);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Valid infinity
-        ExpectantComposer composer{};
-        composer.expectFloater(std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(inf)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(-std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(-inf)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(+inf)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(Inf)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(-std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(-Inf)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(+Inf)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(infinity)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(-std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(-infinity)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(+infinity)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(Infinity)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(-std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(-Infinity)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decode(R"(+Infinity)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{};
+
+        decoder.load(R"(inf)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(-inf)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(+inf)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(Inf)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(-Inf)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(+Inf)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(infinity)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(-infinity)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(+infinity)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(Infinity)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(-Infinity)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(+Infinity)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid infinity
-        ASSERT_FALSE(decode(R"(iNf)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(inF)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(INF)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infi)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infin)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infini)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infinit)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(iNfinity)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(inFinity)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infInity)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infiNity)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infinIty)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infiniTy)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infinitY)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(Infi)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(Infin)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(Infini)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(Infinit)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(INfinity)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(InFinity)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(InfInity)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(InfiNity)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(InfinIty)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(InfiniTy)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(InfinitY)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(INFINITY)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infstuff)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(infinitystuff)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(iNf)"));
+        ASSERT_TRUE(fails(R"(inF)"));
+        ASSERT_TRUE(fails(R"(INF)"));
+        ASSERT_TRUE(fails(R"(infi)"));
+        ASSERT_TRUE(fails(R"(infin)"));
+        ASSERT_TRUE(fails(R"(infini)"));
+        ASSERT_TRUE(fails(R"(infinit)"));
+        ASSERT_TRUE(fails(R"(iNfinity)"));
+        ASSERT_TRUE(fails(R"(inFinity)"));
+        ASSERT_TRUE(fails(R"(infInity)"));
+        ASSERT_TRUE(fails(R"(infiNity)"));
+        ASSERT_TRUE(fails(R"(infinIty)"));
+        ASSERT_TRUE(fails(R"(infiniTy)"));
+        ASSERT_TRUE(fails(R"(infinitY)"));
+        ASSERT_TRUE(fails(R"(Infi)"));
+        ASSERT_TRUE(fails(R"(Infin)"));
+        ASSERT_TRUE(fails(R"(Infini)"));
+        ASSERT_TRUE(fails(R"(Infinit)"));
+        ASSERT_TRUE(fails(R"(INfinity)"));
+        ASSERT_TRUE(fails(R"(InFinity)"));
+        ASSERT_TRUE(fails(R"(InfInity)"));
+        ASSERT_TRUE(fails(R"(InfiNity)"));
+        ASSERT_TRUE(fails(R"(InfinIty)"));
+        ASSERT_TRUE(fails(R"(InfiniTy)"));
+        ASSERT_TRUE(fails(R"(InfinitY)"));
+        ASSERT_TRUE(fails(R"(INFINITY)"));
+        ASSERT_TRUE(fails(R"(infstuff)"));
+        ASSERT_TRUE(fails(R"(infinitystuff)"));
     }
     { // Valid NaN
-        ExpectantComposer composer{};
-        composer.expectFloater(std::numeric_limits<double>::quiet_NaN());
-        ASSERT_TRUE(decode(R"(nan)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectFloater(std::numeric_limits<double>::quiet_NaN());
-        ASSERT_TRUE(decode(R"(NaN)", composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{};
+
+        decoder.load(R"(nan)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_TRUE(std::isnan(decoder.floater));
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(NaN)");
+        ASSERT_EQ(decoder.step(), DecodeState::floater);
+        ASSERT_TRUE(std::isnan(decoder.floater));
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid NaN
-        ASSERT_FALSE(decode(R"(Nan)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(nAn)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(naN)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(NAN)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(nanstuff)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(NaNstuff)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(Nan)"));
+        ASSERT_TRUE(fails(R"(nAn)"));
+        ASSERT_TRUE(fails(R"(naN)"));
+        ASSERT_TRUE(fails(R"(NAN)"));
+        ASSERT_TRUE(fails(R"(nanstuff)"));
+        ASSERT_TRUE(fails(R"(NaNstuff)"));
     }
     { // Exponent decimal point
-        ASSERT_FALSE(decode(R"(1.0e1.0)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(1.0e1.)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(1e1.0)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(1e1.)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(1e.1)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(1.0e1.0)"));
+        ASSERT_TRUE(fails(R"(1.0e1.)"));
+        ASSERT_TRUE(fails(R"(1e1.0)"));
+        ASSERT_TRUE(fails(R"(1e1.)"));
+        ASSERT_TRUE(fails(R"(1e.1)"));
     }
     { // Dangling exponent
-        ASSERT_FALSE(decode(R"(0e)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(0e+)", dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(0e-)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(0e)"));
+        ASSERT_TRUE(fails(R"(0e+)"));
+        ASSERT_TRUE(fails(R"(0e-)"));
     }
     { // Magnitude too large
-        ASSERT_FALSE(decode(R"(1e1000)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(1e1000)"));
     }
     { // Magnitude too small
-        ASSERT_FALSE(decode(R"(1e-1000)", dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(1e-1000)"));
     }
 }
 
 TEST(decode, boolean)
 {
     { // True
-        ExpectantComposer composer{};
-        composer.expectBoolean(true);
-        ASSERT_TRUE(decode(R"(true)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(true)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::boolean);
+        ASSERT_EQ(decoder.boolean, true);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // False
-        ExpectantComposer composer{};
-        composer.expectBoolean(false);
-        ASSERT_TRUE(decode(R"(false)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"(false)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::boolean);
+        ASSERT_EQ(decoder.boolean, false);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
 }
 
 TEST(decode, null)
 {
-    ExpectantComposer composer{};
-    composer.expectNull();
-    ASSERT_TRUE(decode(R"(null)"sv, composer, nullptr).success);
-    ASSERT_TRUE(composer.isDone());
+    Decoder decoder{R"(null)"sv};
+    ASSERT_EQ(decoder.step(), DecodeState::null);
+    ASSERT_EQ(decoder.step(), DecodeState::done);
 }
 
 TEST(decode, noSpace)
 {
-    ExpectantComposer composer{};
-    composer.expectObject().expectKey("a"sv).expectArray().expectString("abc"sv).expectInteger(-123).expectFloater(-123.456e-78).expectBoolean(true).expectNull().expectEnd().expectEnd();
-    ASSERT_TRUE(decode(R"({"a":["abc",-123,-123.456e-78,true,null]})"sv, composer, nullptr).success);
-    ASSERT_TRUE(composer.isDone());
+    Decoder decoder{R"({"a":["abc",-123,-123.456e-78,true,null]})"sv};
+    ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.key, "a"sv);
+            ASSERT_EQ(decoder.step(), DecodeState::string);
+            ASSERT_EQ(decoder.string, "abc"sv);
+            ASSERT_EQ(decoder.step(), DecodeState::integer);
+            ASSERT_EQ(decoder.integer, -123);
+            ASSERT_EQ(decoder.step(), DecodeState::floater);
+            ASSERT_EQ(decoder.floater, -123.456e-78);
+            ASSERT_EQ(decoder.step(), DecodeState::boolean);
+            ASSERT_EQ(decoder.boolean, true);
+            ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+    ASSERT_EQ(decoder.step(), DecodeState::end);
+    ASSERT_EQ(decoder.step(), DecodeState::done);
 }
 
 TEST(decode, extraneousSpace)
 {
-    ExpectantComposer composer{};
-    composer.expectObject().expectEnd();
-    ASSERT_TRUE(decode(" \t\n\r\v{} \t\n\r\v"sv, composer, nullptr).success);
-    ASSERT_TRUE(composer.isDone());
+    Decoder decoder{" \t\n\r\v{} \t\n\r\v"sv};
+    ASSERT_EQ(decoder.step(), DecodeState::object);
+    ASSERT_EQ(decoder.step(), DecodeState::end);
+    ASSERT_EQ(decoder.step(), DecodeState::done);
 }
 
 TEST(decode, trailingComma)
 {
     { // Valid
-        ExpectantComposer composer{};
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(0,)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(0, )"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(0 ,)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectArray().expectInteger(0).expectEnd();
-        ASSERT_TRUE(decode(R"([0,])"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectArray().expectInteger(0).expectEnd();
-        ASSERT_TRUE(decode(R"([0, ])"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectArray().expectInteger(0).expectEnd();
-        ASSERT_TRUE(decode(R"([0 ,])"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("k"sv).expectInteger(0).expectEnd();
-        ASSERT_TRUE(decode(R"({"k":0,})"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("k"sv).expectInteger(0).expectEnd();
-        ASSERT_TRUE(decode(R"({"k":0, })"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectObject().expectKey("k"sv).expectInteger(0).expectEnd();
-        ASSERT_TRUE(decode(R"({"k":0 ,})"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{};
+
+        decoder.load(R"([0,])"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"([0, ])"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"([0 ,])"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"({"k":0,})"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.key, "k"sv);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"({"k":0, })"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.key, "k"sv);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"({"k":0 ,})"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.key, "k"sv);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid
-        ASSERT_FALSE(decode(R"(,)"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"( ,)"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(, )"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(0,,)"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(0 ,,)"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(0, ,)"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(0,, )"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"([0,,])"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"([0 ,,])"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"([0, ,])"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"([0,, ])"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"k":0,,})"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"k":0 ,,})"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"k":0, ,})"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"({"k":0,, })"sv, dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(,)"sv));
+        ASSERT_TRUE(fails(R"( ,)"sv));
+        ASSERT_TRUE(fails(R"(, )"sv));
+        ASSERT_TRUE(fails(R"(0,)"sv));
+        ASSERT_TRUE(fails(R"(0 ,)"sv));
+        ASSERT_TRUE(fails(R"(0, )"sv));
+        ASSERT_TRUE(fails(R"({},)"sv));
+        ASSERT_TRUE(fails(R"([],)"sv));
+        ASSERT_TRUE(fails(R"([0,,])"sv));
+        ASSERT_TRUE(fails(R"([0 ,,])"sv));
+        ASSERT_TRUE(fails(R"([0, ,])"sv));
+        ASSERT_TRUE(fails(R"([0,, ])"sv));
+        ASSERT_TRUE(fails(R"({"k":0,,})"sv));
+        ASSERT_TRUE(fails(R"({"k":0 ,,})"sv));
+        ASSERT_TRUE(fails(R"({"k":0, ,})"sv));
+        ASSERT_TRUE(fails(R"({"k":0,, })"sv));
     }
 }
 
 TEST(decode, comments)
 {
     { // Single comment
-        ExpectantComposer composer{};
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(0 # AAAAA)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode(R"(0 # AAAAA # BBBBB 1)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{};
+
+        decoder.load(R"(0 # AAAAA)"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"(0 # AAAAA # BBBBB 1)"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Multiple comments
-        ExpectantComposer composer{};
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode("# AAAAA\n#  BBBBB \n #CCCCC\n\n# DD DD\n0"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{"# AAAAA\n#  BBBBB \n #CCCCC\n\n# DD DD\n0"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Comment in string
-        ExpectantComposer composer{};
-        composer.expectString("# AAAAA"sv);
-        ASSERT_TRUE(decode(R"("# AAAAA")"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{R"("# AAAAA")"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "# AAAAA"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Comments in array
-        ExpectantComposer composer{};
-        composer.expectArray();
-            composer.expectInteger(0);
-            composer.expectInteger(1);
-        composer.expectEnd();
-        ASSERT_TRUE(decode(
+        Decoder decoder{
 R"([ # AAAAA
     0, # BBBBB
     1 # CCCCC
-] # DDDDD)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+] # DDDDD)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+            ASSERT_EQ(decoder.step(), DecodeState::integer);
+            ASSERT_EQ(decoder.integer, 0);
+            ASSERT_EQ(decoder.step(), DecodeState::integer);
+            ASSERT_EQ(decoder.integer, 1);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Comments in object
-        ExpectantComposer composer{};
-        composer.expectObject();
-            composer.expectKey("0"sv).expectInteger(0);
-            composer.expectKey("1"sv).expectInteger(1);
-        composer.expectEnd();
-        ASSERT_TRUE(decode(
+        Decoder decoder{
 R"({ # AAAAA
     "0": 0, # BBBBB
     "1": 1 # CCCCC
-} # DDDDD)"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+} # DDDDD)"sv};
+        ASSERT_EQ(decoder.step(), DecodeState::object);
+            ASSERT_EQ(decoder.step(), DecodeState::integer);
+            ASSERT_EQ(decoder.key, "0"sv);
+            ASSERT_EQ(decoder.integer, 0);
+            ASSERT_EQ(decoder.step(), DecodeState::integer);
+            ASSERT_EQ(decoder.key, "1"sv);
+            ASSERT_EQ(decoder.integer, 1);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // CRLF
-        ExpectantComposer composer{};
-        composer.expectArray().expectInteger(0).expectInteger(1).expectEnd();
-        ASSERT_TRUE(decode("[ # AAAAA\r\n    0, # BBBBB\n    1 # CCCCC\r\n] # DDDDD \n"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
-        composer.expectArray().expectInteger(1).expectEnd();
-        ASSERT_TRUE(decode("[ # AAAAA\r 0, # BBBBB\n    1 # CCCCC\r\n] # DDDDD \n"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        Decoder decoder{};
+
+        decoder.load("[ # AAAAA\r\n    0, # BBBBB\n    1 # CCCCC\r\n] # DDDDD \n"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+            ASSERT_EQ(decoder.step(), DecodeState::integer);
+            ASSERT_EQ(decoder.integer, 0);
+            ASSERT_EQ(decoder.step(), DecodeState::integer);
+            ASSERT_EQ(decoder.integer, 1);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("[ # AAAAA\r 0, # BBBBB\n    1 # CCCCC\r\n] # DDDDD \n"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+            ASSERT_EQ(decoder.step(), DecodeState::integer);
+            ASSERT_EQ(decoder.integer, 1);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Weirdness
-        ExpectantComposer composer{};
+        Decoder decoder{};
 
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode("#\n0"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        decoder.load("#\n0"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
 
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode("# \n0"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        decoder.load("# \n0"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
 
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode("##\n0"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        decoder.load("##\n0"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
 
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode("# #\n0"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        decoder.load("# #\n0"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
 
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode("#\n#\n0"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        decoder.load("#\n#\n0"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
 
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode("0#"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        decoder.load("0#"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
 
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode("0# "sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        decoder.load("0# "sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
 
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode("0#\n"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        decoder.load("0#\n"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
 
-        composer.expectInteger(0);
-        ASSERT_TRUE(decode("0#\n#"sv, composer, nullptr).success);
-        ASSERT_TRUE(composer.isDone());
+        decoder.load("0#\n#"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.integer, 0);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Nothing but comments
-        ASSERT_FALSE(decode("# AAAAA\n# CCCCC\n"sv, dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails("# AAAAA\n# CCCCC\n"sv));
+    }
+}
+
+TEST(decode, depth)
+{
+    { // 64 nested objects
+        Decoder decoder{R"({"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"v":true}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}})"};
+        for (int i{0}; i < 64; ++i) ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::boolean);
+        ASSERT_EQ(decoder.key, "v");
+        ASSERT_EQ(decoder.boolean, true);
+        for (int i{0}; i < 64; ++i) ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+    }
+    { // 64 nested arrays
+        Decoder decoder{"[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[true]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"};
+        for (int i{0}; i < 64; ++i) ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.step(), DecodeState::boolean);
+        ASSERT_EQ(decoder.boolean, true);
+        for (int i{0}; i < 64; ++i) ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+    }
+    { // 65 nested objects
+        ASSERT_TRUE(fails(R"({"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"v":true}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}})"));
+    }
+    { // 65 nested arrays
+        ASSERT_TRUE(fails("[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[true]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"));
     }
 }
 
 TEST(decode, misc)
 {
     { // Empty
-        ASSERT_FALSE(decode(R"()"sv, dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"()"sv));
     }
     { // Only Space
-        ASSERT_FALSE(decode(R"(   )"sv, dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(   )"sv));
     }
     { // Unknown value
-        ASSERT_FALSE(decode(R"(v)"sv, dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(v)"sv));
     }
     { // Multiple root values
-        ASSERT_FALSE(decode(R"(1 2)"sv, dummyComposer, nullptr).success);
-        ASSERT_FALSE(decode(R"(1, 2)"sv, dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(1 2)"sv));
+        ASSERT_TRUE(fails(R"(1, 2)"sv));
     }
     { // Lone decimal
-        ASSERT_FALSE(decode(R"(.)"sv, dummyComposer, nullptr).success);
+        ASSERT_TRUE(fails(R"(.)"sv));
+    }
+    { // Stepping on error
+        Decoder decoder{"nullnull"};
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.step(), DecodeState::error);
+        ASSERT_EQ(decoder.step(), DecodeState::error);
+    }
+    { // Stepping once done
+        Decoder decoder{"null"};
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
 }
 
 TEST(decode, general)
 {
-    ExpectantComposer composer{};
-    composer.expectObject();
-        composer.expectKey("Name"sv).expectString("Salt's Crust"sv);
-        composer.expectKey("Founded"sv).expectInteger(1964);
-        composer.expectKey("Employees"sv).expectArray();
-            composer.expectObject().expectKey("Name"sv).expectString("Ol' Joe Fisher"sv).expectKey("Title"sv).expectString("Fisherman"sv).expectKey("Age"sv).expectInteger(69).expectEnd();
-            composer.expectObject().expectKey("Name"sv).expectString("Mark Rower"sv).expectKey("Title"sv).expectString("Cook"sv).expectKey("Age"sv).expectInteger(41).expectEnd();
-            composer.expectObject().expectKey("Name"sv).expectString("Phineas"sv).expectKey("Title"sv).expectString("Server Boy"sv).expectKey("Age"sv).expectInteger(19).expectEnd();
-        composer.expectEnd();
-        composer.expectKey("Dishes"sv).expectArray();
-            composer.expectObject();
-                composer.expectKey("Name"sv).expectString("Basket o' Barnacles"sv);
-                composer.expectKey("Price"sv).expectFloater(5.45);
-                composer.expectKey("Ingredients"sv).expectArray().expectString("\"Salt\""sv).expectString("Barnacles"sv).expectEnd();
-                composer.expectKey("Gluten Free"sv).expectBoolean(false);
-            composer.expectEnd();
-            composer.expectObject();
-                composer.expectKey("Name"sv).expectString("Two Tuna"sv);
-                composer.expectKey("Price"sv).expectFloater(-std::numeric_limits<double>::infinity());
-                composer.expectKey("Ingredients"sv).expectArray().expectString("Tuna"sv).expectEnd();
-                composer.expectKey("Gluten Free"sv).expectBoolean(true);
-            composer.expectEnd();
-            composer.expectObject();
-                composer.expectKey("Name"sv).expectString("18 Leg Bouquet"sv);
-                composer.expectKey("Price"sv).expectFloater(std::numeric_limits<double>::quiet_NaN());
-                composer.expectKey("Ingredients"sv).expectArray().expectString("\"Salt\""sv).expectString("Octopus"sv).expectString("Crab"sv).expectEnd();
-                composer.expectKey("Gluten Free"sv).expectBoolean(false);
-            composer.expectEnd();
-        composer.expectEnd();
-        composer.expectKey("Profit Margin"sv).expectNull();
-        composer.expectKey("Ha\x03r Name"sv).expectString("M\0\0n"sv);
-        composer.expectKey("Green Eggs and Ham"sv).expectString(
-R"(I do not like them in a box
-I do not like them with a fox
-I do not like them in a house
-I do not like them with a mouse
-I do not like them here or there
-I do not like them anywhere
-I do not like green eggs and ham
-I do not like them Sam I am
-)");
-        composer.expectKey("Magic Numbers"sv).expectArray().expectInteger(777).expectInteger(777).expectInteger(777).expectEnd();
-    composer.expectEnd();
     const std::string_view qcon{
 R"(
 # Third quarter summary document
@@ -1165,7 +1261,133 @@ I do not like them Sam I am\n\
 ",
     "Magic Numbers": [0x309,0o1411,0b1100001001] # What could they mean?!
 })"sv};
-    const DecodeResult result{decode(qcon, composer, nullptr)};
-    ASSERT_TRUE(result.success);
-    ASSERT_TRUE(composer.isDone());
+    Decoder decoder{qcon};
+    ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.key, "Name"sv);
+        ASSERT_EQ(decoder.string, "Salt's Crust"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::integer);
+        ASSERT_EQ(decoder.key, "Founded"sv);
+        ASSERT_EQ(decoder.integer, 1964);
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.key, "Employees"sv);
+            ASSERT_EQ(decoder.step(), DecodeState::object);
+                ASSERT_EQ(decoder.step(), DecodeState::string);
+                ASSERT_EQ(decoder.key, "Name"sv);
+                ASSERT_EQ(decoder.string, "Ol' Joe Fisher"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::string);
+                ASSERT_EQ(decoder.key, "Title"sv);
+                ASSERT_EQ(decoder.string, "Fisherman"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::integer);
+                ASSERT_EQ(decoder.key, "Age"sv);
+                ASSERT_EQ(decoder.integer, 69);
+            ASSERT_EQ(decoder.step(), DecodeState::end);
+            ASSERT_EQ(decoder.step(), DecodeState::object);
+                ASSERT_EQ(decoder.step(), DecodeState::string);
+                ASSERT_EQ(decoder.key, "Name"sv);
+                ASSERT_EQ(decoder.string, "Mark Rower"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::string);
+                ASSERT_EQ(decoder.key, "Title"sv);
+                ASSERT_EQ(decoder.string, "Cook"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::integer);
+                ASSERT_EQ(decoder.key, "Age"sv);
+                ASSERT_EQ(decoder.integer, 41);
+            ASSERT_EQ(decoder.step(), DecodeState::end);
+            ASSERT_EQ(decoder.step(), DecodeState::object);
+                ASSERT_EQ(decoder.step(), DecodeState::string);
+                ASSERT_EQ(decoder.key, "Name"sv);
+                ASSERT_EQ(decoder.string, "Phineas"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::string);
+                ASSERT_EQ(decoder.key, "Title"sv);
+                ASSERT_EQ(decoder.string, "Server Boy"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::integer);
+                ASSERT_EQ(decoder.key, "Age"sv);
+                ASSERT_EQ(decoder.integer, 19);
+            ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.key, "Dishes"sv);
+            ASSERT_EQ(decoder.step(), DecodeState::object);
+                ASSERT_EQ(decoder.step(), DecodeState::string);
+                ASSERT_EQ(decoder.key, "Name"sv);
+                ASSERT_EQ(decoder.string, "Basket o' Barnacles"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::floater);
+                ASSERT_EQ(decoder.key, "Price"sv);
+                ASSERT_EQ(decoder.floater, 5.45);
+                ASSERT_EQ(decoder.step(), DecodeState::array);
+                ASSERT_EQ(decoder.key, "Ingredients"sv);
+                    ASSERT_EQ(decoder.step(), DecodeState::string);
+                    ASSERT_EQ(decoder.string, "\"Salt\""sv);
+                    ASSERT_EQ(decoder.step(), DecodeState::string);
+                    ASSERT_EQ(decoder.string, "Barnacles"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::end);
+                ASSERT_EQ(decoder.step(), DecodeState::boolean);
+                ASSERT_EQ(decoder.key, "Gluten Free"sv);
+                ASSERT_EQ(decoder.boolean, false);
+            ASSERT_EQ(decoder.step(), DecodeState::end);
+            ASSERT_EQ(decoder.step(), DecodeState::object);
+                ASSERT_EQ(decoder.step(), DecodeState::string);
+                ASSERT_EQ(decoder.key, "Name"sv);
+                ASSERT_EQ(decoder.string, "Two Tuna"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::floater);
+                ASSERT_EQ(decoder.key, "Price"sv);
+                ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
+                ASSERT_EQ(decoder.step(), DecodeState::array);
+                ASSERT_EQ(decoder.key, "Ingredients"sv);
+                    ASSERT_EQ(decoder.step(), DecodeState::string);
+                    ASSERT_EQ(decoder.string, "Tuna"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::end);
+                ASSERT_EQ(decoder.step(), DecodeState::boolean);
+                ASSERT_EQ(decoder.key, "Gluten Free"sv);
+                ASSERT_EQ(decoder.boolean, true);
+            ASSERT_EQ(decoder.step(), DecodeState::end);
+            ASSERT_EQ(decoder.step(), DecodeState::object);
+                ASSERT_EQ(decoder.step(), DecodeState::string);
+                ASSERT_EQ(decoder.key, "Name"sv);
+                ASSERT_EQ(decoder.string, "18 Leg Bouquet"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::floater);
+                ASSERT_EQ(decoder.key, "Price"sv);
+                ASSERT_TRUE(std::isnan(decoder.floater));
+                ASSERT_EQ(decoder.step(), DecodeState::array);
+                ASSERT_EQ(decoder.key, "Ingredients"sv);
+                    ASSERT_EQ(decoder.step(), DecodeState::string);
+                    ASSERT_EQ(decoder.string, "\"Salt\""sv);
+                    ASSERT_EQ(decoder.step(), DecodeState::string);
+                    ASSERT_EQ(decoder.string, "Octopus"sv);
+                    ASSERT_EQ(decoder.step(), DecodeState::string);
+                    ASSERT_EQ(decoder.string, "Crab"sv);
+                ASSERT_EQ(decoder.step(), DecodeState::end);
+                ASSERT_EQ(decoder.step(), DecodeState::boolean);
+                ASSERT_EQ(decoder.key, "Gluten Free"sv);
+                ASSERT_EQ(decoder.boolean, false);
+            ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::null);
+        ASSERT_EQ(decoder.key, "Profit Margin"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.key, "Ha\x03r Name"sv);
+        ASSERT_EQ(decoder.string, "M\0\0n"sv);
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.key, "Green Eggs and Ham"sv);
+        ASSERT_EQ(decoder.string,
+R"(I do not like them in a box
+I do not like them with a fox
+I do not like them in a house
+I do not like them with a mouse
+I do not like them here or there
+I do not like them anywhere
+I do not like green eggs and ham
+I do not like them Sam I am
+)");
+        ASSERT_EQ(decoder.step(), DecodeState::array);
+        ASSERT_EQ(decoder.key, "Magic Numbers"sv);
+            ASSERT_EQ(decoder.step(), DecodeState::integer);
+            ASSERT_EQ(decoder.integer, 777);
+            ASSERT_EQ(decoder.step(), DecodeState::integer);
+            ASSERT_EQ(decoder.integer, 777);
+            ASSERT_EQ(decoder.step(), DecodeState::integer);
+            ASSERT_EQ(decoder.integer, 777);
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+    ASSERT_EQ(decoder.step(), DecodeState::end);
+    ASSERT_EQ(decoder.step(), DecodeState::done);
 }

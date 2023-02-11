@@ -40,7 +40,6 @@ namespace qcon
 
     // Forward declarations
     class Value;
-    class _Composer;
 
     ///
     /// Convenience type alias
@@ -206,8 +205,6 @@ namespace qcon
 
       private:
 
-        friend class _Composer;
-
         union
         {
             nullptr_t _null{};
@@ -261,105 +258,6 @@ namespace qcon
 
 namespace qcon
 {
-    class _Composer
-    {
-      public:
-
-        struct State { Value * node; Container container; };
-
-        State object(State & outerState)
-        {
-            Value * innerNode;
-
-            switch (outerState.container)
-            {
-                case Container::object:
-                    innerNode = &outerState.node->_object->emplace(std::move(_key), Object{}).first->second;
-                    break;
-                case Container::array:
-                    innerNode = &outerState.node->_array->emplace_back(Object{});
-                    break;
-                default:
-                    *outerState.node = Object{};
-                    innerNode = outerState.node;
-            }
-
-            return {innerNode, Container::object};
-        }
-
-        State array(State & outerState)
-        {
-            Value * innerNode;
-
-            switch (outerState.container)
-            {
-                case Container::object:
-                    innerNode = &outerState.node->_object->emplace(std::move(_key), Array{}).first->second;
-                    break;
-                case Container::array:
-                    innerNode = &outerState.node->_array->emplace_back(Array{});
-                    break;
-                default:
-                    *outerState.node = Array{};
-                    innerNode = outerState.node;
-            }
-
-            return {innerNode, Container::array};
-        }
-
-        void key(const std::string_view k, State & /*state*/)
-        {
-            _key = k;
-        }
-
-        void end(State && /*innerState*/, State & /*outerState*/)
-        {
-
-        }
-
-        template <typename T>
-        void val(const T v, State & state)
-        {
-            Value * composedVal;
-
-            switch (state.container)
-            {
-                case Container::object:
-                    composedVal = &state.node->_object->emplace(std::move(_key), v).first->second;
-                    break;
-                case Container::array:
-                    composedVal = &state.node->_array->emplace_back(v);
-                    break;
-                default:
-                    *state.node = v;
-                    composedVal = state.node;
-            }
-        }
-
-        // TODO: Remove
-        void val(const int64_t v, const bool /*positive*/, State & state)
-        {
-            Value * composedVal;
-
-            switch (state.container)
-            {
-                case Container::object:
-                    composedVal = &state.node->_object->emplace(std::move(_key), v).first->second;
-                    break;
-                case Container::array:
-                    composedVal = &state.node->_array->emplace_back(v);
-                    break;
-                default:
-                    *state.node = v;
-                    composedVal = state.node;
-            }
-        }
-
-      private:
-
-        std::string _key{};
-    };
-
     inline Encoder & operator<<(Encoder & encoder, const Value & val)
     {
         switch (val.type())
@@ -884,14 +782,190 @@ namespace qcon
         return arr;
     }
 
+    inline bool _decodeArray(Decoder & decoder, Array & array);
+
+    inline bool _decodeObject(Decoder & decoder, Object & object)
+    {
+        while (true)
+        {
+            switch (decoder.step())
+            {
+                case DecodeState::object:
+                {
+                    Value & val{object.emplace(std::move(decoder.key), Object{}).first->second};
+                    if (!_decodeObject(decoder, *val.object()))
+                    {
+                        return false;
+                    }
+                    break;
+                }
+                case DecodeState::array:
+                {
+                    Value & val{object.emplace(std::move(decoder.key), Array{}).first->second};
+                    if (!_decodeArray(decoder, *val.array()))
+                    {
+                        return false;
+                    }
+                    break;
+                }
+                case DecodeState::end:
+                {
+                    return true;
+                }
+                case DecodeState::string:
+                {
+                    object.emplace(std::move(decoder.key), std::move(decoder.string));
+                    break;
+                }
+                case DecodeState::integer:
+                {
+                    object.emplace(std::move(decoder.key), decoder.integer);
+                    break;
+                }
+                case DecodeState::floater:
+                {
+                    object.emplace(std::move(decoder.key), decoder.floater);
+                    break;
+                }
+                case DecodeState::boolean:
+                {
+                    object.emplace(std::move(decoder.key), decoder.boolean);
+                    break;
+                }
+                case DecodeState::null:
+                {
+                    object.emplace(std::move(decoder.key), nullptr);
+                    break;
+                }
+                default:
+                {
+                    return false;
+                }
+            }
+        }
+    }
+
+    inline bool _decodeArray(Decoder & decoder, Array & array)
+    {
+        while (true)
+        {
+            switch (decoder.step())
+            {
+                case DecodeState::object:
+                {
+                    Value & val{array.emplace_back(Object{})};
+                    if (!_decodeObject(decoder, *val.object()))
+                    {
+                        return false;
+                    }
+                    break;
+                }
+                case DecodeState::array:
+                {
+                    Value & val{array.emplace_back(Array{})};
+                    if (!_decodeArray(decoder, *val.array()))
+                    {
+                        return false;
+                    }
+                    break;
+                }
+                case DecodeState::end:
+                {
+                    return true;
+                }
+                case DecodeState::string:
+                {
+                    array.push_back(std::move(decoder.string));
+                    break;
+                }
+                case DecodeState::integer:
+                {
+                    array.push_back(decoder.integer);
+                    break;
+                }
+                case DecodeState::floater:
+                {
+                    array.push_back(decoder.floater);
+                    break;
+                }
+                case DecodeState::boolean:
+                {
+                    array.push_back(decoder.boolean);
+                    break;
+                }
+                case DecodeState::null:
+                {
+                    array.push_back(nullptr);
+                    break;
+                }
+                default:
+                {
+                    return false;
+                }
+            }
+        }
+    }
+
     inline std::optional<Value> decode(const std::string_view qcon)
     {
-        Value root{};
-        _Composer::State rootState{&root, end};
-        _Composer composer{};
-        if (decode(qcon, composer, rootState).success)
+        Value value{};
+        Decoder decoder{qcon};
+
+        switch (decoder.step())
         {
-            return root;
+            case DecodeState::object:
+            {
+                Object obj{};
+                if (!_decodeObject(decoder, obj))
+                {
+                    return {};
+                }
+                value = std::move(obj);
+                break;
+            }
+            case DecodeState::array:
+            {
+                Array arr{};
+                if (!_decodeArray(decoder, arr))
+                {
+                    return {};
+                }
+                value = std::move(arr);
+                break;
+            }
+            case DecodeState::string:
+            {
+                value = std::move(decoder.string);
+                break;
+            }
+            case DecodeState::integer:
+            {
+                value = decoder.integer;
+                break;
+            }
+            case DecodeState::floater:
+            {
+                value = decoder.floater;
+                break;
+            }
+            case DecodeState::boolean:
+            {
+                value = decoder.boolean;
+                break;
+            }
+            case DecodeState::null:
+            {
+                break;
+            }
+            default:
+            {
+                return {};
+            }
+        }
+
+        if (decoder.step() == DecodeState::done)
+        {
+            return value;
         }
         else
         {
