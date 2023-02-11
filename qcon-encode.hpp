@@ -35,7 +35,7 @@ namespace qcon
         ///
         /// Stream to the encoder to specify the density of the next container
         ///
-        enum class Density : int8_t
+        enum class Density
         {
             multiline, /// Elements are put on new lines
             uniline,   /// Elements are put on one line separated by spaces
@@ -47,8 +47,7 @@ namespace qcon
         ///
         /// Simple enum representing a QCON container type
         ///
-        // TODO: These shouldn't need to be int8_t?
-        enum class Container : int8_t
+        enum class Container
         {
             end,
             object,
@@ -199,18 +198,17 @@ namespace qcon
             error
         };
 
-        // Using deltas allows us to start with an empty scope vector without needing a bunch of special root-case logic
-        struct _ScopeDelta
+        struct _ScopeInfo
         {
-            int8_t containerDelta;
-            int8_t densityDelta;
+            Container container;
+            Density density;
         };
 
         Density _baseDensity;
         size_t _indentSpaces;
 
         std::string _str;
-        std::vector<_ScopeDelta> _scopeDeltas;
+        std::vector<_ScopeInfo> _scopeInfos;
         Container _container;
         Density _density;
         size_t _indentation;
@@ -267,7 +265,7 @@ namespace qcon
         _indentSpaces{other._indentSpaces},
 
         _str{std::move(other._str)},
-        _scopeDeltas{std::move(other._scopeDeltas)},
+        _scopeInfos{std::move(other._scopeInfos)},
         _container{other._container},
         _density{other._density},
         _indentation{other._indentation},
@@ -284,7 +282,7 @@ namespace qcon
         _indentSpaces = other._indentSpaces;
 
         _str = std::move(other._str);
-        _scopeDeltas = std::move(other._scopeDeltas);
+        _scopeInfos = std::move(other._scopeInfos);
         _container = other._container;
         _density = other._density;
         _indentation = other._indentation;
@@ -479,7 +477,7 @@ namespace qcon
     inline void Encoder::reset()
     {
         _str.clear();
-        _scopeDeltas.clear();
+        _scopeInfos.clear();
         _container = end;
         _density = _baseDensity;
         _indentation = 0u;
@@ -525,9 +523,7 @@ namespace qcon
         _str += container == object ? '{' : '[';
 
         const Density newDensity{_nextDensity > _density ? _nextDensity : _density};
-        const int8_t containerDelta{int8_t(int8_t(container) - int8_t(_container))};
-        const int8_t densityDelta{int8_t(int8_t(newDensity) - int8_t(_density))};
-        _scopeDeltas.push_back(_ScopeDelta{containerDelta, densityDelta});
+        _scopeInfos.push_back(_ScopeInfo{_container, _density});
         _container = container;
         _density = newDensity;
         _nextDensity = multiline;
@@ -552,9 +548,9 @@ namespace qcon
             _putSpace();
         }
         _str += (_container == object ? "},"sv : "],"sv);
-        _container = Container(int8_t(_container) - _scopeDeltas.back().containerDelta);
-        _density = Density(int8_t(_density) - _scopeDeltas.back().densityDelta);
-        _scopeDeltas.pop_back();
+        _container = _scopeInfos.back().container;
+        _density = _scopeInfos.back().density;
+        _scopeInfos.pop_back();
         switch (_container)
         {
             case end: _expect = _Expect::nothing; break;
@@ -718,6 +714,13 @@ namespace qcon
     inline void Encoder::_encode(const double v)
     {
         static thread_local char buffer[24u];
+
+        // Ensure all NaNs are encoded the same
+        if (v != v)
+        {
+            _str.append("nan"sv);
+            return;
+        }
 
         const std::to_chars_result res{std::to_chars(buffer, buffer + sizeof(buffer), v)};
         const size_t length{size_t(res.ptr - buffer)};

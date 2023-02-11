@@ -386,17 +386,34 @@ TEST(qcon, valueConstruction)
     ASSERT_EQ(Type::string, Value("abc").type());
     ASSERT_EQ(Type::string, Value(const_cast<char *>("abc")).type());
     ASSERT_EQ(Type::string, Value('a').type());
-    // Number
+    // Integer
     ASSERT_EQ(Type::integer, Value(int64_t(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<int64_t>::max()).positive());
+    ASSERT_FALSE(Value(std::numeric_limits<int64_t>::min()).positive());
     ASSERT_EQ(Type::integer, Value(int32_t(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<int32_t>::max()).positive());
+    ASSERT_FALSE(Value(std::numeric_limits<int32_t>::min()).positive());
     ASSERT_EQ(Type::integer, Value(int16_t(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<int16_t>::max()).positive());
+    ASSERT_FALSE(Value(std::numeric_limits<int16_t>::min()).positive());
     ASSERT_EQ(Type::integer, Value(int8_t(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<int8_t>::max()).positive());
+    ASSERT_FALSE(Value(std::numeric_limits<int8_t>::min()).positive());
     ASSERT_EQ(Type::integer, Value(uint64_t(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<uint64_t>::max()).positive());
     ASSERT_EQ(Type::integer, Value(uint32_t(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<uint32_t>::max()).positive());
     ASSERT_EQ(Type::integer, Value(uint16_t(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<uint16_t>::max()).positive());
     ASSERT_EQ(Type::integer, Value(uint8_t(0)).type());
+    ASSERT_TRUE(Value(std::numeric_limits<uint8_t>::max()).positive());
+    // Floater
     ASSERT_EQ(Type::floater, Value(0.0).type());
+    ASSERT_TRUE(Value(1.0).positive());
+    ASSERT_FALSE(Value(-1.0).positive());
     ASSERT_EQ(Type::floater, Value(0.0f).type());
+    ASSERT_TRUE(Value(1.0f).positive());
+    ASSERT_FALSE(Value(-1.0f).positive());
     // Boolean
     ASSERT_EQ(Type::boolean, Value(false).type());
     // Null
@@ -465,41 +482,65 @@ TEST(qcon, valueAssignAndEquality)
     ASSERT_EQ(Type::integer, v.type());
     ASSERT_TRUE(v == int64_t(5));
     ASSERT_FALSE(v != int64_t(5));
+    v = std::numeric_limits<int64_t>::max();
+    ASSERT_TRUE(v.positive());
+    v = std::numeric_limits<int64_t>::min();
+    ASSERT_FALSE(v.positive());
 
     v = int32_t(6);
     ASSERT_EQ(Type::integer, v.type());
     ASSERT_TRUE(v == int32_t(6));
     ASSERT_FALSE(v != int32_t(6));
+    v = std::numeric_limits<int32_t>::max();
+    ASSERT_TRUE(v.positive());
+    v = std::numeric_limits<int32_t>::min();
+    ASSERT_FALSE(v.positive());
 
     v = int16_t(7);
     ASSERT_EQ(Type::integer, v.type());
     ASSERT_TRUE(v == int16_t(7));
     ASSERT_FALSE(v != int16_t(7));
+    v = std::numeric_limits<int16_t>::max();
+    ASSERT_TRUE(v.positive());
+    v = std::numeric_limits<int16_t>::min();
+    ASSERT_FALSE(v.positive());
 
     v = int8_t(8);
     ASSERT_EQ(Type::integer, v.type());
     ASSERT_TRUE(v == int8_t(8));
     ASSERT_FALSE(v != int8_t(8));
+    v = std::numeric_limits<int8_t>::max();
+    ASSERT_TRUE(v.positive());
+    v = std::numeric_limits<int8_t>::min();
+    ASSERT_FALSE(v.positive());
 
     v = uint64_t(10u);
     ASSERT_EQ(Type::integer, v.type());
     ASSERT_TRUE(v == uint64_t(10u));
     ASSERT_FALSE(v != uint64_t(10u));
+    v = std::numeric_limits<uint64_t>::max();
+    ASSERT_TRUE(v.positive());
 
     v = uint32_t(11u);
     ASSERT_EQ(Type::integer, v.type());
     ASSERT_TRUE(v == uint32_t(11u));
     ASSERT_FALSE(v != uint32_t(11u));
+    v = std::numeric_limits<uint32_t>::max();
+    ASSERT_TRUE(v.positive());
 
     v = uint16_t(12u);
     ASSERT_EQ(Type::integer, v.type());
     ASSERT_TRUE(v == uint16_t(12u));
     ASSERT_FALSE(v != uint16_t(12u));
+    v = std::numeric_limits<uint16_t>::max();
+    ASSERT_TRUE(v.positive());
 
     v = uint8_t(13u);
     ASSERT_EQ(Type::integer, v.type());
     ASSERT_TRUE(v == uint8_t(13u));
     ASSERT_FALSE(v != uint8_t(13u));
+    v = std::numeric_limits<uint8_t>::max();
+    ASSERT_TRUE(v.positive());
 
     v = 7.7;
     ASSERT_EQ(Type::floater, v.type());

@@ -175,6 +175,11 @@ namespace qcon
         const nullptr_t * null() const;
 
         ///
+        /// @return whether the number was positive; useful for unsigned integers too large to fit in a int64_t
+        ///
+        bool positive() const { return _positive; }
+
+        ///
         /// Compares if two values are equivalent, that is they have the same type and value
         /// @param other the value to compare with
         /// @return whether this is equivalent to the other value
@@ -216,9 +221,12 @@ namespace qcon
             bool _boolean;
         };
         Type _type{};
+        bool _positive{};
 
         void _deleteValue();
     };
+
+    static_assert(sizeof(Value) == 16u);
 
     ///
     /// Efficiently creates an object from the given key and value arguments
@@ -294,7 +302,14 @@ namespace qcon
             }
             case Type::integer:
             {
-                encoder << val._integer;
+                if (val._positive)
+                {
+                    encoder << uint64_t(val._integer);
+                }
+                else
+                {
+                    encoder << val._integer;
+                }
                 break;
             }
             case Type::floater:
@@ -346,7 +361,8 @@ namespace qcon
 
     inline Value::Value(const int64_t val) :
         _integer{val},
-        _type{Type::integer}
+        _type{Type::integer},
+        _positive{_integer >= 0}
     {}
 
     inline Value::Value(const int32_t val) :
@@ -362,7 +378,9 @@ namespace qcon
     {}
 
     inline Value::Value(const uint64_t val) :
-        Value{int64_t(val)}
+        _integer{int64_t(val)},
+        _type{Type::integer},
+        _positive{true}
     {}
 
     inline Value::Value(const uint32_t val) :
@@ -379,7 +397,8 @@ namespace qcon
 
     inline Value::Value(const double val) :
         _floater{val},
-        _type{Type::floater}
+        _type{Type::floater},
+        _positive{_floater >= 0.0}
     {}
 
     inline Value::Value(const float val) :
@@ -392,9 +411,12 @@ namespace qcon
     {}
 
     inline Value::Value(Value && other) :
-        _integer{std::exchange(other._integer, 0)},
-        _type{std::exchange(other._type, Type::null)}
-    {}
+        _integer{other._integer},
+        _type{other._type},
+        _positive{other._positive}
+    {
+        other._type = Type::null;
+    }
 
     inline Value & Value::operator=(Object && val)
     {
@@ -474,6 +496,7 @@ namespace qcon
             _type = Type::integer;
         }
         _integer = val;
+        _positive = _integer >= 0;
         return *this;
     }
 
@@ -494,7 +517,14 @@ namespace qcon
 
     inline Value & Value::operator=(const uint64_t val)
     {
-        return *this = int64_t(val);
+        if (_type != Type::integer)
+        {
+            _deleteValue();
+            _type = Type::integer;
+        }
+        _integer = int64_t(val);
+        _positive = true;
+        return *this;
     }
 
     inline Value & Value::operator=(const uint32_t val)
@@ -520,6 +550,7 @@ namespace qcon
             _type = Type::floater;
         }
         _floater = val;
+        _positive = _floater >= 0.0;
         return *this;
     }
 
@@ -553,8 +584,10 @@ namespace qcon
     inline Value & Value::operator=(Value && other)
     {
         _deleteValue();
-        _integer = std::exchange(other._integer, 0u);
-        _type = std::exchange(other._type, Type::null);
+        _integer = other._integer;
+        _type = other._type;
+        _positive = other._positive;
+        other._type = Type::null;
         return *this;
     }
 
@@ -819,7 +852,14 @@ namespace qcon
                 }
                 case DecodeState::integer:
                 {
-                    object.emplace(std::move(decoder.key), decoder.integer);
+                    if (decoder.boolean)
+                    {
+                        object.emplace(std::move(decoder.key), uint64_t(decoder.integer));
+                    }
+                    else
+                    {
+                        object.emplace(std::move(decoder.key), decoder.integer);
+                    }
                     break;
                 }
                 case DecodeState::floater:
@@ -880,7 +920,14 @@ namespace qcon
                 }
                 case DecodeState::integer:
                 {
-                    array.push_back(decoder.integer);
+                    if (decoder.boolean)
+                    {
+                        array.push_back(uint64_t(decoder.integer));
+                    }
+                    else
+                    {
+                        array.push_back(decoder.integer);
+                    }
                     break;
                 }
                 case DecodeState::floater:
@@ -940,7 +987,14 @@ namespace qcon
             }
             case DecodeState::integer:
             {
-                value = decoder.integer;
+                if (decoder.boolean)
+                {
+                    value = uint64_t(decoder.integer);
+                }
+                else
+                {
+                    value = decoder.integer;
+                }
                 break;
             }
             case DecodeState::floater:

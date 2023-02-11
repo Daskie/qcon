@@ -47,7 +47,6 @@ namespace qcon
         int64_t integer;
         double floater;
         bool boolean;
-        bool integerPositive;
 
         Decoder() = default;
         Decoder(std::string_view qson);
@@ -267,15 +266,14 @@ namespace qcon
                 _ingestNumber(0);
                 return _state;
             }
-            case '+': [[fallthrough]];
-            case '-':
+            case '+':
             {
                 ++_pos;
                 if (_pos < _end)
                 {
                     if (std::isdigit(*_pos))
                     {
-                        _ingestNumber((c == '+') - (c == '-'));
+                        _ingestNumber(1);
                         return _state;
                     }
                     else if (*_pos == 'i' || *_pos == 'I')
@@ -284,7 +282,32 @@ namespace qcon
                         if (_tryConsumeChars("nf"sv))
                         {
                             _tryConsumeChars("inity"sv);
-                            floater = c == '+' ? std::numeric_limits<double>::infinity() : -std::numeric_limits<double>::infinity();
+                            floater = std::numeric_limits<double>::infinity();
+                            boolean = true;
+                            return _state = DecodeState::floater;
+                        }
+                    }
+                }
+                break;
+            }
+            case '-':
+            {
+                ++_pos;
+                if (_pos < _end)
+                {
+                    if (std::isdigit(*_pos))
+                    {
+                        _ingestNumber(-1);
+                        return _state;
+                    }
+                    else if (*_pos == 'i' || *_pos == 'I')
+                    {
+                        ++_pos;
+                        if (_tryConsumeChars("nf"sv))
+                        {
+                            _tryConsumeChars("inity"sv);
+                            floater = -std::numeric_limits<double>::infinity();
+                            boolean = false;
                             return _state = DecodeState::floater;
                         }
                     }
@@ -299,6 +322,7 @@ namespace qcon
                 {
                     _tryConsumeChars("inity"sv);
                     floater = std::numeric_limits<double>::infinity();
+                    boolean = true;
                     return _state = DecodeState::floater;
                 }
                 break;
@@ -332,6 +356,7 @@ namespace qcon
                 else if (_tryConsumeChars("an"sv))
                 {
                     floater = std::numeric_limits<double>::quiet_NaN();
+                    boolean = true;
                     return _state = DecodeState::floater;
                 }
                 break;
@@ -342,6 +367,7 @@ namespace qcon
                 if (_tryConsumeChars("aN"sv))
                 {
                     floater = std::numeric_limits<double>::quiet_NaN();
+                    boolean = true;
                     return _state = DecodeState::floater;
                 }
                 break;
@@ -584,7 +610,7 @@ namespace qcon
         if (sign >= 0)
         {
             integer = int64_t(val);
-            integerPositive = true;
+            boolean = true;
         }
         else
         {
@@ -596,7 +622,7 @@ namespace qcon
             }
 
             integer = -int64_t(val);
-            integerPositive = false;
+            boolean = false;
         }
 
         _pos = res.ptr;
@@ -614,7 +640,15 @@ namespace qcon
             return false;
         }
 
-        if (sign < 0) floater = -floater;
+        if (sign >= 0)
+        {
+            boolean = true;
+        }
+        else
+        {
+            floater = -floater;
+            boolean = false;
+        }
 
         _pos = res.ptr;
         return true;

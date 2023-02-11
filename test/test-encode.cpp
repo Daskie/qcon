@@ -484,6 +484,11 @@ TEST(encode, floater)
         encoder << std::numeric_limits<double>::quiet_NaN();
         ASSERT_EQ(R"(nan)"s, encoder.finish());
     }
+    { // Negative NaN
+        Encoder encoder{};
+        encoder << -std::numeric_limits<double>::quiet_NaN();
+        ASSERT_EQ(R"(nan)"s, encoder.finish());
+    }
 }
 
 TEST(encode, boolean)
