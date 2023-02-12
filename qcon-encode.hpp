@@ -9,6 +9,7 @@
 
 #include <cctype>
 
+#include <bit>
 #include <charconv>
 #include <concepts>
 #include <optional>
@@ -663,60 +664,91 @@ namespace qcon
         }
     }
 
-    inline void Encoder::_encodeDecimal(const u64 v)
+    inline void Encoder::_encodeDecimal(u64 v)
     {
-        static thread_local char buffer[24u];
+        static thread_local char buffer[20u];
 
-        const std::to_chars_result res{std::to_chars(buffer, buffer + sizeof(buffer), v)};
-        _str.append(buffer, unat(res.ptr - buffer));
+        char * const bufferEnd{buffer + sizeof(buffer)};
+        char * dst{bufferEnd};
+
+        do
+        {
+            // Encourage compiler to combine into one instruction
+            const u64 remainder{v % 10};
+            const u64 quotient{v / 10};
+            *--dst = char('0' + remainder);
+            v = quotient;
+        } while (v);
+
+        _str.append(dst, bufferEnd);
     }
 
-    inline void Encoder::_encodeBinary(const u64 v)
+    inline void Encoder::_encodeBinary(u64 v)
     {
-        static thread_local char buffer[66u]{'0', 'b'};
+        // Digits reversed due to endianess
+        static constexpr u32 binaryTable[16u]{
+            '0000', '1000', '0100', '1100',
+            '0010', '1010', '0110', '1110',
+            '0001', '1001', '0101', '1101',
+            '0011', '1011', '0111', '1111'};
 
-        const std::to_chars_result res{std::to_chars(buffer + 2, buffer + sizeof(buffer), v, 2)};
-        _str.append(buffer, unat(res.ptr - buffer));
+        static thread_local u32 chunkBuffer[16u];
+        static thread_local char * const charBuffer{reinterpret_cast<char *>(chunkBuffer)};
+
+        const unat leadZeroCount{unat(std::countl_zero(v))};
+
+        // Process four bits at a time
+        u32 * dst{chunkBuffer + 16};
+        do
+        {
+            *--dst = binaryTable[v & 0b1111u];
+            v >>= 4;
+        } while (v);
+
+        _str += "0b"sv;
+        _str.append(charBuffer + std::min(leadZeroCount, unat(63u)), charBuffer + 64);
     }
 
-    inline void Encoder::_encodeOctal(const u64 v)
+    inline void Encoder::_encodeOctal(u64 v)
     {
-        static thread_local char buffer[26u]{'0', 'o'};
+        static thread_local char buffer[22u];
 
-        const std::to_chars_result res{std::to_chars(buffer + 2, buffer + sizeof(buffer), v, 8)};
-        _str.append(buffer, unat(res.ptr - buffer));
+        char * const bufferEnd{buffer + sizeof(buffer)};
+        char * dst{bufferEnd};
+
+        do
+        {
+            *--dst = char('0' + (v & 0b111u));
+            v >>= 3;
+        } while (v);
+
+        _str += "0o"sv;
+        _str.append(dst, bufferEnd);
     }
 
     inline void Encoder::_encodeHex(u64 v)
     {
         // We're hand rolling this because `std::to_chars` doesn't support uppercase hex
+        // Also, this is likely faster for our use case
         static constexpr char hexTable[16u]{
             '0', '1', '2', '3',
             '4', '5', '6', '7',
             '8', '9', 'A', 'B',
             'C', 'D', 'E', 'F'};
 
-        static thread_local char buffer[18u];
+        static thread_local char buffer[16u];
 
-        unat bufferI{sizeof(buffer)};
+        char * const bufferEnd{buffer + sizeof(buffer)};
+        char * dst{bufferEnd};
 
-        if (v)
+        do
         {
-            do
-            {
-                buffer[--bufferI] = hexTable[v & 0xFu];
-                v >>= 4;
-            } while (v);
-        }
-        else
-        {
-            buffer[--bufferI] = '0';
-        }
+            *--dst = hexTable[v & 0b1111u];
+            v >>= 4;
+        } while (v);
 
-        buffer[--bufferI] = 'x';
-        buffer[--bufferI] = '0';
-
-        _str.append(buffer + bufferI, sizeof(buffer) - bufferI);
+        _str += "0x"sv;
+        _str.append(dst, bufferEnd);
     }
 
     inline void Encoder::_encode(const double v)

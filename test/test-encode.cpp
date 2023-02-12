@@ -253,6 +253,8 @@ TEST(encode, signedInteger)
         Encoder encoder{};
         encoder << 123;
         ASSERT_EQ(R"(123)"s, encoder.finish());
+        encoder << -123;
+        ASSERT_EQ(R"(-123)"s, encoder.finish());
     }
     { // Max 64
         Encoder encoder{};
@@ -334,29 +336,35 @@ TEST(encode, hex)
 {
     { // Zero
         Encoder encoder{};
-        encoder << hex << 0u;
+        encoder << hex << 0x0;
         ASSERT_EQ(R"(0x0)"s, encoder.finish());
     }
     { // Typical
         Encoder encoder{};
-        encoder << hex << 26u;
+        encoder << hex << 0x1A;
         ASSERT_EQ(R"(0x1A)"s, encoder.finish());
+        encoder << hex << -0x1A;
+        ASSERT_EQ(R"(-0x1A)"s, encoder.finish());
+    }
+    { // Every digit
+        Encoder encoder{};
+        encoder << hex << 0xFEDCBA9876543210u;
+        ASSERT_EQ("0xFEDCBA9876543210", encoder.finish());
     }
     { // Max unsigned
         Encoder encoder{};
         encoder << hex << std::numeric_limits<u64>::max();
         ASSERT_EQ(R"(0xFFFFFFFFFFFFFFFF)"s, encoder.finish());
     }
+    { // Max signed
+        Encoder encoder{};
+        encoder << hex << std::numeric_limits<s64>::max();
+        ASSERT_EQ(R"(0x7FFFFFFFFFFFFFFF)"s, encoder.finish());
+    }
     { // Min signed
         Encoder encoder{};
-        encoder << hex << u64(std::numeric_limits<s64>::min());
-        ASSERT_EQ(R"(0x8000000000000000)"s, encoder.finish());
-    }
-    { // -1
-        Encoder encoder{};
-        #pragma warning(suppress: 4245)
-        encoder << hex << u64(s64(-1));
-        ASSERT_EQ(R"(0xFFFFFFFFFFFFFFFF)"s, encoder.finish());
+        encoder << hex << std::numeric_limits<s64>::min();
+        ASSERT_EQ(R"(-0x8000000000000000)"s, encoder.finish());
     }
 }
 
@@ -364,29 +372,35 @@ TEST(encode, octal)
 {
     { // Zero
         Encoder encoder{};
-        encoder << octal << 0u;
+        encoder << octal << 00;
         ASSERT_EQ(R"(0o0)"s, encoder.finish());
     }
     { // Typical
         Encoder encoder{};
-        encoder << octal << 10u;
+        encoder << octal << 012;
         ASSERT_EQ(R"(0o12)"s, encoder.finish());
+        encoder << octal << -012;
+        ASSERT_EQ(R"(-0o12)"s, encoder.finish());
+    }
+    { // Every digit
+        Encoder encoder{};
+        encoder << octal << 076543210u;
+        ASSERT_EQ("0o76543210", encoder.finish());
     }
     { // Max unsigned
         Encoder encoder{};
         encoder << octal << std::numeric_limits<u64>::max();
         ASSERT_EQ(R"(0o1777777777777777777777)"s, encoder.finish());
     }
+    { // Max signed
+        Encoder encoder{};
+        encoder << octal << std::numeric_limits<s64>::max();
+        ASSERT_EQ(R"(0o777777777777777777777)"s, encoder.finish());
+    }
     { // Min signed
         Encoder encoder{};
-        encoder << octal << u64(std::numeric_limits<s64>::min());
-        ASSERT_EQ(R"(0o1000000000000000000000)"s, encoder.finish());
-    }
-    { // -1
-        Encoder encoder{};
-        #pragma warning(suppress: 4245)
-        encoder << octal << u64(s64(-1));
-        ASSERT_EQ(R"(0o1777777777777777777777)"s, encoder.finish());
+        encoder << octal << std::numeric_limits<s64>::min();
+        ASSERT_EQ(R"(-0o1000000000000000000000)"s, encoder.finish());
     }
 }
 
@@ -394,29 +408,55 @@ TEST(encode, binary)
 {
     { // Zero
         Encoder encoder{};
-        encoder << binary << 0u;
+        encoder << binary << 0b0;
         ASSERT_EQ(R"(0b0)"s, encoder.finish());
+    }
+    { // One
+        Encoder encoder{};
+        encoder << binary << 0b1;
+        ASSERT_EQ(R"(0b1)"s, encoder.finish());
+        encoder << binary << -0b1;
+        ASSERT_EQ(R"(-0b1)"s, encoder.finish());
     }
     { // Typical
         Encoder encoder{};
-        encoder << binary << 5u;
+        encoder << binary << 0b101;
         ASSERT_EQ(R"(0b101)"s, encoder.finish());
+        encoder << binary << -0b101;
+        ASSERT_EQ(R"(-0b101)"s, encoder.finish());
+    }
+    { // Non multiple of 4 lengths
+        Encoder encoder{};
+        encoder << binary << 0b1100'0011;
+        ASSERT_EQ(R"(0b11000011)"s, encoder.finish());
+        encoder << binary << 0b1'1100'0011;
+        ASSERT_EQ(R"(0b111000011)"s, encoder.finish());
+        encoder << binary << 0b11'1100'0011;
+        ASSERT_EQ(R"(0b1111000011)"s, encoder.finish());
+        encoder << binary << 0b111'1100'0011;
+        ASSERT_EQ(R"(0b11111000011)"s, encoder.finish());
+        encoder << binary << 0b1111'1100'0011;
+        ASSERT_EQ(R"(0b111111000011)"s, encoder.finish());
+    }
+    { // Every 4 length permutation
+        Encoder encoder{};
+        encoder << binary << 0b0001'0010'0011'0000'0100'0101'0110'0111'1000'1001'1010'1011'1100'1101'1110'1111u;
+        ASSERT_EQ(R"(0b1001000110000010001010110011110001001101010111100110111101111)"s, encoder.finish());
     }
     { // Max unsigned
         Encoder encoder{};
         encoder << binary << std::numeric_limits<u64>::max();
         ASSERT_EQ(R"(0b1111111111111111111111111111111111111111111111111111111111111111)"s, encoder.finish());
     }
+    { // Max signed
+        Encoder encoder{};
+        encoder << binary << std::numeric_limits<s64>::max();
+        ASSERT_EQ(R"(0b111111111111111111111111111111111111111111111111111111111111111)"s, encoder.finish());
+    }
     { // Min signed
         Encoder encoder{};
-        encoder << binary << u64(std::numeric_limits<s64>::min());
-        ASSERT_EQ(R"(0b1000000000000000000000000000000000000000000000000000000000000000)"s, encoder.finish());
-    }
-    { // -1
-        Encoder encoder{};
-        #pragma warning(suppress: 4245)
-        encoder << binary << u64(s64(-1));
-        ASSERT_EQ(R"(0b1111111111111111111111111111111111111111111111111111111111111111)"s, encoder.finish());
+        encoder << binary << std::numeric_limits<s64>::min();
+        ASSERT_EQ(R"(-0b1000000000000000000000000000000000000000000000000000000000000000)"s, encoder.finish());
     }
 }
 
