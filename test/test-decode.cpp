@@ -454,6 +454,13 @@ TEST(decode, decimal)
         ASSERT_TRUE(fails(R"(+-0)"));
         ASSERT_TRUE(fails(R"(-+0)"));
     }
+    { // Invalid digit
+        ASSERT_TRUE(fails("123A"));
+    }
+    { // Too big
+        ASSERT_TRUE(fails("18446744073709551616"));
+        ASSERT_TRUE(fails("-9223372036854775809"));
+    }
 }
 
 TEST(decode, hex)
@@ -530,6 +537,7 @@ TEST(decode, hex)
     }
     { // Invalid digit
         ASSERT_TRUE(fails(R"(0x1G)"));
+        ASSERT_TRUE(fails(R"(0xG)"));
     }
     { // Uppercase X
         ASSERT_TRUE(fails(R"(0X1A)"));
@@ -612,6 +620,7 @@ TEST(decode, octal)
     }
     { // Invalid digit
         ASSERT_TRUE(fails(R"(0o18)"));
+        ASSERT_TRUE(fails(R"(0o8)"));
     }
     { // Uppercase O
         ASSERT_TRUE(fails(R"(0O12)"));
@@ -694,6 +703,7 @@ TEST(decode, binary)
     }
     { // Invalid digit
         ASSERT_TRUE(fails(R"(0b121)"));
+        ASSERT_TRUE(fails(R"(0b2)"));
     }
     { // Uppercase B
         ASSERT_TRUE(fails(R"(0B101)"));

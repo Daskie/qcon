@@ -9,6 +9,8 @@
 
 #include <cctype>
 
+#include <array>
+#include <bit>
 #include <charconv>
 #include <format>
 #include <limits>
@@ -91,9 +93,17 @@ namespace qcon
 
         [[nodiscard]] bool _consumeKey();
 
-        [[nodiscard]] bool _consumeInteger(int sign, int base);
+        [[nodiscard]] bool _consumeBinary(u64 & val, bool wasZero);
+
+        [[nodiscard]] bool _consumeOctal(u64 & val, bool wasZero);
+
+        [[nodiscard]] bool _consumeHex(u64 & val, bool wasZero);
+
+        [[nodiscard]] bool _consumeDecimal(u64 & val, const char * end);
 
         [[nodiscard]] bool _consumeFloater(int sign);
+
+        template <int base> [[nodiscard]] bool _consumeInteger(int sign, const char * end);
 
         void _ingestNumber(int sign);
     };
@@ -103,6 +113,11 @@ namespace qcon
 
 namespace qcon
 {
+    inline constexpr bool _isDigit(const char c)
+    {
+        return unat(c - '0') < 10u;
+    }
+
     inline Decoder::Decoder(const std::string_view qson)
     {
         load(qson);
@@ -280,7 +295,7 @@ namespace qcon
                 ++_pos;
                 if (_pos < _end)
                 {
-                    if (std::isdigit(*_pos))
+                    if (_isDigit(*_pos))
                     {
                         _ingestNumber(1);
                         return _state;
@@ -304,7 +319,7 @@ namespace qcon
                 ++_pos;
                 if (_pos < _end)
                 {
-                    if (std::isdigit(*_pos))
+                    if (_isDigit(*_pos))
                     {
                         _ingestNumber(-1);
                         return _state;
@@ -594,47 +609,166 @@ namespace qcon
         return true;
     }
 
-    inline bool Decoder::_consumeInteger(const int sign, const int base)
+    inline consteval std::array<u8, 256u> _createHexTable()
     {
-        u64 val;
+        std::array<u8, 256u> table;
 
-        const std::from_chars_result res{std::from_chars(_pos, _end, val, base)};
-
-        // There was an issue parsing
-        if (res.ec != std::errc{})
+        // Fill table with 255
+        for (u8 & v : table)
         {
-            if (res.ec == std::errc::result_out_of_range)
+            v = 255u;
+        }
+
+        // Set '0' - '9'
+        for (unat v{0u}; v < 10u; ++v)
+        {
+            table[unat('0') + v] = u8(v);
+        }
+
+        // Set 'A' - 'F' and 'a' - 'f'
+        for (unat v{0u}; v < 6u; ++v)
+        {
+            table[unat('A') + v] = u8(10u + v);
+            table[unat('a') + v] = u8(10u + v);
+        }
+
+        return table;
+    }
+
+    inline bool Decoder::_consumeBinary(u64 & val, const bool wasZero)
+    {
+        const char * start{_pos};
+
+        u64 b;
+        if (_pos >= _end || (b = u64(*_pos - '0')) > 1u)
+        {
+            if (wasZero)
             {
-                string = "Integer too large"sv;
-                return false;
+                val = 0u;
+                return true;
             }
-            // Some other issue
             else
             {
-                string = "Invalid integer"sv;
+                string = "Invalid binary digit";
                 return false;
             }
         }
+        val = b;
 
-        if (sign >= 0)
+        while (++_pos < _end && (b = u64(*_pos - '0')) <= 1u)
         {
-            integer = s64(val);
-            boolean = true;
+            val = (val << 1) | b;
+        }
+
+        const unat length{unat(_pos - start)};
+        if (length <= 64u)
+        {
+            return true;
         }
         else
         {
-            // The integer is too large to fit in an `s64` when negative
-            if (val > u64(std::numeric_limits<s64>::min()))
+            string = "Binary integer too large";
+            return false;
+        }
+    }
+
+    inline bool Decoder::_consumeOctal(u64 & val, const bool wasZero)
+    {
+        const char * start{_pos};
+
+        u64 o;
+        if (_pos >= _end || (o = u64(*_pos - '0')) > 7u)
+        {
+            if (wasZero)
             {
-                string = "Negative integer too large"sv;
+                val = 0u;
+                return true;
+            }
+            else
+            {
+                string = "Invalid octal digit";
+                return false;
+            }
+        }
+        val = o;
+
+        const unat headBits{64u - unat(std::countl_zero(o))};
+
+        while (++_pos < _end && (o = u64(*_pos - '0')) <= 7u)
+        {
+            val = (val << 3) | o;
+        }
+
+        const unat bits{unat(_pos - start - 1) * 3u + headBits};
+        if (bits <= 64u)
+        {
+            return true;
+        }
+        else
+        {
+            string = "Octal integer too large";
+            return false;
+        }
+    }
+
+    inline bool Decoder::_consumeHex(u64 & val, const bool wasZero)
+    {
+        static constexpr std::array<u8, 256u> hexTable{_createHexTable()};
+
+        const char * start{_pos};
+
+        u64 h;
+        if (_pos >= _end || (h = hexTable[u8(*_pos)]) > 15u)
+        {
+            if (wasZero)
+            {
+                val = 0u;
+                return true;
+            }
+            else
+            {
+                string = "Invalid hex digit";
+                return false;
+            }
+        }
+        val = h;
+
+        while (++_pos < _end && (h = hexTable[u8(*_pos)]) <= 15u)
+        {
+            val = (val << 4) | h;
+        }
+
+        const unat length{unat(_pos - start)};
+        if (length <= 16u)
+        {
+            return true;
+        }
+        else
+        {
+            string = "Hex integer too large";
+            return false;
+        }
+    }
+
+    inline bool Decoder::_consumeDecimal(u64 & val, const char * const end)
+    {
+        static constexpr u64 riskyVal{std::numeric_limits<u64>::max() / 10u};
+        static constexpr u64 riskyDigit{std::numeric_limits<u64>::max() % 10u};
+
+        val = 0u;
+
+        for (u64 d; _pos < end && (d = u64(*_pos - '0')) <= 9u; ++_pos)
+        {
+            // Check if would overflow
+            if (val > riskyVal || val == riskyVal && d > riskyDigit) [[unlikely]]
+            {
+                string = "Decimal integer too large";
                 return false;
             }
 
-            integer = -s64(val);
-            boolean = false;
+            val = val * 10u + d;
         }
 
-        _pos = res.ptr;
         return true;
     }
 
@@ -663,6 +797,63 @@ namespace qcon
         return true;
     }
 
+    template <int base>
+    inline bool Decoder::_consumeInteger(const int sign, const char * end)
+    {
+        u64 val;
+
+        // Skip leading zeroes
+        bool wasZero{false};
+        while (_pos < _end && *_pos == '0')
+        {
+            ++_pos;
+            wasZero = true;
+        }
+
+        bool res;
+        if constexpr (base == 2)
+        {
+            res = _consumeBinary(val, wasZero);
+        }
+        else if constexpr (base == 8)
+        {
+            res = _consumeOctal(val, wasZero);
+        }
+        else if constexpr (base == 16)
+        {
+            res = _consumeHex(val, wasZero);
+        }
+        else if constexpr (base == 10)
+        {
+            res = _consumeDecimal(val, end);
+        }
+        if (!res)
+        {
+            string = "Invalid integer";
+            return false;
+        }
+
+        if (sign >= 0)
+        {
+            integer = s64(val);
+            boolean = true;
+        }
+        else
+        {
+            // The integer is too large to fit in an `s64` when negative
+            if (val > u64(std::numeric_limits<s64>::min()))
+            {
+                string = "Negative integer too large"sv;
+                return false;
+            }
+
+            integer = -s64(val);
+            boolean = false;
+        }
+
+        return true;
+    }
+
     inline void Decoder::_ingestNumber(const int sign)
     {
         // Check if hex/octal/binary
@@ -675,19 +866,19 @@ namespace qcon
                 if (*_pos == 'b')
                 {
                     ++_pos;
-                    _state = _consumeInteger(sign, 2) ? DecodeState::integer : DecodeState::error;
+                    _state = _consumeInteger<2>(sign, nullptr) ? DecodeState::integer : DecodeState::error;
                     return;
                 }
                 else if (*_pos == 'o')
                 {
                     ++_pos;
-                    _state = _consumeInteger(sign, 8) ? DecodeState::integer : DecodeState::error;
+                    _state = _consumeInteger<8>(sign, nullptr) ? DecodeState::integer : DecodeState::error;
                     return;
                 }
                 else if (*_pos == 'x')
                 {
                     ++_pos;
-                    _state = _consumeInteger(sign, 16) ? DecodeState::integer : DecodeState::error;
+                    _state = _consumeInteger<16>(sign, nullptr) ? DecodeState::integer : DecodeState::error;
                     return;
                 }
             }
@@ -697,10 +888,10 @@ namespace qcon
 
         // Determine if integer or floater
         const char * integerEnd{_pos + 1};
-        for (; integerEnd < _end && std::isdigit(*integerEnd); ++integerEnd);
+        for (; integerEnd < _end && _isDigit(*integerEnd); ++integerEnd);
         if (integerEnd >= _end)
         {
-            _state = _consumeInteger(sign, 10) ? DecodeState::integer : DecodeState::error;
+            _state = _consumeInteger<10>(sign, integerEnd) ? DecodeState::integer : DecodeState::error;
         }
         else if (*integerEnd == 'e' || *integerEnd == 'E')
         {
@@ -708,7 +899,7 @@ namespace qcon
         }
         else if (*integerEnd == '.')
         {
-            if (integerEnd + 1 < _end && std::isdigit(integerEnd[1]))
+            if (integerEnd + 1 < _end && _isDigit(integerEnd[1]))
             {
                 _state = _consumeFloater(sign) ? DecodeState::floater : DecodeState::error;
             }
@@ -720,7 +911,7 @@ namespace qcon
         }
         else
         {
-            _state = _consumeInteger(sign, 10) ? DecodeState::integer : DecodeState::error;
+            _state = _consumeInteger<10>(sign, integerEnd) ? DecodeState::integer : DecodeState::error;
         }
     }
 }
