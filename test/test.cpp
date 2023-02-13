@@ -22,7 +22,6 @@ using qcon::Object;
 using qcon::Array;
 using qcon::decode;
 using qcon::encode;
-using namespace qcon::tokens;
 
 using qcon::makeObject;
 using qcon::makeArray;
@@ -657,9 +656,9 @@ TEST(qcon, density)
     1,
     2,
     3
-])"s, encode(makeArray(1, 2, 3), Density::multiline));
-    ASSERT_EQ("[ 1, 2, 3 ]"s, encode(makeArray(1, 2, 3), Density::uniline));
-    ASSERT_EQ("[1,2,3]"s, encode(makeArray(1, 2, 3), Density::nospace));
+])"s, encode(makeArray(1, 2, 3), qcon::multiline));
+    ASSERT_EQ("[ 1, 2, 3 ]"s, encode(makeArray(1, 2, 3), qcon::uniline));
+    ASSERT_EQ("[1,2,3]"s, encode(makeArray(1, 2, 3), qcon::nospace));
 }
 
 TEST(qcon, makeObject)

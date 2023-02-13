@@ -19,7 +19,16 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 using qcon::Encoder;
-using namespace qcon::tokens;
+using qcon::object;
+using qcon::array;
+using qcon::end;
+using qcon::multiline;
+using qcon::uniline;
+using qcon::nospace;
+using qcon::binary;
+using qcon::octal;
+using qcon::decimal;
+using qcon::hex;
 
 struct CustomVal { int x, y; };
 
@@ -715,7 +724,6 @@ TEST(encode, flagTokens)
 
         // Mutliple densities
         encoder << nospace << uniline << array << 0 << end;
-        ASSERT_EQ(multiline, encoder.density());
         ASSERT_EQ("[ 0 ]", encoder.finish());
 
         // End after density
@@ -758,7 +766,6 @@ TEST(encode, flagTokens)
 
         // Mutliple bases
         encoder << hex << binary << 0;
-        ASSERT_EQ(decimal, encoder.base());
         ASSERT_EQ("0b0", encoder.finish());
 
         // Object after base

@@ -36,48 +36,38 @@ namespace qcon
     using namespace std::string_view_literals;
 
     ///
-    /// Namespace provided to allow the user to `using namespace qcon::tokens` to avoid the verbosity of fully
-    /// qualifying the tokens namespace
+    /// Stream to the encoder to specify the density of the next container
     ///
-    inline namespace tokens
+    enum class Density
     {
-        ///
-        /// Stream to the encoder to specify the density of the next container
-        ///
-        enum class Density
-        {
-            multiline, /// Elements are put on new lines
-            uniline,   /// Elements are put on one line separated by spaces
-            nospace    /// No space is used whatsoever
-        };
+        multiline, /// Elements are put on new lines
+        uniline,   /// Elements are put on one line separated by spaces
+        nospace    /// No space is used whatsoever
+    };
+    using enum Density;
 
-        using enum Density;
+    ///
+    /// Simple enum representing a QCON container type
+    ///
+    enum class Container
+    {
+        end,
+        object,
+        array
+    };
+    using enum Container;
 
-        ///
-        /// Simple enum representing a QCON container type
-        ///
-        enum class Container
-        {
-            end,
-            object,
-            array
-        };
-
-        using enum Container;
-
-        ///
-        /// Stream to the encoder to specify the base of the next integer
-        ///
-        enum class Base
-        {
-            decimal,
-            binary,
-            octal,
-            hex
-        };
-
-        using enum Base;
-    }
+    ///
+    /// Stream to the encoder to specify the base of the next integer
+    ///
+    enum class Base
+    {
+        decimal,
+        binary,
+        octal,
+        hex
+    };
+    using enum Base;
 
     ///
     /// Instantiate this class to do the encoding
@@ -179,21 +169,6 @@ namespace qcon
         /// @return the encoded QCON string
         ///
         [[nodiscard]] std::optional<std::string> finish();
-
-        ///
-        /// @return the current container
-        ///
-        [[nodiscard]] Container container() const { return _container; }
-
-        ///
-        /// @return the current density
-        ///
-        [[nodiscard]] Density density() const { return _density; }
-
-        ///
-        /// @return the current base
-        ///
-        [[nodiscard]] Base base() const { return _nextBase; }
 
       private:
 
