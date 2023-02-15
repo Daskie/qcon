@@ -20,6 +20,7 @@ using qcon::Type;
 using qcon::Value;
 using qcon::Object;
 using qcon::Array;
+using qcon::Datetime;
 using qcon::decode;
 using qcon::encode;
 
@@ -370,6 +371,28 @@ TEST(qcon, encodeDecodeBoolean)
     }
 }
 
+TEST(qcon, encodeDecodeDatetime)
+{
+    { // Epoch
+        const Datetime dt{};
+        const std::optional<std::string> encoded{encode(dt)};
+        ASSERT_TRUE(encoded);
+        const std::optional<Value> decoded{decode(*encoded)};
+        ASSERT_TRUE(decoded);
+        ASSERT_TRUE(decoded->datetime());
+        ASSERT_EQ(*decoded->datetime(), dt);
+    }
+    { // Current time
+        const Datetime dt{std::chrono::system_clock::now()};
+        const std::optional<std::string> encoded{encode(dt)};
+        ASSERT_TRUE(encoded);
+        const std::optional<Value> decoded{decode(*encoded)};
+        ASSERT_TRUE(decoded);
+        ASSERT_TRUE(decoded->datetime());
+        ASSERT_EQ(*decoded->datetime(), dt);
+    }
+}
+
 TEST(qcon, encodeDecodeNull)
 {
     const std::optional<std::string> encoded{encode(nullptr)};
@@ -383,16 +406,20 @@ TEST(qcon, valueConstruction)
 {
     // Default
     ASSERT_EQ(Type::null, Value().type());
+
     // Object
     ASSERT_EQ(Type::object, Value(Object()).type());
+
     // Array
     ASSERT_EQ(Type::array, Value(Array()).type());
+
     // String
     ASSERT_EQ(Type::string, Value("abc"sv).type());
     ASSERT_EQ(Type::string, Value("abc"s).type());
     ASSERT_EQ(Type::string, Value("abc").type());
     ASSERT_EQ(Type::string, Value(const_cast<char *>("abc")).type());
     ASSERT_EQ(Type::string, Value('a').type());
+
     // Integer
     ASSERT_EQ(Type::integer, Value(s64(0)).type());
     ASSERT_TRUE(Value(std::numeric_limits<s64>::max()).positive());
@@ -414,6 +441,7 @@ TEST(qcon, valueConstruction)
     ASSERT_TRUE(Value(std::numeric_limits<u16>::max()).positive());
     ASSERT_EQ(Type::integer, Value(u8(0)).type());
     ASSERT_TRUE(Value(std::numeric_limits<u8>::max()).positive());
+
     // Floater
     ASSERT_EQ(Type::floater, Value(0.0).type());
     ASSERT_TRUE(Value(1.0).positive());
@@ -421,8 +449,13 @@ TEST(qcon, valueConstruction)
     ASSERT_EQ(Type::floater, Value(0.0f).type());
     ASSERT_TRUE(Value(1.0f).positive());
     ASSERT_FALSE(Value(-1.0f).positive());
+
     // Boolean
     ASSERT_EQ(Type::boolean, Value(false).type());
+
+    // Datetime
+    ASSERT_EQ(Type::datetime, Value(Datetime{}).type());
+
     // Null
     ASSERT_EQ(Type::null, Value(nullptr).type());
 }
@@ -564,6 +597,11 @@ TEST(qcon, valueAssignAndEquality)
     ASSERT_TRUE(v == true);
     ASSERT_FALSE(v != true);
 
+    v = Datetime{};
+    ASSERT_EQ(Type::datetime, v.type());
+    ASSERT_TRUE(v == Datetime{});
+    ASSERT_FALSE(v != Datetime{});
+
     v = nullptr;
     ASSERT_EQ(Type::null, v.type());
     ASSERT_TRUE(v == nullptr);
@@ -593,47 +631,52 @@ TEST(qcon, swap)
 TEST(qcon, valueTypes)
 {
     { // Object
-        Value v(Object{});
+        Value v{Object{}};
         ASSERT_EQ(Type::object, v.type());
         ASSERT_TRUE(v.object());
     }
     { // Array
-        Value v(Array{});
+        Value v{Array{}};
         ASSERT_EQ(Type::array, v.type());
         ASSERT_TRUE(v.array());
     }
     { // String
-        Value v("abc"sv);
+        Value v{"abc"sv};
         ASSERT_EQ(Type::string, v.type());
         ASSERT_TRUE(v.string());
     }
     { // Character
-        Value v('a');
+        Value v{'a'};
         ASSERT_EQ(Type::string, v.type());
         ASSERT_TRUE(v.string());
     }
     { // Signed integer
-        Value v(123);
+        Value v{123};
         ASSERT_EQ(Type::integer, v.type());
         ASSERT_TRUE(v.integer());
     }
     { // Unsigned integer
-        Value v(123u);
+        Value v{123u};
         ASSERT_EQ(Type::integer, v.type());
         ASSERT_TRUE(v.integer());
     }
     { // Floater
-        Value v(123.0);
+        Value v{123.0};
         ASSERT_EQ(Type::floater, v.type());
         ASSERT_TRUE(v.floater());
     }
     { // Boolean
-        Value v(false);
+        Value v{false};
         ASSERT_EQ(Type::boolean, v.type());
         ASSERT_TRUE(v.boolean());
     }
+    { // Datetime
+        Value v{Datetime{}};
+        ASSERT_EQ(Type::datetime, v.type());
+        ASSERT_TRUE(v.datetime());
+    }
     { // Null
-        Value v(nullptr);
+        Value v{nullptr};
         ASSERT_EQ(Type::null, v.type());
         ASSERT_TRUE(v.null());
     }
@@ -641,13 +684,13 @@ TEST(qcon, valueTypes)
 
 TEST(qcon, wrongValueType)
 {
-    // Safe
-    ASSERT_FALSE((Value().object()));
-    ASSERT_FALSE((Value().array()));
-    ASSERT_FALSE((Value().string()));
-    ASSERT_FALSE((Value().integer()));
-    ASSERT_FALSE((Value().floater()));
-    ASSERT_FALSE((Value().boolean()));
+    ASSERT_FALSE((Value{}.object()));
+    ASSERT_FALSE((Value{}.array()));
+    ASSERT_FALSE((Value{}.string()));
+    ASSERT_FALSE((Value{}.integer()));
+    ASSERT_FALSE((Value{}.floater()));
+    ASSERT_FALSE((Value{}.boolean()));
+    ASSERT_FALSE((Value{}.datetime()));
 }
 
 TEST(qcon, density)
@@ -884,7 +927,7 @@ TEST(qcon, general)
             "Title": "Server Boy"
         }
     ],
-    "Founded": 1964,
+    "Founded": D1964-03-17T13:59:11Z,
     "Green Eggs and Ham": "I do not like them in a box\nI do not like them with a fox\nI do not like them in a house\nI do not like them with a mouse\nI do not like them here or there\nI do not like them anywhere\nI do not like green eggs and ham\nI do not like them Sam I am\n",
     "Ha\x03r Name": "M\0\0n",
     "Magic Numbers": [

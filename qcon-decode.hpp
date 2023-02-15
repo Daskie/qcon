@@ -12,8 +12,10 @@
 #include <array>
 #include <bit>
 #include <charconv>
+#include <chrono>
 #include <format>
 #include <limits>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -35,6 +37,8 @@ namespace qcon
     using namespace std::string_literals;
     using namespace std::string_view_literals;
 
+    using Datetime = std::chrono::system_clock::time_point;
+
     enum class DecodeState
     {
         error,
@@ -45,6 +49,7 @@ namespace qcon
         integer,
         floater,
         boolean,
+        datetime,
         null,
         done
     };
@@ -58,6 +63,8 @@ namespace qcon
         s64 integer;
         double floater;
         bool boolean;
+        Datetime datetime;
+        // TODO: error should be a separate string_view, positive should be a separate boolean, encoder should have error string
 
         Decoder() = default;
         Decoder(std::string_view qson);
@@ -79,6 +86,8 @@ namespace qcon
 
         void _skipSpaceAndComments();
 
+        int _tryConsumeSign();
+
         bool _tryConsumeChar(char c);
 
         bool _tryConsumeChars(std::string_view str);
@@ -93,19 +102,25 @@ namespace qcon
 
         [[nodiscard]] bool _consumeKey();
 
-        [[nodiscard]] bool _consumeBinary(u64 & val, bool wasZero);
+        [[nodiscard]] bool _consumeBinary(u64 & v);
 
-        [[nodiscard]] bool _consumeOctal(u64 & val, bool wasZero);
+        [[nodiscard]] bool _consumeOctal(u64 & v);
 
-        [[nodiscard]] bool _consumeHex(u64 & val, bool wasZero);
+        [[nodiscard]] bool _consumeDecimal(u64 & v);
 
-        [[nodiscard]] bool _consumeDecimal(u64 & val, const char * end);
+        [[nodiscard]] bool _consumeHex(u64 & v);
 
         [[nodiscard]] bool _consumeFloater(int sign);
 
-        template <int base> [[nodiscard]] bool _consumeInteger(int sign, const char * end);
+        template <int base> [[nodiscard]] bool _consumeInteger(int sign);
 
         void _ingestNumber(int sign);
+
+        bool _tryConsumeDecimalDigits(u64 & v, unat digits);
+
+        [[nodiscard]] bool _consumeDecimalDigits(u64 & v, unat digits);
+
+        [[nodiscard]] bool _consumeDatetime();
     };
 }
 
@@ -396,6 +411,11 @@ namespace qcon
                 }
                 break;
             }
+            case 'D':
+            {
+                ++_pos;
+                return _state = _consumeDatetime() ? DecodeState::datetime : DecodeState::error;
+            }
         }
 
         string = "Unknown value"sv;
@@ -422,6 +442,23 @@ namespace qcon
 
             _skipSpace();
         }
+    }
+
+    inline int Decoder::_tryConsumeSign()
+    {
+        int sign{0};
+
+        if (_pos < _end)
+        {
+            sign = (*_pos == '+') - (*_pos == '-');
+
+            if (sign)
+            {
+                ++_pos;
+            }
+        }
+
+        return sign;
     }
 
     inline bool Decoder::_tryConsumeChar(const char c)
@@ -479,8 +516,8 @@ namespace qcon
             return false;
         }
 
-        u32 val;
-        const std::from_chars_result res{std::from_chars(_pos, _pos + digits, val, 16)};
+        u32 v;
+        const std::from_chars_result res{std::from_chars(_pos, _pos + digits, v, 16)};
         if (res.ec != std::errc{})
         {
             string = "Invalid code point"sv;
@@ -489,7 +526,7 @@ namespace qcon
 
         _pos += digits;
 
-        c = char(val);
+        c = char(v);
         return true;
     }
 
@@ -635,138 +672,114 @@ namespace qcon
         return table;
     }
 
-    inline bool Decoder::_consumeBinary(u64 & val, const bool wasZero)
+    inline bool Decoder::_consumeBinary(u64 & v)
     {
         const char * start{_pos};
 
-        u64 b;
-        if (_pos >= _end || (b = u64(*_pos - '0')) > 1u)
+        v = 0u;
+
+        for (u64 b; _pos < _end && (b = u64(*_pos - '0')) <= 1u; ++_pos)
         {
-            if (wasZero)
+            // Check if would overflow
+            if (v & (u64(0b1u) << 63))
             {
-                val = 0u;
-                return true;
-            }
-            else
-            {
-                string = "Invalid binary digit";
+                string = "Binary integer too large";
                 return false;
             }
-        }
-        val = b;
 
-        while (++_pos < _end && (b = u64(*_pos - '0')) <= 1u)
-        {
-            val = (val << 1) | b;
+            v = (v << 1) | b;
         }
 
-        const unat length{unat(_pos - start)};
-        if (length <= 64u)
+        if (_pos == start)
         {
-            return true;
-        }
-        else
-        {
-            string = "Binary integer too large";
+            string = "Missing binary digit";
             return false;
         }
+
+        return true;
     }
 
-    inline bool Decoder::_consumeOctal(u64 & val, const bool wasZero)
+    inline bool Decoder::_consumeOctal(u64 & v)
     {
         const char * start{_pos};
 
-        u64 o;
-        if (_pos >= _end || (o = u64(*_pos - '0')) > 7u)
+        v = 0u;
+
+        for (u64 o; _pos < _end && (o = u64(*_pos - '0')) <= 7u; ++_pos)
         {
-            if (wasZero)
+            // Check if would overflow
+            if (v & (u64(0b111u) << 61))
             {
-                val = 0u;
-                return true;
-            }
-            else
-            {
-                string = "Invalid octal digit";
+                string = "Octal integer too large";
                 return false;
             }
-        }
-        val = o;
 
-        const unat headBits{64u - unat(std::countl_zero(o))};
-
-        while (++_pos < _end && (o = u64(*_pos - '0')) <= 7u)
-        {
-            val = (val << 3) | o;
+            v = (v << 3) | o;
         }
 
-        const unat bits{unat(_pos - start - 1) * 3u + headBits};
-        if (bits <= 64u)
+        if (_pos == start)
         {
-            return true;
-        }
-        else
-        {
-            string = "Octal integer too large";
+            string = "Missing octal digit";
             return false;
         }
+
+        return true;
     }
 
-    inline bool Decoder::_consumeHex(u64 & val, const bool wasZero)
-    {
-        static constexpr std::array<u8, 256u> hexTable{_createHexTable()};
-
-        const char * start{_pos};
-
-        u64 h;
-        if (_pos >= _end || (h = hexTable[u8(*_pos)]) > 15u)
-        {
-            if (wasZero)
-            {
-                val = 0u;
-                return true;
-            }
-            else
-            {
-                string = "Invalid hex digit";
-                return false;
-            }
-        }
-        val = h;
-
-        while (++_pos < _end && (h = hexTable[u8(*_pos)]) <= 15u)
-        {
-            val = (val << 4) | h;
-        }
-
-        const unat length{unat(_pos - start)};
-        if (length <= 16u)
-        {
-            return true;
-        }
-        else
-        {
-            string = "Hex integer too large";
-            return false;
-        }
-    }
-
-    inline bool Decoder::_consumeDecimal(u64 & val, const char * const end)
+    inline bool Decoder::_consumeDecimal(u64 & v)
     {
         static constexpr u64 riskyVal{std::numeric_limits<u64>::max() / 10u};
         static constexpr u64 riskyDigit{std::numeric_limits<u64>::max() % 10u};
 
-        val = 0u;
+        const char * start{_pos};
 
-        for (u64 d; _pos < end && (d = u64(*_pos - '0')) <= 9u; ++_pos)
+        v = 0u;
+
+        for (u64 d; _pos < _end && (d = u64(*_pos - '0')) <= 9u; ++_pos)
         {
             // Check if would overflow
-            if (val > riskyVal || val == riskyVal && d > riskyDigit) [[unlikely]]
+            if (v > riskyVal || v == riskyVal && d > riskyDigit) [[unlikely]]
             {
                 string = "Decimal integer too large";
                 return false;
             }
 
-            val = val * 10u + d;
+            v = v * 10u + d;
+        }
+
+        if (_pos == start)
+        {
+            string = "Missing decimal digit";
+            return false;
+        }
+
+        return true;
+    }
+
+    inline bool Decoder::_consumeHex(u64 & v)
+    {
+        static constexpr std::array<u8, 256u> hexTable{_createHexTable()};
+
+        const char * start{_pos};
+
+        v = 0u;
+
+        for (u64 h; _pos < _end && (h = hexTable[u8(*_pos)]) <= 15u; ++_pos)
+        {
+            // Check if would overflow
+            if (v & (u64(0b1111u) << 60))
+            {
+                string = "Hex integer too large";
+                return false;
+            }
+
+            v = (v << 4) | h;
+        }
+
+        if (_pos == start)
+        {
+            string = "Missing hex digit";
+            return false;
         }
 
         return true;
@@ -798,34 +811,26 @@ namespace qcon
     }
 
     template <int base>
-    inline bool Decoder::_consumeInteger(const int sign, const char * end)
+    inline bool Decoder::_consumeInteger(const int sign)
     {
-        u64 val;
-
-        // Skip leading zeroes
-        bool wasZero{false};
-        while (_pos < _end && *_pos == '0')
-        {
-            ++_pos;
-            wasZero = true;
-        }
+        u64 v;
 
         bool res;
         if constexpr (base == 2)
         {
-            res = _consumeBinary(val, wasZero);
+            res = _consumeBinary(v);
         }
         else if constexpr (base == 8)
         {
-            res = _consumeOctal(val, wasZero);
-        }
-        else if constexpr (base == 16)
-        {
-            res = _consumeHex(val, wasZero);
+            res = _consumeOctal(v);
         }
         else if constexpr (base == 10)
         {
-            res = _consumeDecimal(val, end);
+            res = _consumeDecimal(v);
+        }
+        else if constexpr (base == 16)
+        {
+            res = _consumeHex(v);
         }
         if (!res)
         {
@@ -835,19 +840,19 @@ namespace qcon
 
         if (sign >= 0)
         {
-            integer = s64(val);
+            integer = s64(v);
             boolean = true;
         }
         else
         {
             // The integer is too large to fit in an `s64` when negative
-            if (val > u64(std::numeric_limits<s64>::min()))
+            if (v > u64(std::numeric_limits<s64>::min()))
             {
                 string = "Negative integer too large"sv;
                 return false;
             }
 
-            integer = -s64(val);
+            integer = -s64(v);
             boolean = false;
         }
 
@@ -866,19 +871,19 @@ namespace qcon
                 if (*_pos == 'b')
                 {
                     ++_pos;
-                    _state = _consumeInteger<2>(sign, nullptr) ? DecodeState::integer : DecodeState::error;
+                    _state = _consumeInteger<2>(sign) ? DecodeState::integer : DecodeState::error;
                     return;
                 }
                 else if (*_pos == 'o')
                 {
                     ++_pos;
-                    _state = _consumeInteger<8>(sign, nullptr) ? DecodeState::integer : DecodeState::error;
+                    _state = _consumeInteger<8>(sign) ? DecodeState::integer : DecodeState::error;
                     return;
                 }
                 else if (*_pos == 'x')
                 {
                     ++_pos;
-                    _state = _consumeInteger<16>(sign, nullptr) ? DecodeState::integer : DecodeState::error;
+                    _state = _consumeInteger<16>(sign) ? DecodeState::integer : DecodeState::error;
                     return;
                 }
             }
@@ -887,11 +892,12 @@ namespace qcon
         }
 
         // Determine if integer or floater
+        // TODO: Just parse fractional portion and combine
         const char * integerEnd{_pos + 1};
         for (; integerEnd < _end && _isDigit(*integerEnd); ++integerEnd);
         if (integerEnd >= _end)
         {
-            _state = _consumeInteger<10>(sign, integerEnd) ? DecodeState::integer : DecodeState::error;
+            _state = _consumeInteger<10>(sign) ? DecodeState::integer : DecodeState::error;
         }
         else if (*integerEnd == 'e' || *integerEnd == 'E')
         {
@@ -911,7 +917,227 @@ namespace qcon
         }
         else
         {
-            _state = _consumeInteger<10>(sign, integerEnd) ? DecodeState::integer : DecodeState::error;
+            _state = _consumeInteger<10>(sign) ? DecodeState::integer : DecodeState::error;
         }
+    }
+
+    inline bool Decoder::_tryConsumeDecimalDigits(u64 & v, unat digits)
+    {
+        // Assumed to never overflow
+
+        if (_pos + digits > _end)
+        {
+            return false;
+        }
+
+        v = 0u;
+
+        for (; digits; --digits, ++_pos)
+        {
+            const u64 d{u64(*_pos - '0')};
+
+            if (d > 9u)
+            {
+                return false;
+            }
+
+            v = v * 10u + d;
+        }
+
+        return true;
+    }
+
+    inline bool Decoder::_consumeDecimalDigits(u64 & v, const unat digits)
+    {
+        if (_tryConsumeDecimalDigits(v, digits))
+        {
+            return true;
+        }
+        else
+        {
+            string.clear();
+            std::format_to(std::back_inserter(string), "Expected {} decimal digits"sv, digits);
+            return false;
+        }
+    }
+
+    // Compile time compute the floored base-10 logarithm of the given value
+    inline consteval unat _floorLog10(unat v)
+    {
+        unat log{0u};
+        v /= 10u;
+        while (v)
+        {
+            ++log;
+            v /= 10u;
+        }
+        return log;
+    }
+
+    // Utterly ignoring leap seconds with righteous conviction
+    inline bool Decoder::_consumeDatetime()
+    {
+        // Already consumed `D`
+
+        // Consume date
+        {
+            // Consume year
+            u64 year;
+            if (!_consumeDecimalDigits(year, 4u))
+            {
+                return false;
+            }
+
+            _tryConsumeChar('-');
+
+            // Consume month
+            u64 month;
+            if (!_consumeDecimalDigits(month, 2u))
+            {
+                return false;
+            }
+            if (month < 1u || month > 12u)
+            {
+                string = "Invalid month";
+                return false;
+            }
+
+            _tryConsumeChar('-');
+
+            // Consume day
+            u64 day;
+            if (!_consumeDecimalDigits(day, 2u))
+            {
+                return false;
+            }
+            if (day < 1u || day > 31u)
+            {
+                string = "Invalid day";
+                return false;
+            }
+
+            if (!_consumeChar('T'))
+            {
+                return false;
+            }
+
+            const std::chrono::year_month_day ymd{std::chrono::year{int(year)}, std::chrono::month{static_cast<unsigned int>(month)}, std::chrono::day{static_cast<unsigned int>(day)}};
+            datetime = std::chrono::sys_days{ymd};
+        }
+
+        // Consume time
+        {
+            // Consume hour
+            u64 hour;
+            if (!_consumeDecimalDigits(hour, 2u))
+            {
+                return false;
+            }
+            if (hour >= 24u)
+            {
+                string = "Invalid hour";
+                return false;
+            }
+
+            _tryConsumeChar(':');
+
+            // Consume minute
+            u64 minute;
+            if (!_consumeDecimalDigits(minute, 2u))
+            {
+                return false;
+            }
+            if (minute >= 60u)
+            {
+                string = "Invalid minute";
+                return false;
+            }
+
+            _tryConsumeChar(':');
+
+            // Consume second
+            u64 second;
+            if (!_consumeDecimalDigits(second, 2u))
+            {
+                return false;
+            }
+            if (second >= 60u)
+            {
+                string = "Invalid second";
+                return false;
+            }
+
+            datetime += std::chrono::hours{hour} + std::chrono::minutes{minute} + std::chrono::seconds{second};
+
+            // Consume fractional seconds
+            if (_tryConsumeChar('.'))
+            {
+                const char * const start{_pos};
+                u64 fractionalVal;
+                if (!_consumeDecimal(fractionalVal))
+                {
+                    return false;
+                }
+
+                static constexpr unat sysDigits{_floorLog10(std::chrono::system_clock::duration::period::den)};
+                static constexpr u64 powersOf10[20u]{
+                    1u, 10u, 100u, 1'000u, 10'000u, 100'000u, 1'000'000u, 10'000'000u,
+                    100'000'000u, 1'000'000'000u, 10'000'000'000u, 100'000'000'000u, 1'000'000'000'000u,
+                    10'000'000'000'000u, 100'000'000'000'000u, 1'000'000'000'000'000u, 10'000'000'000'000'000u,
+                    100'000'000'000'000'000u, 1'000'000'000'000'000'000u, 10'000'000'000'000'000'000u};
+
+                const unat digits{unat(_pos - start)};
+                if (digits < sysDigits)
+                {
+                    datetime += std::chrono::system_clock::duration{fractionalVal * powersOf10[sysDigits - digits]};
+                }
+                else if (digits > sysDigits)
+                {
+                    // Appropriate rounding
+                    const u64 divisor{powersOf10[digits - sysDigits]};
+                    datetime += std::chrono::system_clock::duration{(fractionalVal + divisor / 2u) / divisor};
+                }
+                else
+                {
+                    datetime += std::chrono::system_clock::duration{fractionalVal};
+                }
+            }
+        }
+
+        // Consume timezone
+        {
+            // GMT time
+            if (_tryConsumeChar('Z'))
+            {
+                // No-op
+            }
+            // Has timezone offset
+            else if (int sign{_tryConsumeSign()}; sign)
+            {
+                u64 hour;
+                if (!_consumeDecimalDigits(hour, 2u))
+                {
+                    return false;
+                }
+
+                _tryConsumeChar(':');
+
+                u64 minute{0u};
+                _tryConsumeDecimalDigits(minute, 2u);
+
+                // Subtract offset
+                std::chrono::minutes offset{hour * 60u + minute};
+                if (sign < 0) offset = -offset;
+                datetime -= offset;
+            }
+            // No timezone, local time
+            else
+            {
+                // Determine and subtract local offset
+                datetime -= std::chrono::current_zone()->get_info(datetime).offset;
+            }
+        }
+
+        return true;
     }
 }

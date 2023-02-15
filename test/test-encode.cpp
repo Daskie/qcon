@@ -19,16 +19,11 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 using qcon::Encoder;
-using qcon::object;
-using qcon::array;
-using qcon::end;
-using qcon::multiline;
-using qcon::uniline;
-using qcon::nospace;
-using qcon::binary;
-using qcon::octal;
-using qcon::decimal;
-using qcon::hex;
+using qcon::Datetime;
+using enum qcon::Container;
+using enum qcon::Density;
+using enum qcon::Base;
+using enum qcon::TimezoneFormat;
 
 struct CustomVal { int x, y; };
 
@@ -565,6 +560,93 @@ TEST(encode, boolean)
     }
 }
 
+TEST(encode, datetime)
+{
+    { // Epoch
+        Encoder encoder{};
+        encoder << utcOffset << Datetime{};
+        ASSERT_EQ("D1969-12-31T16:00:00-08:00", encoder.finish());
+        encoder << utc << Datetime{};
+        ASSERT_EQ("D1970-01-01T00:00:00Z", encoder.finish());
+        encoder << localTime << Datetime{};
+        ASSERT_EQ("D1969-12-31T16:00:00", encoder.finish());
+    }
+    { // Positive timestamp
+        const Datetime tp{std::chrono::seconds{1676337198} + std::chrono::microseconds{123456}};
+        Encoder encoder{};
+        encoder << utcOffset << tp;
+        ASSERT_EQ("D2023-02-13T17:13:18.123456-08:00", encoder.finish());
+        encoder << utc << tp;
+        ASSERT_EQ("D2023-02-14T01:13:18.123456Z", encoder.finish());
+        encoder << localTime << tp;
+        ASSERT_EQ("D2023-02-13T17:13:18.123456", encoder.finish());
+    }
+    { // Negative timestamp
+        const Datetime tp{std::chrono::seconds{-777777777} + std::chrono::microseconds{142536}};
+        Encoder encoder{};
+        encoder << utcOffset << tp;
+        ASSERT_EQ("D1945-05-09T15:37:03.142536-07:00", encoder.finish());
+        encoder << utc << tp;
+        ASSERT_EQ("D1945-05-09T22:37:03.142536Z", encoder.finish());
+        encoder << localTime << tp;
+        ASSERT_EQ("D1945-05-09T15:37:03.142536", encoder.finish());
+    }
+    { // Future timestamp
+        const Datetime tp{std::chrono::seconds{253402300799}};
+        Encoder encoder{};
+        encoder << utc << tp;
+        ASSERT_EQ("D9999-12-31T23:59:59Z", encoder.finish());
+    }
+    { // Past timestamp
+        const Datetime tp{std::chrono::seconds{-62167219200}};
+        Encoder encoder{};
+        encoder << utc << tp;
+        ASSERT_EQ("D0000-01-01T00:00:00Z", encoder.finish());
+    }
+    { // Too far in the future
+        Encoder encoder{};
+        encoder << utc << Datetime{std::chrono::seconds{253402300800}};
+        ASSERT_FALSE(encoder.status());
+    }
+    { // Too far in the past
+        Encoder encoder{};
+        encoder << utc << Datetime{std::chrono::seconds{-62167219201}};
+        ASSERT_FALSE(encoder.status());
+    }
+    { // utcOffset and local match
+        Encoder encoder{};
+        encoder << utcOffset << std::chrono::system_clock::now();
+        const std::string s1{*encoder.finish()};
+        encoder << localTime << std::chrono::system_clock::now();
+        const std::string s2{*encoder.finish()};
+        ASSERT_EQ(s1.substr(0u, 20u), s2.substr(0u, 20u));
+    }
+    { // Fractional seconds
+        static_assert(std::chrono::system_clock::duration::period::den == 10'000'000);
+        Encoder encoder{};
+        encoder << utc << Datetime{std::chrono::system_clock::duration{1'000'000}};
+        ASSERT_EQ("D1970-01-01T00:00:00.1Z", encoder.finish());
+        encoder << utc << Datetime{std::chrono::system_clock::duration{100'000}};
+        ASSERT_EQ("D1970-01-01T00:00:00.01Z", encoder.finish());
+        encoder << utc << Datetime{std::chrono::system_clock::duration{10'000}};
+        ASSERT_EQ("D1970-01-01T00:00:00.001Z", encoder.finish());
+        encoder << utc << Datetime{std::chrono::system_clock::duration{1'000}};
+        ASSERT_EQ("D1970-01-01T00:00:00.0001Z", encoder.finish());
+        encoder << utc << Datetime{std::chrono::system_clock::duration{100}};
+        ASSERT_EQ("D1970-01-01T00:00:00.00001Z", encoder.finish());
+        encoder << utc << Datetime{std::chrono::system_clock::duration{10}};
+        ASSERT_EQ("D1970-01-01T00:00:00.000001Z", encoder.finish());
+        encoder << utc << Datetime{std::chrono::system_clock::duration{1}};
+        ASSERT_EQ("D1970-01-01T00:00:00.0000001Z", encoder.finish());
+    }
+    { // Nospace
+        const Datetime tp{};
+        Encoder encoder{};
+        encoder << nospace << utcOffset << tp;
+        ASSERT_EQ("D19691231T160000-08", encoder.finish());
+    }
+}
+
 TEST(encode, null)
 {
     Encoder encoder{};
@@ -726,40 +808,45 @@ TEST(encode, flagTokens)
         encoder << nospace << uniline << array << 0 << end;
         ASSERT_EQ("[ 0 ]", encoder.finish());
 
+        // Density is transient
+        encoder << uniline << array << nospace << array << 0 << end << array << 0 << end << end;
+        ASSERT_EQ("[ [0], [ 0 ] ]", encoder.finish());
+
         // End after density
         encoder << array << nospace << end;
-        ASSERT_FALSE(encoder.status());
-        encoder.reset();
+        ASSERT_EQ("[]", encoder.finish());
 
         // String after density
         encoder << nospace << "ok";
-        ASSERT_FALSE(encoder.status());
-        encoder.reset();
+        ASSERT_EQ("\"ok\"", encoder.finish());
 
         // Integer after density
         encoder << nospace << 0;
-        ASSERT_FALSE(encoder.status());
-        encoder.reset();
+        ASSERT_EQ("0", encoder.finish());
 
         // Floater after density
         encoder << nospace << 0.0;
-        ASSERT_FALSE(encoder.status());
-        encoder.reset();
+        ASSERT_EQ("0.0", encoder.finish());
 
         // Boolean after density
         encoder << nospace << true;
-        ASSERT_FALSE(encoder.status());
-        encoder.reset();
+        ASSERT_EQ("true", encoder.finish());
 
         // Null after density
         encoder << nospace << nullptr;
-        ASSERT_FALSE(encoder.status());
-        encoder.reset();
+        ASSERT_EQ("null", encoder.finish());
+
+        // Datetime after density
+        encoder << utc << nospace << Datetime{};
+        ASSERT_EQ("D19700101T000000Z", encoder.finish());
+
+        // Time zone format after density
+        encoder << nospace << utc << Datetime{};
+        ASSERT_EQ("D19700101T000000Z", encoder.finish());
 
         // Base after density
-        encoder << nospace << binary;
-        ASSERT_FALSE(encoder.status());
-        encoder.reset();
+        encoder << nospace << binary << 0;
+        ASSERT_EQ("0b0", encoder.finish());
     }
     { // Base
         Encoder encoder{};
@@ -803,6 +890,49 @@ TEST(encode, flagTokens)
         ASSERT_FALSE(encoder.status());
         encoder.reset();
     }
+    { // Time zone format
+        Encoder encoder{};
+
+        const Datetime tp{};
+
+        // Mutliple time zone formats
+        encoder << localTime << utc << tp;
+        ASSERT_EQ("D1970-01-01T00:00:00Z", encoder.finish());
+
+        // Object after time zone format
+        encoder << utc << object << end;
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Array after time zone format
+        encoder << utc << array << end;
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // String after time zone format
+        encoder << utc << "ok";
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Floater after time zone format
+        encoder << utc << 0.0;
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Boolean after time zone format
+        encoder << utc << true;
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Null after time zone formatse
+        encoder << utc << nullptr;
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Density after time zone format
+        encoder << utc << nospace << tp;
+        ASSERT_EQ("D19700101T000000Z", encoder.finish());
+    }
 }
 
 TEST(encode, misc)
@@ -821,7 +951,7 @@ TEST(encode, general)
     Encoder encoder{};
     encoder << object;
         encoder << "Name"sv << "Salt's Crust"sv;
-        encoder << "Founded"sv << 1964;
+        encoder << "Founded"sv << utc << Datetime{std::chrono::seconds{-182772049}};
         encoder << "Employees"sv << array;
             encoder << uniline << object << "Name"sv << "Ol' Joe Fisher"sv << "Title"sv << "Fisherman"sv << "Age"sv << 69 << end;
             encoder << uniline << object << "Name"sv << "Mark Rower"sv << "Title"sv << "Cook"sv << "Age"sv << 41 << end;
@@ -864,7 +994,7 @@ I do not like them Sam I am
 
     ASSERT_EQ(R"({
     "Name": "Salt's Crust",
-    "Founded": 1964,
+    "Founded": D1964-03-17T13:59:11Z,
     "Employees": [
         { "Name": "Ol' Joe Fisher", "Title": "Fisherman", "Age": 69 },
         { "Name": "Mark Rower", "Title": "Cook", "Age": 41 },
