@@ -49,8 +49,8 @@ namespace qcon
         integer,
         floater,
         boolean,
-        datetime,
         null,
+        datetime,
         done
     };
 

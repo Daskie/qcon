@@ -1018,6 +1018,13 @@ TEST(decode, boolean)
     }
 }
 
+TEST(decode, null)
+{
+    Decoder decoder{R"(null)"sv};
+    ASSERT_EQ(decoder.step(), DecodeState::null);
+    ASSERT_EQ(decoder.step(), DecodeState::done);
+}
+
 TEST(decode, datetime)
 {
     { // Epoch
@@ -1280,13 +1287,6 @@ TEST(decode, datetime)
         ASSERT_TRUE(fails("D1970/01/01T00:00:00Z"));
         ASSERT_TRUE(fails("D1970-01-01T00-00-00Z"));
     }
-}
-
-TEST(decode, null)
-{
-    Decoder decoder{R"(null)"sv};
-    ASSERT_EQ(decoder.step(), DecodeState::null);
-    ASSERT_EQ(decoder.step(), DecodeState::done);
 }
 
 TEST(decode, noSpace)

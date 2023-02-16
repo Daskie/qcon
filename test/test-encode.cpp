@@ -560,6 +560,13 @@ TEST(encode, boolean)
     }
 }
 
+TEST(encode, null)
+{
+    Encoder encoder{};
+    encoder << nullptr;
+    ASSERT_EQ(R"(null)"s, encoder.finish());
+}
+
 TEST(encode, datetime)
 {
     { // Epoch
@@ -645,13 +652,6 @@ TEST(encode, datetime)
         encoder << nospace << utcOffset << tp;
         ASSERT_EQ("D19691231T160000-08", encoder.finish());
     }
-}
-
-TEST(encode, null)
-{
-    Encoder encoder{};
-    encoder << nullptr;
-    ASSERT_EQ(R"(null)"s, encoder.finish());
 }
 
 TEST(encode, custom)

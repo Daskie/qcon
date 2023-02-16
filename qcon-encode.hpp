@@ -171,8 +171,8 @@ namespace qcon
         Encoder & operator<<(double v);
         Encoder & operator<<(float v);
         Encoder & operator<<(bool v);
-        Encoder & operator<<(Datetime v);
         Encoder & operator<<(std::nullptr_t);
+        Encoder & operator<<(Datetime v);
 
         ///
         /// @return whether the encoding has been thusfar successful
@@ -242,9 +242,9 @@ namespace qcon
         void _encodeHex(u64 v);
         [[nodiscard]] bool _encode(double v);
         [[nodiscard]] bool _encode(bool v);
+        [[nodiscard]] bool _encode(std::nullptr_t);
         void _encodeDatetime(u32 year, u32 month, u32 day, u32 seconds, u32 nanoseconds, s32 zoneOffsetMinutes);
         [[nodiscard]] bool _encode(Datetime v);
-        [[nodiscard]] bool _encode(std::nullptr_t);
     };
 }
 
@@ -477,12 +477,11 @@ namespace qcon
         return *this;
     }
 
-    inline Encoder & Encoder::operator<<(const Datetime v)
+    inline Encoder & Encoder::operator<<(const std::nullptr_t)
     {
-        if (_expect == _Expect::any || _expect == _Expect::datetime)
+        if (_expect == _Expect::any)
         {
-            _val(v);
-            _nextTimezoneFormat = utcOffset;
+            _val(nullptr);
         }
         else
         {
@@ -492,11 +491,12 @@ namespace qcon
         return *this;
     }
 
-    inline Encoder & Encoder::operator<<(const std::nullptr_t)
+    inline Encoder & Encoder::operator<<(const Datetime v)
     {
-        if (_expect == _Expect::any)
+        if (_expect == _Expect::any || _expect == _Expect::datetime)
         {
-            _val(nullptr);
+            _val(v);
+            _nextTimezoneFormat = utcOffset;
         }
         else
         {
@@ -837,6 +837,13 @@ namespace qcon
         return true;
     }
 
+    inline bool Encoder::_encode(std::nullptr_t)
+    {
+        _str += "null"sv;
+
+        return true;
+    }
+
     inline void Encoder::_encodeDatetime(u32 year, const u32 month, const u32 day, u32 seconds, u32 nanoseconds, const s32 zoneOffsetMinutes)
     {
         static thread_local char buffer[36u]{/*DYYYY-MM-DDThh:mm:ss.fffffffff+hh:mm*/};
@@ -1036,13 +1043,6 @@ namespace qcon
         const std::chrono::nanoseconds nanoseconds{time - seconds};
 
         _encodeDatetime(u32(s32(ymd.year())), u32(ymd.month()), u32(ymd.day()), u32(seconds.count()), u32(nanoseconds.count()), timezoneOffset.count());
-
-        return true;
-    }
-
-    inline bool Encoder::_encode(std::nullptr_t)
-    {
-        _str += "null"sv;
 
         return true;
     }

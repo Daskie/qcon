@@ -453,11 +453,11 @@ TEST(qcon, valueConstruction)
     // Boolean
     ASSERT_EQ(Type::boolean, Value(false).type());
 
-    // Datetime
-    ASSERT_EQ(Type::datetime, Value(Datetime{}).type());
-
     // Null
     ASSERT_EQ(Type::null, Value(nullptr).type());
+
+    // Datetime
+    ASSERT_EQ(Type::datetime, Value(Datetime{}).type());
 }
 
 TEST(qcon, valueMove)
@@ -597,15 +597,15 @@ TEST(qcon, valueAssignAndEquality)
     ASSERT_TRUE(v == true);
     ASSERT_FALSE(v != true);
 
-    v = Datetime{};
-    ASSERT_EQ(Type::datetime, v.type());
-    ASSERT_TRUE(v == Datetime{});
-    ASSERT_FALSE(v != Datetime{});
-
     v = nullptr;
     ASSERT_EQ(Type::null, v.type());
     ASSERT_TRUE(v == nullptr);
     ASSERT_FALSE(v != nullptr);
+
+    v = Datetime{};
+    ASSERT_EQ(Type::datetime, v.type());
+    ASSERT_TRUE(v == Datetime{});
+    ASSERT_FALSE(v != Datetime{});
 }
 
 TEST(qcon, swap)
@@ -670,15 +670,15 @@ TEST(qcon, valueTypes)
         ASSERT_EQ(Type::boolean, v.type());
         ASSERT_TRUE(v.boolean());
     }
-    { // Datetime
-        Value v{Datetime{}};
-        ASSERT_EQ(Type::datetime, v.type());
-        ASSERT_TRUE(v.datetime());
-    }
     { // Null
         Value v{nullptr};
         ASSERT_EQ(Type::null, v.type());
         ASSERT_TRUE(v.null());
+    }
+    { // Datetime
+        Value v{Datetime{}};
+        ASSERT_EQ(Type::datetime, v.type());
+        ASSERT_TRUE(v.datetime());
     }
 }
 
