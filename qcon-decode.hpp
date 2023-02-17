@@ -982,7 +982,10 @@ namespace qcon
                 return false;
             }
 
-            _tryConsumeChar('-');
+            if (!_consumeChar('-'))
+            {
+                return false;
+            }
 
             // Consume month
             u64 month;
@@ -997,7 +1000,10 @@ namespace qcon
                 return false;
             }
 
-            _tryConsumeChar('-');
+            if (!_consumeChar('-'))
+            {
+                return false;
+            }
 
             // Consume day
             u64 day;
@@ -1036,7 +1042,10 @@ namespace qcon
                 return false;
             }
 
-            _tryConsumeChar(':');
+            if (!_consumeChar(':'))
+            {
+                return false;
+            }
 
             // Consume minute
             u64 minute;
@@ -1051,7 +1060,10 @@ namespace qcon
                 return false;
             }
 
-            _tryConsumeChar(':');
+            if (!_consumeChar(':'))
+            {
+                return false;
+            }
 
             // Consume second
             u64 second;
@@ -1119,10 +1131,16 @@ namespace qcon
                     return false;
                 }
 
-                _tryConsumeChar(':');
+                if (!_consumeChar(':'))
+                {
+                    return false;
+                }
 
                 u64 minute{0u};
-                _tryConsumeDecimalDigits(minute, 2u);
+                if (!_consumeDecimalDigits(minute, 2u))
+                {
+                    return false;
+                }
 
                 // Subtract offset
                 std::chrono::minutes offset{hour * 60u + minute};

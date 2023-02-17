@@ -646,12 +646,6 @@ TEST(encode, datetime)
         encoder << utc << Datetime{std::chrono::system_clock::duration{1}};
         ASSERT_EQ("D1970-01-01T00:00:00.0000001Z", encoder.finish());
     }
-    { // Nospace
-        const Datetime tp{};
-        Encoder encoder{};
-        encoder << nospace << utcOffset << tp;
-        ASSERT_EQ("D19691231T160000-08", encoder.finish());
-    }
 }
 
 TEST(encode, custom)
@@ -814,39 +808,48 @@ TEST(encode, flagTokens)
 
         // End after density
         encoder << array << nospace << end;
-        ASSERT_EQ("[]", encoder.finish());
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
 
         // String after density
         encoder << nospace << "ok";
-        ASSERT_EQ("\"ok\"", encoder.finish());
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
 
         // Integer after density
         encoder << nospace << 0;
-        ASSERT_EQ("0", encoder.finish());
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
 
         // Floater after density
         encoder << nospace << 0.0;
-        ASSERT_EQ("0.0", encoder.finish());
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
 
         // Boolean after density
         encoder << nospace << true;
-        ASSERT_EQ("true", encoder.finish());
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
 
         // Null after density
         encoder << nospace << nullptr;
-        ASSERT_EQ("null", encoder.finish());
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
 
         // Datetime after density
         encoder << utc << nospace << Datetime{};
-        ASSERT_EQ("D19700101T000000Z", encoder.finish());
-
-        // Time zone format after density
-        encoder << nospace << utc << Datetime{};
-        ASSERT_EQ("D19700101T000000Z", encoder.finish());
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
 
         // Base after density
         encoder << nospace << binary << 0;
-        ASSERT_EQ("0b0", encoder.finish());
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Time zone format after density
+        encoder << nospace << utc;
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
     }
     { // Base
         Encoder encoder{};
@@ -886,7 +889,12 @@ TEST(encode, flagTokens)
         encoder.reset();
 
         // Density after base
-        encoder << hex << nospace << array << 0 << end;
+        encoder << hex << nospace;
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Time zone format after base
+        encoder << hex << utc;
         ASSERT_FALSE(encoder.status());
         encoder.reset();
     }
@@ -930,8 +938,14 @@ TEST(encode, flagTokens)
         encoder.reset();
 
         // Density after time zone format
-        encoder << utc << nospace << tp;
-        ASSERT_EQ("D19700101T000000Z", encoder.finish());
+        encoder << utc << nospace;
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // bASE after time zone format
+        encoder << utc << hex;
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
     }
 }
 

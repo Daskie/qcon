@@ -1064,22 +1064,6 @@ TEST(decode, datetime)
         const Datetime tp{};
         Decoder decoder{};
 
-        decoder.load("D1970-01-01T00:00:00+00");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D1970-01-01T00:00:00-00");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D1970-01-01T00:00:00+0000");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D1970-01-01T00:00:00-0000");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
         decoder.load("D1970-01-01T00:00:00+00:00");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
         ASSERT_EQ(decoder.datetime, tp);
@@ -1098,58 +1082,6 @@ TEST(decode, datetime)
         decoder.load("D1970-01-01T00:00:00-12:34");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
         ASSERT_EQ(decoder.datetime, Datetime{std::chrono::hours{12} + std::chrono::minutes{34}});
-
-        decoder.load("D1970-01-01T00:00:00+1234");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::hours{-12} + std::chrono::minutes{-34}});
-
-        decoder.load("D1970-01-01T00:00:00-1234");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::hours{12} + std::chrono::minutes{34}});
-    }
-    { // Compact
-        const Datetime tp{};
-        Decoder decoder{};
-
-        decoder.load("D19691231T160000-08");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D19691231T160000");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D19700101T000000Z");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D1970-0101T000000Z");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D197001-01T000000Z");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D19700101T00:0000Z");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D19700101T0000:00Z");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D19700101T000000.0Z");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D19691231T160000-0800");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
-
-        decoder.load("D19691231T160000-08:00");
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
     }
     { // Invalid year
         ASSERT_TRUE(fails("D-1970-01-01T00:00:00Z"));
@@ -1200,10 +1132,10 @@ TEST(decode, datetime)
         ASSERT_TRUE(fails("D1970-01-01T00:00:00z"));
         ASSERT_TRUE(fails("D1970-01-01T00:00:0000"));
         ASSERT_TRUE(fails("D1970-01-01T00:00:00+1"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+11"));
         ASSERT_TRUE(fails("D1970-01-01T00:00:00+111"));
         ASSERT_TRUE(fails("D1970-01-01T00:00:00+11111"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+0X"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+000X"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+0X:00"));
         ASSERT_TRUE(fails("D1970-01-01T00:00:00+00:0X"));
         ASSERT_TRUE(fails("D1970-01-01T00:00:00+0:00"));
         ASSERT_TRUE(fails("D1970-01-01T00:00:00+00:0"));
@@ -1218,6 +1150,13 @@ TEST(decode, datetime)
         ASSERT_TRUE(fails("D1970-01-01t00:00:00Z"));
         ASSERT_TRUE(fails("D1970/01/01T00:00:00Z"));
         ASSERT_TRUE(fails("D1970-01-01T00-00-00Z"));
+        ASSERT_TRUE(fails("D197001-01T00:00:00Z"));
+        ASSERT_TRUE(fails("D1970-0101T00:00:00Z"));
+        ASSERT_TRUE(fails("D19700101T00:00:00Z"));
+        ASSERT_TRUE(fails("D1970-01-01T0000:00Z"));
+        ASSERT_TRUE(fails("D1970-01-01T00:0000Z"));
+        ASSERT_TRUE(fails("D1970-01-01T000000Z"));
+        ASSERT_TRUE(fails("D19700101T000000Z"));
     }
 }
 

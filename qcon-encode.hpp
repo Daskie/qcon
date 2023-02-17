@@ -198,6 +198,7 @@ namespace qcon
         {
             any,
             key,
+            container,
             integer,
             datetime,
             nothing,
@@ -308,7 +309,14 @@ namespace qcon
 
     inline Encoder & Encoder::operator<<(const Density density)
     {
+        if (_expect != _Expect::any && _expect != _Expect::container)
+        {
+            _expect = _Expect::error;
+            return *this;
+        }
+
         _nextDensity = std::max(_density, density);
+        _expect = _Expect::container;
         return *this;
     }
 
@@ -547,7 +555,7 @@ namespace qcon
 
     inline void Encoder::_start(const Container container)
     {
-        if (_expect != _Expect::any)
+        if (_expect != _Expect::any && _expect != _Expect::container)
         {
             _expect = _Expect::error;
             return;
@@ -615,7 +623,6 @@ namespace qcon
 
         _str += ',';
 
-        _nextDensity = _density;
         switch (_container)
         {
             case end: _expect = _Expect::nothing; break;
@@ -638,7 +645,6 @@ namespace qcon
 
         if (_density < nospace) _str += ' ';
 
-        _nextDensity = _density;
         _expect = _Expect::any;
     }
 
@@ -852,48 +858,33 @@ namespace qcon
 
     inline void Encoder::_encodeDatetime(u32 year, const u32 month, const u32 day, u32 seconds, u32 nanoseconds, const s32 zoneOffsetMinutes)
     {
-        static thread_local char buffer[36u]{/*DYYYY-MM-DDThh:mm:ss.fffffffff+hh:mm*/};
-
-        char * bufferEnd{buffer};
+        static thread_local char buffer[36u]{"DYYYY-MM-DDThh:mm:ss"/*fffffffff+hh:mm*/};
 
         // Encode date
 
-        *bufferEnd = 'D';
-        ++bufferEnd;
+        // `D` already in buffer
 
         // Encode year
-        bufferEnd[3] = char('0' + year % 10u); year /= 10u;
-        bufferEnd[2] = char('0' + year % 10u); year /= 10u;
-        bufferEnd[1] = char('0' + year % 10u); year /= 10u;
-        bufferEnd[0] = char('0' + year);
-        bufferEnd += 4;
+        buffer[4] = char('0' + year % 10u); year /= 10u;
+        buffer[3] = char('0' + year % 10u); year /= 10u;
+        buffer[2] = char('0' + year % 10u); year /= 10u;
+        buffer[1] = char('0' + year);
 
-        if (_nextDensity < nospace)
-        {
-            *bufferEnd = '-';
-            ++bufferEnd;
-        }
+        // `-` already in buffer
 
         // Encode month
-        bufferEnd[0] = char('0' + month / 10u);
-        bufferEnd[1] = char('0' + month % 10u);
-        bufferEnd += 2;
+        buffer[6] = char('0' + month / 10u);
+        buffer[7] = char('0' + month % 10u);
 
-        if (_nextDensity < nospace)
-        {
-            *bufferEnd = '-';
-            ++bufferEnd;
-        }
+        // `-` already in buffer
 
         // Encode day
-        bufferEnd[0] = char('0' + day / 10u);
-        bufferEnd[1] = char('0' + day % 10u);
-        bufferEnd += 2;
+        buffer[ 9] = char('0' + day / 10u);
+        buffer[10] = char('0' + day % 10u);
 
         // Encode time
 
-        *bufferEnd = 'T';
-        ++bufferEnd;
+        // `T` already in buffer
 
         u32 minutes{seconds / 60u};
         seconds %= 60u;
@@ -902,31 +893,22 @@ namespace qcon
         minutes %= 60u;
 
         // Encode hours
-        bufferEnd[0] = char('0' + hours / 10u);
-        bufferEnd[1] = char('0' + hours % 10u);
-        bufferEnd += 2;
+        buffer[12] = char('0' + hours / 10u);
+        buffer[13] = char('0' + hours % 10u);
 
-        if (_nextDensity < nospace)
-        {
-            *bufferEnd = ':';
-            ++bufferEnd;
-        }
+        // `:` already in buffer
 
         // Encode minutes
-        bufferEnd[0] = char('0' + minutes / 10u);
-        bufferEnd[1] = char('0' + minutes % 10u);
-        bufferEnd += 2;
+        buffer[15] = char('0' + minutes / 10u);
+        buffer[16] = char('0' + minutes % 10u);
 
-        if (_nextDensity < nospace)
-        {
-            *bufferEnd = ':';
-            ++bufferEnd;
-        }
+        // `:` already in buffer
 
         // Encode seconds
-        bufferEnd[0] = char('0' + seconds / 10u);
-        bufferEnd[1] = char('0' + seconds % 10u);
-        bufferEnd += 2;
+        buffer[18] = char('0' + seconds / 10u);
+        buffer[19] = char('0' + seconds % 10u);
+
+        char * bufferEnd{buffer + 20};
 
         // Encode fractional seconds
         if (nanoseconds)
@@ -961,38 +943,29 @@ namespace qcon
 
                 if (zoneOffsetMinutes >= 0)
                 {
-                    *bufferEnd = '+';
+                    bufferEnd[0] = '+';
                     absOffsetMinutes = u32(zoneOffsetMinutes);
                 }
                 else
                 {
-                    *bufferEnd = '-';
+                    bufferEnd[0] = '-';
                     absOffsetMinutes = u32(-zoneOffsetMinutes);
                 }
-                ++bufferEnd;
 
                 const u32 offsetHours{absOffsetMinutes / 60u};
                 const u32 offsetMinutes{absOffsetMinutes % 60u};
 
                 // Encode offset hours
-                bufferEnd[0] = char('0' + offsetHours / 10u);
-                bufferEnd[1] = char('0' + offsetHours % 10u);
-                bufferEnd += 2;
+                bufferEnd[1] = char('0' + offsetHours / 10u);
+                bufferEnd[2] = char('0' + offsetHours % 10u);
+
+                bufferEnd[3] = ':';
 
                 // Encode offset minutes
-                if (offsetMinutes || _nextDensity < nospace)
-                {
-                    if (_nextDensity < nospace)
-                    {
-                        *bufferEnd = ':';
-                        ++bufferEnd;
-                    }
+                bufferEnd[4] = char('0' + offsetMinutes / 10u);
+                bufferEnd[5] = char('0' + offsetMinutes % 10u);
 
-                    bufferEnd[0] = char('0' + offsetMinutes / 10u);
-                    bufferEnd[1] = char('0' + offsetMinutes % 10u);
-                    bufferEnd += 2;
-                }
-
+                bufferEnd += 6;
                 break;
             }
             case utc:
