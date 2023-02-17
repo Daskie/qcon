@@ -1,7 +1,7 @@
 find_package(GTest CONFIG REQUIRED)
 
 qc_setup_target(
-    qcon-test
+    qcon-dom-test
     EXECUTABLE
     SOURCE_FILES
         test-dom.cpp

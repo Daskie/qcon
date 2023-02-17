@@ -62,7 +62,7 @@ bool fails(const std::string_view str)
     }
 }
 
-TEST(decode, object)
+TEST(Decode, object)
 {
     { // Empty
         Decoder decoder{R"({})"sv};
@@ -164,7 +164,7 @@ TEST(decode, object)
     }
 }
 
-TEST(decode, array)
+TEST(Decode, array)
 {
     { // Empty
         Decoder decoder{R"([])"sv};
@@ -222,7 +222,7 @@ TEST(decode, array)
     }
 }
 
-TEST(decode, string)
+TEST(Decode, string)
 {
     { // Empty string
         Decoder decoder{R"("")"sv};
@@ -345,7 +345,7 @@ TEST(decode, string)
     }
 }
 
-TEST(decode, decimal)
+TEST(Decode, decimal)
 {
     { // Zero
         Decoder decoder{R"(0)"sv};
@@ -467,7 +467,7 @@ TEST(decode, decimal)
     }
 }
 
-TEST(decode, hex)
+TEST(Decode, hex)
 {
     { // Zero
         Decoder decoder{R"(0x0)"sv};
@@ -557,7 +557,7 @@ TEST(decode, hex)
     }
 }
 
-TEST(decode, octal)
+TEST(Decode, octal)
 {
     { // Zero
         Decoder decoder{R"(0o0)"sv};
@@ -640,7 +640,7 @@ TEST(decode, octal)
     }
 }
 
-TEST(decode, binary)
+TEST(Decode, binary)
 {
     { // Zero
         Decoder decoder{R"(0b0)"sv};
@@ -723,7 +723,7 @@ TEST(decode, binary)
     }
 }
 
-TEST(decode, floater)
+TEST(Decode, floater)
 {
     { // Zero
         Decoder decoder{R"(0.0)"};
@@ -936,7 +936,7 @@ TEST(decode, floater)
     }
 }
 
-TEST(decode, boolean)
+TEST(Decode, boolean)
 {
     { // True
         Decoder decoder{R"(true)"sv};
@@ -952,14 +952,14 @@ TEST(decode, boolean)
     }
 }
 
-TEST(decode, null)
+TEST(Decode, null)
 {
     Decoder decoder{R"(null)"sv};
     ASSERT_EQ(decoder.step(), DecodeState::null);
     ASSERT_EQ(decoder.step(), DecodeState::done);
 }
 
-TEST(decode, date)
+TEST(Decode, date)
 {
     { // General
         Decoder decoder{"D2023-02-16"};
@@ -1086,7 +1086,7 @@ TEST(decode, date)
     }
 }
 
-TEST(decode, time)
+TEST(Decode, time)
 {
     { // General
         Decoder decoder{"T18:36:09"};
@@ -1308,7 +1308,7 @@ TEST(decode, time)
     }
 }
 
-TEST(decode, datetime)
+TEST(Decode, datetime)
 {
     { // Epoch
         Decoder decoder{};
@@ -1465,7 +1465,7 @@ TEST(decode, datetime)
     }
 }
 
-TEST(decode, noSpace)
+TEST(Decode, noSpace)
 {
     Decoder decoder{R"({"a":["abc",-123,-123.456e-78,true,null]})"sv};
     ASSERT_EQ(decoder.step(), DecodeState::object);
@@ -1485,7 +1485,7 @@ TEST(decode, noSpace)
     ASSERT_EQ(decoder.step(), DecodeState::done);
 }
 
-TEST(decode, extraneousSpace)
+TEST(Decode, extraneousSpace)
 {
     Decoder decoder{" \t\n\r\v{} \t\n\r\v"sv};
     ASSERT_EQ(decoder.step(), DecodeState::object);
@@ -1493,7 +1493,7 @@ TEST(decode, extraneousSpace)
     ASSERT_EQ(decoder.step(), DecodeState::done);
 }
 
-TEST(decode, trailingComma)
+TEST(Decode, trailingComma)
 {
     { // Valid
         Decoder decoder{};
@@ -1563,7 +1563,7 @@ TEST(decode, trailingComma)
     }
 }
 
-TEST(decode, comments)
+TEST(Decode, comments)
 {
     { // Single comment
         Decoder decoder{};
@@ -1692,7 +1692,7 @@ R"({ # AAAAA
     }
 }
 
-TEST(decode, depth)
+TEST(Decode, depth)
 {
     { // 64 nested objects
         Decoder decoder{R"({"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"v":true}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}})"};
@@ -1719,7 +1719,7 @@ TEST(decode, depth)
     }
 }
 
-TEST(decode, misc)
+TEST(Decode, misc)
 {
     { // Empty
         ASSERT_TRUE(fails(R"()"sv));
@@ -1751,7 +1751,7 @@ TEST(decode, misc)
     }
 }
 
-TEST(decode, general)
+TEST(Decode, general)
 {
     const std::string_view qcon{
 R"(

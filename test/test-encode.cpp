@@ -49,59 +49,59 @@ std::ostream & operator<<(std::ostream & os, const std::optional<T> & v)
     return os;
 }
 
-TEST(encode, object)
+TEST(Encode, object)
 {
     { // Empty
         Encoder encoder{};
         encoder << multiline << object << end;
-        ASSERT_EQ(R"({})"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "{}");
         encoder << uniline << object << end;
-        ASSERT_EQ(R"({})"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "{}");
         encoder << nospace << object << end;
-        ASSERT_EQ(R"({})"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "{}");
     }
     { // Non-empty
         Encoder encoder{};
         encoder << multiline << object << "k1" << "abc" << "k2" << 123 << "k3" << true << end;
-        ASSERT_EQ(R"({
+        ASSERT_EQ(encoder.finish(), R"({
     "k1": "abc",
     "k2": 123,
     "k3": true
-})"s, encoder.finish());
+})");
         encoder << uniline << object << "k1" << "abc" << "k2" << 123 << "k3" << true << end;
-        ASSERT_EQ(R"({ "k1": "abc", "k2": 123, "k3": true })"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({ "k1": "abc", "k2": 123, "k3": true })");
         encoder << nospace << object << "k1" << "abc" << "k2" << 123 << "k3" << true << end;
-        ASSERT_EQ(R"({"k1":"abc","k2":123,"k3":true})"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({"k1":"abc","k2":123,"k3":true})");
     }
     { // String view key
         Encoder encoder{uniline};
         encoder << object << "k"sv << "v" << end;
-        ASSERT_EQ(R"({ "k": "v" })"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({ "k": "v" })");
     }
     { // String key
         Encoder encoder{uniline};
         encoder << object << "k"s << "v" << end;
-        ASSERT_EQ(R"({ "k": "v" })"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({ "k": "v" })");
     }
     { // Const C string key
         Encoder encoder{uniline};
         encoder << object << "k" << "v" << end;
-        ASSERT_EQ(R"({ "k": "v" })"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({ "k": "v" })");
     }
     { // Mutable C string key
         Encoder encoder{uniline};
         encoder << object << const_cast<char *>("k") << "v" << end;
-        ASSERT_EQ(R"({ "k": "v" })"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({ "k": "v" })");
     }
     { // Character key
         Encoder encoder{uniline};
         encoder << object << 'k' << "v" << end;
-        ASSERT_EQ(R"({ "k": "v" })"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({ "k": "v" })");
     }
     { // Empty key
         Encoder encoder{uniline};
         encoder << object << "" << "" << end;
-        ASSERT_EQ(R"({ "": "" })"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({ "": "" })");
     }
     { // Integer key
         Encoder encoder{};
@@ -139,70 +139,70 @@ TEST(encode, object)
     }
 }
 
-TEST(encode, array)
+TEST(Encode, array)
 {
     { // Empty
         Encoder encoder{};
         encoder << multiline << array << end;
-        ASSERT_EQ(R"([])"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "[]");
         encoder << uniline << array << end;
-        ASSERT_EQ(R"([])"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "[]");
         encoder << nospace << array << end;
-        ASSERT_EQ(R"([])"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "[]");
     }
     { // Non-empty
         Encoder encoder{};
         encoder << multiline << array << "abc" << 123 << true << end;
-        ASSERT_EQ(R"([
+        ASSERT_EQ(encoder.finish(), R"([
     "abc",
     123,
     true
-])"s, encoder.finish());
+])");
         encoder << uniline << array << "abc" << 123 << true << end;
-        ASSERT_EQ(R"([ "abc", 123, true ])"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"([ "abc", 123, true ])");
         encoder << nospace << array << "abc" << 123 << true << end;
-        ASSERT_EQ(R"(["abc",123,true])"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"(["abc",123,true])");
     }
 }
 
-TEST(encode, string)
+TEST(Encode, string)
 {
     { // Empty
         Encoder encoder{};
         encoder << "";
-        ASSERT_EQ(R"("")"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"("")");
     }
     { // String view
         Encoder encoder{};
         encoder << "hello"sv;
-        ASSERT_EQ(R"("hello")"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"("hello")");
     }
     { // String
         Encoder encoder{};
         encoder << "hello"s;
-        ASSERT_EQ(R"("hello")"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"("hello")");
     }
     { // Const C string
         Encoder encoder{};
         encoder << "hello";
-        ASSERT_EQ(R"("hello")"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"("hello")");
     }
     { // Mutable C string
         Encoder encoder{};
         encoder << const_cast<char *>("hello");
-        ASSERT_EQ(R"("hello")"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"("hello")");
     }
     { // Printable characters
         Encoder encoder{};
-        const std::string actual{R"( !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~)"s};
-        const std::string expected{R"(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")"s};
+        const std::string actual{R"( !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~)"};
+        const std::string expected{R"(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")"};
         encoder << actual;
-        ASSERT_EQ(expected, encoder.finish());
+        ASSERT_EQ(encoder.finish(), expected);
     }
     { // Escape characters
         Encoder encoder{};
         encoder << "\0\b\t\n\v\f\r"sv;
-        ASSERT_EQ(R"("\0\b\t\n\v\f\r")"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"("\0\b\t\n\v\f\r")");
     }
     { // `\x` code point
         std::string decodeStr(154, '\0');
@@ -227,370 +227,370 @@ TEST(encode, string)
         }
         Encoder encoder{};
         encoder << decodeStr;
-        ASSERT_EQ(expectedStr, encoder.finish());
+        ASSERT_EQ(encoder.finish(), expectedStr);
     }
     { // Single char
         Encoder encoder{};
         encoder << 'a';
-        ASSERT_EQ(R"("a")"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"("a")");
     }
     { // Double quotes
         Encoder encoder{uniline, 4u};
         std::string expected{};
         encoder << R"(s"t'r)";
-        expected = R"("s\"t'r")"s;
-        ASSERT_EQ(expected, encoder.finish());
+        expected = R"("s\"t'r")";
+        ASSERT_EQ(encoder.finish(), expected);
         encoder << object << R"(""")" << R"(''')" << end;
-        expected = R"({ "\"\"\"": "'''" })"s;
-        ASSERT_EQ(expected, encoder.finish());
+        expected = R"({ "\"\"\"": "'''" })";
+        ASSERT_EQ(encoder.finish(), expected);
         encoder << object << R"(''')" << R"(""")" << end;
-        expected = R"({ "'''": "\"\"\"" })"s;
-        ASSERT_EQ(expected, encoder.finish());
+        expected = R"({ "'''": "\"\"\"" })";
+        ASSERT_EQ(encoder.finish(), expected);
     }
 }
 
-TEST(encode, signedInteger)
+TEST(Encode, signedInteger)
 {
     { // Zero
         Encoder encoder{};
         encoder << s64(0);
-        ASSERT_EQ(R"(0)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0");
     }
     { // Typical
         Encoder encoder{};
         encoder << 123;
-        ASSERT_EQ(R"(123)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "123");
         encoder << -123;
-        ASSERT_EQ(R"(-123)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-123");
     }
     { // Max 64
         Encoder encoder{};
         encoder << std::numeric_limits<s64>::max();
-        ASSERT_EQ(R"(9223372036854775807)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "9223372036854775807");
     }
     { // Min 64
         Encoder encoder{};
         encoder << std::numeric_limits<s64>::min();
-        ASSERT_EQ(R"(-9223372036854775808)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-9223372036854775808");
     }
     { // Max 32
         Encoder encoder{};
         encoder << std::numeric_limits<s32>::max();
-        ASSERT_EQ(R"(2147483647)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "2147483647");
     }
     { // Min 32
         Encoder encoder{};
         encoder << std::numeric_limits<s32>::min();
-        ASSERT_EQ(R"(-2147483648)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-2147483648");
     }
     { // Max 16
         Encoder encoder{};
         encoder << std::numeric_limits<s16>::max();
-        ASSERT_EQ(R"(32767)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "32767");
     }
     { // Min 16
         Encoder encoder{};
         encoder << std::numeric_limits<s16>::min();
-        ASSERT_EQ(R"(-32768)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-32768");
     }
     { // Max 8
         Encoder encoder{};
         encoder << std::numeric_limits<s8>::max();
-        ASSERT_EQ(R"(127)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "127");
     }
     { // Min 8
         Encoder encoder{};
         encoder << std::numeric_limits<s8>::min();
-        ASSERT_EQ(R"(-128)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-128");
     }
 }
 
-TEST(encode, unsignedInteger)
+TEST(Encode, unsignedInteger)
 {
     { // Zero
         Encoder encoder{};
         encoder << 0u;
-        ASSERT_EQ(R"(0)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0");
     }
     { // Typical
         Encoder encoder{};
         encoder << 123u;
-        ASSERT_EQ(R"(123)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "123");
     }
     { // Max 64
         Encoder encoder{};
         encoder << std::numeric_limits<u64>::max();
-        ASSERT_EQ(R"(18446744073709551615)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "18446744073709551615");
     }
     { // Max 32
         Encoder encoder{};
         encoder << std::numeric_limits<u32>::max();
-        ASSERT_EQ(R"(4294967295)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "4294967295");
     }
     { // Max 16
         Encoder encoder{};
         encoder << std::numeric_limits<u16>::max();
-        ASSERT_EQ(R"(65535)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "65535");
     }
     { // Max 8
         Encoder encoder{};
         encoder << std::numeric_limits<u8>::max();
-        ASSERT_EQ(R"(255)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "255");
     }
 }
 
-TEST(encode, hex)
+TEST(Encode, hex)
 {
     { // Zero
         Encoder encoder{};
         encoder << hex << 0x0;
-        ASSERT_EQ(R"(0x0)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0x0");
     }
     { // Typical
         Encoder encoder{};
         encoder << hex << 0x1A;
-        ASSERT_EQ(R"(0x1A)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0x1A");
         encoder << hex << -0x1A;
-        ASSERT_EQ(R"(-0x1A)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-0x1A");
     }
     { // Every digit
         Encoder encoder{};
         encoder << hex << 0xFEDCBA9876543210u;
-        ASSERT_EQ("0xFEDCBA9876543210", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0xFEDCBA9876543210");
     }
     { // Max unsigned
         Encoder encoder{};
         encoder << hex << std::numeric_limits<u64>::max();
-        ASSERT_EQ(R"(0xFFFFFFFFFFFFFFFF)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0xFFFFFFFFFFFFFFFF");
     }
     { // Max signed
         Encoder encoder{};
         encoder << hex << std::numeric_limits<s64>::max();
-        ASSERT_EQ(R"(0x7FFFFFFFFFFFFFFF)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0x7FFFFFFFFFFFFFFF");
     }
     { // Min signed
         Encoder encoder{};
         encoder << hex << std::numeric_limits<s64>::min();
-        ASSERT_EQ(R"(-0x8000000000000000)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-0x8000000000000000");
     }
 }
 
-TEST(encode, octal)
+TEST(Encode, octal)
 {
     { // Zero
         Encoder encoder{};
         encoder << octal << 00;
-        ASSERT_EQ(R"(0o0)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0o0");
     }
     { // Typical
         Encoder encoder{};
         encoder << octal << 012;
-        ASSERT_EQ(R"(0o12)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0o12");
         encoder << octal << -012;
-        ASSERT_EQ(R"(-0o12)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-0o12");
     }
     { // Every digit
         Encoder encoder{};
         encoder << octal << 076543210u;
-        ASSERT_EQ("0o76543210", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0o76543210");
     }
     { // Max unsigned
         Encoder encoder{};
         encoder << octal << std::numeric_limits<u64>::max();
-        ASSERT_EQ(R"(0o1777777777777777777777)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0o1777777777777777777777");
     }
     { // Max signed
         Encoder encoder{};
         encoder << octal << std::numeric_limits<s64>::max();
-        ASSERT_EQ(R"(0o777777777777777777777)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0o777777777777777777777");
     }
     { // Min signed
         Encoder encoder{};
         encoder << octal << std::numeric_limits<s64>::min();
-        ASSERT_EQ(R"(-0o1000000000000000000000)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-0o1000000000000000000000");
     }
 }
 
-TEST(encode, binary)
+TEST(Encode, binary)
 {
     { // Zero
         Encoder encoder{};
         encoder << binary << 0b0;
-        ASSERT_EQ(R"(0b0)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b0");
     }
     { // One
         Encoder encoder{};
         encoder << binary << 0b1;
-        ASSERT_EQ(R"(0b1)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b1");
         encoder << binary << -0b1;
-        ASSERT_EQ(R"(-0b1)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-0b1");
     }
     { // Typical
         Encoder encoder{};
         encoder << binary << 0b101;
-        ASSERT_EQ(R"(0b101)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b101");
         encoder << binary << -0b101;
-        ASSERT_EQ(R"(-0b101)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-0b101");
     }
     { // Non multiple of 4 lengths
         Encoder encoder{};
         encoder << binary << 0b1100'0011;
-        ASSERT_EQ(R"(0b11000011)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b11000011");
         encoder << binary << 0b1'1100'0011;
-        ASSERT_EQ(R"(0b111000011)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b111000011");
         encoder << binary << 0b11'1100'0011;
-        ASSERT_EQ(R"(0b1111000011)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b1111000011");
         encoder << binary << 0b111'1100'0011;
-        ASSERT_EQ(R"(0b11111000011)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b11111000011");
         encoder << binary << 0b1111'1100'0011;
-        ASSERT_EQ(R"(0b111111000011)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b111111000011");
     }
     { // Every 4 length permutation
         Encoder encoder{};
         encoder << binary << 0b0001'0010'0011'0000'0100'0101'0110'0111'1000'1001'1010'1011'1100'1101'1110'1111u;
-        ASSERT_EQ(R"(0b1001000110000010001010110011110001001101010111100110111101111)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b1001000110000010001010110011110001001101010111100110111101111");
     }
     { // Max unsigned
         Encoder encoder{};
         encoder << binary << std::numeric_limits<u64>::max();
-        ASSERT_EQ(R"(0b1111111111111111111111111111111111111111111111111111111111111111)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b1111111111111111111111111111111111111111111111111111111111111111");
     }
     { // Max signed
         Encoder encoder{};
         encoder << binary << std::numeric_limits<s64>::max();
-        ASSERT_EQ(R"(0b111111111111111111111111111111111111111111111111111111111111111)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b111111111111111111111111111111111111111111111111111111111111111");
     }
     { // Min signed
         Encoder encoder{};
         encoder << binary << std::numeric_limits<s64>::min();
-        ASSERT_EQ(R"(-0b1000000000000000000000000000000000000000000000000000000000000000)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-0b1000000000000000000000000000000000000000000000000000000000000000");
     }
 }
 
-TEST(encode, floater)
+TEST(Encode, floater)
 {
     { // Zero
         Encoder encoder{};
         encoder << 0.0;
-        ASSERT_EQ(R"(0.0)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0.0");
     }
     { // Typical
         Encoder encoder{};
         encoder << 123.45;
-        ASSERT_EQ(R"(123.45)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "123.45");
     }
     { // Max integer 64
         Encoder encoder{};
         u64 val{0b0'10000110011'1111111111111111111111111111111111111111111111111111u};
         encoder << reinterpret_cast<const double &>(val);
-        ASSERT_EQ(R"(9007199254740991.0)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "9007199254740991.0");
     }
     { // Max integer 32
         Encoder encoder{};
         u32 val{0b0'10010110'11111111111111111111111u};
         encoder << reinterpret_cast<const float &>(val);
-        ASSERT_EQ(R"(16777215.0)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "16777215.0");
     }
     { // Max 64
         Encoder encoder{};
         u64 val{0b0'11111111110'1111111111111111111111111111111111111111111111111111u};
         encoder << reinterpret_cast<const double &>(val);
-        ASSERT_EQ(R"(1.7976931348623157e+308)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "1.7976931348623157e+308");
     }
     { // Max 32
         Encoder encoder{};
         u32 val{0b0'11111110'11111111111111111111111u};
         encoder << reinterpret_cast<const float &>(val);
-        ASSERT_EQ(R"(3.4028234663852886e+38)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "3.4028234663852886e+38");
     }
     { // Min normal 64
         Encoder encoder{};
         u64 val{0b0'00000000001'0000000000000000000000000000000000000000000000000000u};
         encoder << reinterpret_cast<const double &>(val);
-        ASSERT_EQ(R"(2.2250738585072014e-308)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "2.2250738585072014e-308");
     }
     { // Min normal 32
         Encoder encoder{};
         u32 val{0b0'00000001'00000000000000000000000u};
         encoder << reinterpret_cast<const float &>(val);
-        ASSERT_EQ(R"(1.1754943508222875e-38)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "1.1754943508222875e-38");
     }
     { // Min subnormal 64
         Encoder encoder{};
         u64 val{0b0'00000000000'0000000000000000000000000000000000000000000000000001u};
         encoder << reinterpret_cast<const double &>(val);
-        ASSERT_EQ(R"(5e-324)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "5e-324");
     }
     { // Min subnormal 32
         Encoder encoder{};
         u64 val{0b0'00000000'00000000000000000000001u};
         encoder << reinterpret_cast<const float &>(val);
-        ASSERT_EQ(R"(1.401298464324817e-45)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "1.401298464324817e-45");
     }
     { // Positive infinity
         Encoder encoder{};
         encoder << std::numeric_limits<double>::infinity();
-        ASSERT_EQ(R"(inf)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "inf");
     }
     { // Negative infinity
         Encoder encoder{};
         encoder << -std::numeric_limits<double>::infinity();
-        ASSERT_EQ(R"(-inf)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "-inf");
     }
     { // NaN
         Encoder encoder{};
         encoder << std::numeric_limits<double>::quiet_NaN();
-        ASSERT_EQ(R"(nan)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "nan");
     }
     { // Negative NaN
         Encoder encoder{};
         encoder << -std::numeric_limits<double>::quiet_NaN();
-        ASSERT_EQ(R"(nan)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "nan");
     }
 }
 
-TEST(encode, boolean)
+TEST(Encode, boolean)
 {
     { // True
         Encoder encoder{};
         encoder << true;
-        ASSERT_EQ(R"(true)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "true");
     }
     { // False
         Encoder encoder{};
         encoder << false;
-        ASSERT_EQ(R"(false)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "false");
     }
 }
 
-TEST(encode, null)
+TEST(Encode, null)
 {
     Encoder encoder{};
     encoder << nullptr;
-    ASSERT_EQ(R"(null)"s, encoder.finish());
+    ASSERT_EQ(encoder.finish(), "null");
 }
 
-TEST(encode, date)
+TEST(Encode, date)
 {
     { // Default
         Encoder encoder{};
         encoder << Date{};
-        ASSERT_EQ("D1970-01-01", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1970-01-01");
     }
     { // General
         Encoder encoder{};
         encoder << Date{.year = 2023u, .month = 2u, .day = 17u};
-        ASSERT_EQ("D2023-02-17", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D2023-02-17");
     }
     { // Min
         Encoder encoder{};
         encoder << Date{.year = 0u, .month = 1u, .day = 1u};
-        ASSERT_EQ("D0000-01-01", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D0000-01-01");
     }
     { // Max
         Encoder encoder{};
         encoder << Date{.year = 9999u, .month = 12u, .day = 31u};
-        ASSERT_EQ("D9999-12-31", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D9999-12-31");
     }
     { // Invalid
         Encoder encoder{};
@@ -615,8 +615,7 @@ TEST(encode, date)
     }
 }
 
-// TODO: Capitalize test classes and reorder asserts
-TEST(encoder, time)
+TEST(Encode, time)
 {
     { // Default
         Encoder encoder{};
@@ -728,25 +727,25 @@ TEST(encoder, time)
     }
 }
 
-TEST(encode, datetime)
+TEST(Encode, datetime)
 {
     { // General
         Encoder encoder{};
         Datetime datetime{.date = {.year = 2023, .month = 2, .day = 17}, .time = {.hour = 12, .minute = 34, .second = 56, .subsecond = 123456789, .zone = {.format = localTime, .offset = 12 * 60 + 34}}};
         encoder << datetime;
-        ASSERT_EQ("D2023-02-17T12:34:56.123456789", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D2023-02-17T12:34:56.123456789");
         datetime.time.zone.format = utc;
         encoder << datetime;
-        ASSERT_EQ("D2023-02-17T12:34:56.123456789Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D2023-02-17T12:34:56.123456789Z");
         datetime.time.zone.format = utcOffset;
         encoder << datetime;
-        ASSERT_EQ("D2023-02-17T12:34:56.123456789+12:34", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D2023-02-17T12:34:56.123456789+12:34");
     }
     { // Default
         Encoder encoder{};
         const Datetime datetime{};
         encoder << datetime;
-        ASSERT_EQ("D1970-01-01T00:00:00", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00");
     }
     { // Either is invalid
         Encoder encoder{};
@@ -759,48 +758,48 @@ TEST(encode, datetime)
     }
 }
 
-TEST(encode, timepoint)
+TEST(Encode, timepoint)
 {
     { // Epoch
         Encoder encoder{};
         encoder << utcOffset << Timepoint{};
-        ASSERT_EQ("D1969-12-31T16:00:00-08:00", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1969-12-31T16:00:00-08:00");
         encoder << utc << Timepoint{};
-        ASSERT_EQ("D1970-01-01T00:00:00Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00Z");
         encoder << localTime << Timepoint{};
-        ASSERT_EQ("D1969-12-31T16:00:00", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1969-12-31T16:00:00");
     }
     { // Positive timestamp
         const Timepoint tp{std::chrono::seconds{1676337198} + std::chrono::microseconds{123456}};
         Encoder encoder{};
         encoder << utcOffset << tp;
-        ASSERT_EQ("D2023-02-13T17:13:18.123456-08:00", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D2023-02-13T17:13:18.123456-08:00");
         encoder << utc << tp;
-        ASSERT_EQ("D2023-02-14T01:13:18.123456Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D2023-02-14T01:13:18.123456Z");
         encoder << localTime << tp;
-        ASSERT_EQ("D2023-02-13T17:13:18.123456", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D2023-02-13T17:13:18.123456");
     }
     { // Negative timestamp
         const Timepoint tp{std::chrono::seconds{-777777777} + std::chrono::microseconds{142536}};
         Encoder encoder{};
         encoder << utcOffset << tp;
-        ASSERT_EQ("D1945-05-09T15:37:03.142536-07:00", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1945-05-09T15:37:03.142536-07:00");
         encoder << utc << tp;
-        ASSERT_EQ("D1945-05-09T22:37:03.142536Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1945-05-09T22:37:03.142536Z");
         encoder << localTime << tp;
-        ASSERT_EQ("D1945-05-09T15:37:03.142536", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1945-05-09T15:37:03.142536");
     }
     { // Future timestamp
         const Timepoint tp{std::chrono::seconds{253402300799}};
         Encoder encoder{};
         encoder << utc << tp;
-        ASSERT_EQ("D9999-12-31T23:59:59Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D9999-12-31T23:59:59Z");
     }
     { // Past timestamp
         const Timepoint tp{std::chrono::seconds{-62167219200}};
         Encoder encoder{};
         encoder << utc << tp;
-        ASSERT_EQ("D0000-01-01T00:00:00Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D0000-01-01T00:00:00Z");
     }
     { // Too far in the future
         Encoder encoder{};
@@ -824,30 +823,30 @@ TEST(encode, timepoint)
         static_assert(std::chrono::system_clock::duration::period::den == 10'000'000);
         Encoder encoder{};
         encoder << utc << Timepoint{std::chrono::system_clock::duration{1'000'000}};
-        ASSERT_EQ("D1970-01-01T00:00:00.1Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.1Z");
         encoder << utc << Timepoint{std::chrono::system_clock::duration{100'000}};
-        ASSERT_EQ("D1970-01-01T00:00:00.01Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.01Z");
         encoder << utc << Timepoint{std::chrono::system_clock::duration{10'000}};
-        ASSERT_EQ("D1970-01-01T00:00:00.001Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.001Z");
         encoder << utc << Timepoint{std::chrono::system_clock::duration{1'000}};
-        ASSERT_EQ("D1970-01-01T00:00:00.0001Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.0001Z");
         encoder << utc << Timepoint{std::chrono::system_clock::duration{100}};
-        ASSERT_EQ("D1970-01-01T00:00:00.00001Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.00001Z");
         encoder << utc << Timepoint{std::chrono::system_clock::duration{10}};
-        ASSERT_EQ("D1970-01-01T00:00:00.000001Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.000001Z");
         encoder << utc << Timepoint{std::chrono::system_clock::duration{1}};
-        ASSERT_EQ("D1970-01-01T00:00:00.0000001Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.0000001Z");
     }
 }
 
-TEST(encode, custom)
+TEST(Encode, custom)
 {
     Encoder encoder{};
     encoder << CustomVal{1, 2};
-    ASSERT_EQ(R"([ 1, 2 ])"s, encoder.finish());
+    ASSERT_EQ(encoder.finish(), "[ 1, 2 ]");
 }
 
-TEST(encode, reset)
+TEST(Encode, reset)
 {
     {
         Encoder encoder{};
@@ -864,18 +863,18 @@ TEST(encode, reset)
         encoder.reset();
         ASSERT_TRUE(encoder.status());
         encoder << true;
-        ASSERT_EQ(R"(true)"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "true");
     }
 }
 
-TEST(encode, finish)
+TEST(Encode, finish)
 {
     { // Encoder left in clean state after finish
         Encoder encoder{uniline};
         encoder << object << "val" << 123 << end;
-        ASSERT_EQ(R"({ "val": 123 })"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({ "val": 123 })");
         encoder << array << 321 << end;
-        ASSERT_EQ(R"([ 321 ])"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), "[ 321 ]");
     }
     { // Finishing at root
         Encoder encoder{};
@@ -895,28 +894,28 @@ TEST(encode, finish)
     }
 }
 
-TEST(encode, density)
+TEST(Encode, density)
 {
     { // Top level multiline
         Encoder encoder{multiline};
         encoder << object << "k1" << array << "v1" << "v2" << end << "k2" << "v3" << end;
-        ASSERT_EQ(R"({
+        ASSERT_EQ(encoder.finish(), R"({
     "k1": [
         "v1",
         "v2"
     ],
     "k2": "v3"
-})"s, encoder.finish());
+})");
     }
     { // Top level uniline
         Encoder encoder{uniline};
         encoder << object << "k1" << array << "v1" << "v2" << end << "k2" << "v3" << end;
-        ASSERT_EQ(R"({ "k1": [ "v1", "v2" ], "k2": "v3" })"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({ "k1": [ "v1", "v2" ], "k2": "v3" })");
     }
     { // Top level nospace
         Encoder encoder{nospace};
         encoder << object << "k1" << array << "v1" << "v2" << end << "k2" << "v3" << end;
-        ASSERT_EQ(R"({"k1":["v1","v2"],"k2":"v3"})"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({"k1":["v1","v2"],"k2":"v3"})");
     }
     { // Inner density
         Encoder encoder{};
@@ -924,25 +923,25 @@ TEST(encode, density)
             encoder << "k1" << uniline << array << "v1" << nospace << array << "v2" << "v3" << end << end;
             encoder << "k2" << uniline << object << "k3" << "v4" << "k4" << nospace << object << "k5" << "v5" << "k6" << "v6" << end << end;
         encoder << end;
-        ASSERT_EQ(R"({
+        ASSERT_EQ(encoder.finish(), R"({
     "k1": [ "v1", ["v2","v3"] ],
     "k2": { "k3": "v4", "k4": {"k5":"v5","k6":"v6"} }
-})"s, encoder.finish());
+})");
     }
     { // Density priority
         Encoder encoder{};
         encoder << uniline << object << "k" << multiline << array << "v" << end << end;
-        ASSERT_EQ(R"({ "k": [ "v" ] })"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({ "k": [ "v" ] })");
         encoder << uniline << array << multiline << object << "k" << "v" << end << end;
-        ASSERT_EQ(R"([ { "k": "v" } ])"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"([ { "k": "v" } ])");
         encoder << nospace << object << "k" << uniline << array << "v" << end << end;
-        ASSERT_EQ(R"({"k":["v"]})"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"({"k":["v"]})");
         encoder << nospace << array << uniline << object << "k" << "v" << end << end;
-        ASSERT_EQ(R"([{"k":"v"}])"s, encoder.finish());
+        ASSERT_EQ(encoder.finish(), R"([{"k":"v"}])");
     }
 }
 
-TEST(encode, indentSpaces)
+TEST(Encode, indentSpaces)
 {
     { // 0
         Encoder encoder{multiline, 0u};
@@ -951,11 +950,11 @@ TEST(encode, indentSpaces)
                 encoder << "v";
             encoder << end;
         encoder << end;
-        ASSERT_EQ(R"({
+        ASSERT_EQ(encoder.finish(), R"({
 "k": [
 "v"
 ]
-})", encoder.finish());
+})");
     }
     { // 1
         Encoder encoder{multiline, 1u};
@@ -964,11 +963,11 @@ TEST(encode, indentSpaces)
                 encoder << "v";
             encoder << end;
         encoder << end;
-        ASSERT_EQ(R"({
+        ASSERT_EQ(encoder.finish(), R"({
  "k": [
   "v"
  ]
-})", encoder.finish());
+})");
     }
     { // 7
         Encoder encoder{multiline, 7u};
@@ -977,26 +976,26 @@ TEST(encode, indentSpaces)
                 encoder << "v";
             encoder << end;
         encoder << end;
-        ASSERT_EQ(R"({
+        ASSERT_EQ(encoder.finish(), R"({
        "k": [
               "v"
        ]
-})", encoder.finish());
+})");
     }
 }
 
-TEST(encode, flagTokens)
+TEST(Encode, flagTokens)
 {
     { // Density
         Encoder encoder{};
 
         // Mutliple densities
         encoder << nospace << uniline << array << 0 << end;
-        ASSERT_EQ("[ 0 ]", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "[ 0 ]");
 
         // Density is transient
         encoder << uniline << array << nospace << array << 0 << end << array << 0 << end << end;
-        ASSERT_EQ("[ [0], [ 0 ] ]", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "[ [0], [ 0 ] ]");
 
         // End after density
         encoder << array << nospace << end;
@@ -1063,7 +1062,7 @@ TEST(encode, flagTokens)
 
         // Mutliple bases
         encoder << hex << binary << 0;
-        ASSERT_EQ("0b0", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "0b0");
 
         // Object after base
         encoder << hex << object << end;
@@ -1130,7 +1129,7 @@ TEST(encode, flagTokens)
 
         // Mutliple time zone formats
         encoder << localTime << utc << Timepoint{};
-        ASSERT_EQ("D1970-01-01T00:00:00Z", encoder.finish());
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00Z");
 
         // Object after time zone format
         encoder << utc << object << end;
@@ -1189,7 +1188,7 @@ TEST(encode, flagTokens)
     }
 }
 
-TEST(encode, misc)
+TEST(Encode, misc)
 {
     { // Extraneous content
         Encoder encoder{};
@@ -1200,7 +1199,7 @@ TEST(encode, misc)
     }
 }
 
-TEST(encode, general)
+TEST(Encode, general)
 {
     Encoder encoder{};
     encoder << object;
@@ -1248,7 +1247,7 @@ I do not like them Sam I am
         encoder << "Last Updated"sv << utc << Timepoint{std::chrono::seconds{1056808751} + std::chrono::milliseconds{67}};
     encoder << end;
 
-    ASSERT_EQ(R"({
+    ASSERT_EQ(encoder.finish(), R"({
     "Name": "Salt's Crust",
     "Founded": D1964-03-17,
     "Opens": T08:30:00,
@@ -1282,5 +1281,5 @@ I do not like them Sam I am
     "Green Eggs and Ham": "I do not like them in a box\nI do not like them with a fox\nI do not like them in a house\nI do not like them with a mouse\nI do not like them here or there\nI do not like them anywhere\nI do not like green eggs and ham\nI do not like them Sam I am\n",
     "Magic Numbers": [0x309,0o1411,0b1100001001],
     "Last Updated": D2003-06-28T13:59:11.067Z
-})"s, encoder.finish());
+})");
 }
