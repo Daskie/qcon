@@ -905,7 +905,7 @@ namespace qcon
                 }
                 case DecodeState::integer:
                 {
-                    if (decoder.boolean)
+                    if (decoder.positive)
                     {
                         object.emplace(std::move(decoder.key), u64(decoder.integer));
                     }
@@ -978,7 +978,7 @@ namespace qcon
                 }
                 case DecodeState::integer:
                 {
-                    if (decoder.boolean)
+                    if (decoder.positive)
                     {
                         array.push_back(u64(decoder.integer));
                     }
@@ -1050,7 +1050,7 @@ namespace qcon
             }
             case DecodeState::integer:
             {
-                if (decoder.boolean)
+                if (decoder.positive)
                 {
                     value = u64(decoder.integer);
                 }

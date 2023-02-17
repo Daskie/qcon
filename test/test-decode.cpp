@@ -349,49 +349,49 @@ TEST(decode, decimal)
         Decoder decoder{R"(0)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 0);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Normal
         Decoder decoder{R"(123)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 123);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive
         Decoder decoder{R"(+123)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer,123);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative
         Decoder decoder{R"(-123)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, -123);
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min
         Decoder decoder{R"(-9223372036854775808)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
         Decoder decoder{R"(+9223372036854775807)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::max());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max unsigned
         Decoder decoder{R"(+18446744073709551615)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Leading zeroes
@@ -400,46 +400,46 @@ TEST(decode, decimal)
         decoder.load(R"(0123)"sv);
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 123);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(00)"sv);
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 0);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(+00)"sv);
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 0);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(-00)"sv);
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 0);
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min with leading zeroes
         Decoder decoder{R"(-000000009223372036854775808)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
         Decoder decoder{R"(+000000009223372036854775807)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::max());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max unsigned with leading zeroes
         Decoder decoder{R"(+0000000018446744073709551615)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid minus sign
@@ -471,70 +471,70 @@ TEST(decode, hex)
         Decoder decoder{R"(0x0)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 0);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Lowercase
         Decoder decoder{R"(0x1a)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 26);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Uppercase
         Decoder decoder{R"(0x1A)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 26);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive
         Decoder decoder{R"(+0x1A)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 26);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative
         Decoder decoder{R"(-0x1A)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, -26);
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min
         Decoder decoder{R"(-0x8000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
         Decoder decoder{R"(+0xFFFFFFFFFFFFFFFF)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Leading zeroes
         Decoder decoder{R"(0x001A)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 26);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min with leading zeroes
         Decoder decoder{R"(-0x000000008000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
         Decoder decoder{R"(+0x00000000FFFFFFFFFFFFFFFF)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid digit
@@ -561,63 +561,63 @@ TEST(decode, octal)
         Decoder decoder{R"(0o0)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 0);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // No sign
         Decoder decoder{R"(0o12)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 10);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive
         Decoder decoder{R"(+0o12)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 10);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative
         Decoder decoder{R"(-0o12)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, -10);
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min
         Decoder decoder{R"(-0o1000000000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
         Decoder decoder{R"(+0o1777777777777777777777)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Leading zeroes
         Decoder decoder{R"(0o0012)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 10);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min with leading zeroes
         Decoder decoder{R"(-0o000000001000000000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
         Decoder decoder{R"(+0o000000001777777777777777777777)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid digit
@@ -644,63 +644,63 @@ TEST(decode, binary)
         Decoder decoder{R"(0b0)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 0);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // No sign
         Decoder decoder{R"(0b101)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 5);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive
         Decoder decoder{R"(+0b101)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 5);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative
         Decoder decoder{R"(-0b101)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, -5);
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min
         Decoder decoder{R"(-0b1000000000000000000000000000000000000000000000000000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max
         Decoder decoder{R"(+0b1111111111111111111111111111111111111111111111111111111111111111)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Leading zeroes
         Decoder decoder{R"(0b00101)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, 5);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Min with leading zeroes
         Decoder decoder{R"(-0b000000001000000000000000000000000000000000000000000000000000000000000000)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<s64>::min());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max with leading zeroes
         Decoder decoder{R"(+0b000000001111111111111111111111111111111111111111111111111111111111111111)"sv};
         ASSERT_EQ(decoder.step(), DecodeState::integer);
         ASSERT_EQ(decoder.integer, std::numeric_limits<u64>::max());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid digit
@@ -727,84 +727,84 @@ TEST(decode, floater)
         Decoder decoder{R"(0.0)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 0.0);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive zero
         Decoder decoder{R"(+0.0)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 0.0);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative Zero
         Decoder decoder{R"(-0.0)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 0.0);
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // No sign
         Decoder decoder{R"(123.456)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 123.456);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive
         Decoder decoder{R"(+123.456)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 123.456);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative
         Decoder decoder{R"(-123.456)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, -123.456);
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Exponent lowercase
         Decoder decoder{R"(123.456e17)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 123.456e17);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Exponent uppercase
         Decoder decoder{R"(123.456E17)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 123.456e17);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Positive exponent
         Decoder decoder{R"(123.456e+17)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 123.456e17);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Negative exponent
         Decoder decoder{R"(-123.456e-17)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, -123.456e-17);
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Exponent without fraction
         Decoder decoder{R"(123e34)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 123.0e34);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Max integer
         Decoder decoder{R"(9007199254740991.0e0)"};
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 9007199254740991.0);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Leading and trailing decimal
@@ -823,37 +823,37 @@ TEST(decode, floater)
         decoder.load(R"(01.2)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 1.2);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(00.2)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 0.2);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(1e02)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 1e02);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(1e+02)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 1e+02);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(1e-02)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 1e-02);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(1e00)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, 1e00);
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Valid infinity
@@ -862,73 +862,73 @@ TEST(decode, floater)
         decoder.load(R"(inf)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(-inf)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(+inf)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(Inf)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(-Inf)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(+Inf)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(infinity)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(-infinity)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(+infinity)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(Infinity)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(-Infinity)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
-        ASSERT_FALSE(decoder.boolean);
+        ASSERT_FALSE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
 
         decoder.load(R"(+Infinity)");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.boolean);
+        ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid infinity

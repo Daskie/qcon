@@ -63,8 +63,9 @@ namespace qcon
         s64 integer;
         double floater;
         bool boolean;
+        bool positive;
         Datetime datetime;
-        // TODO: error should be a separate string_view, positive should be a separate boolean, encoder should have error string
+        // TODO: error should be a separate string_view, encoder should have error string
 
         Decoder() = default;
         Decoder(std::string_view qson);
@@ -322,7 +323,7 @@ namespace qcon
                         {
                             _tryConsumeChars("inity"sv);
                             floater = std::numeric_limits<double>::infinity();
-                            boolean = true;
+                            positive = true;
                             return _state = DecodeState::floater;
                         }
                     }
@@ -346,7 +347,7 @@ namespace qcon
                         {
                             _tryConsumeChars("inity"sv);
                             floater = -std::numeric_limits<double>::infinity();
-                            boolean = false;
+                            positive = false;
                             return _state = DecodeState::floater;
                         }
                     }
@@ -361,7 +362,7 @@ namespace qcon
                 {
                     _tryConsumeChars("inity"sv);
                     floater = std::numeric_limits<double>::infinity();
-                    boolean = true;
+                    positive = true;
                     return _state = DecodeState::floater;
                 }
                 break;
@@ -395,7 +396,7 @@ namespace qcon
                 else if (_tryConsumeChars("an"sv))
                 {
                     floater = std::numeric_limits<double>::quiet_NaN();
-                    boolean = true;
+                    positive = true;
                     return _state = DecodeState::floater;
                 }
                 break;
@@ -406,7 +407,7 @@ namespace qcon
                 if (_tryConsumeChars("aN"sv))
                 {
                     floater = std::numeric_limits<double>::quiet_NaN();
-                    boolean = true;
+                    positive = true;
                     return _state = DecodeState::floater;
                 }
                 break;
@@ -798,12 +799,12 @@ namespace qcon
 
         if (sign >= 0)
         {
-            boolean = true;
+            positive = true;
         }
         else
         {
             floater = -floater;
-            boolean = false;
+            positive = false;
         }
 
         _pos = res.ptr;
@@ -841,7 +842,7 @@ namespace qcon
         if (sign >= 0)
         {
             integer = s64(v);
-            boolean = true;
+            positive = true;
         }
         else
         {
@@ -853,7 +854,7 @@ namespace qcon
             }
 
             integer = -s64(v);
-            boolean = false;
+            positive = false;
         }
 
         return true;
@@ -892,7 +893,6 @@ namespace qcon
         }
 
         // Determine if integer or floater
-        // TODO: Just parse fractional portion and combine
         const char * integerEnd{_pos + 1};
         for (; integerEnd < _end && _isDigit(*integerEnd); ++integerEnd);
         if (integerEnd >= _end)
