@@ -58,14 +58,15 @@ namespace qcon
     {
       public:
 
-        std::string key;
-        std::string string;
-        s64 integer;
-        double floater;
-        bool boolean;
-        bool positive;
-        Datetime datetime;
-        // TODO: error should be a separate string_view, encoder should have error string
+        std::string key{};
+        std::string string{};
+        s64 integer{};
+        double floater{};
+        bool boolean{};
+        bool positive{};
+        Datetime datetime{};
+        std::string errorMessage{};
+        // TODO: encoder should have error string
 
         Decoder() = default;
         Decoder(std::string_view qson);
@@ -167,7 +168,7 @@ namespace qcon
             }
             else
             {
-                string = "Expected content"sv;
+                errorMessage = "Expected content"sv;
                 return _state = DecodeState::error;
             }
         }
@@ -203,7 +204,7 @@ namespace qcon
 
                 if (missingComma)
                 {
-                    string = "Expected comma"sv;
+                    errorMessage = "Expected comma"sv;
                     return _state = DecodeState::error;
                 }
 
@@ -242,7 +243,7 @@ namespace qcon
 
                 if (missingComma)
                 {
-                    string = "Expected comma"sv;
+                    errorMessage = "Expected comma"sv;
                     return _state = DecodeState::error;
                 }
             }
@@ -253,7 +254,7 @@ namespace qcon
             // Can only be one value at root level
             if (content)
             {
-                string = "Extraneous content"sv;
+                errorMessage = "Extraneous content"sv;
                 return _state = DecodeState::error;
             }
         }
@@ -265,7 +266,7 @@ namespace qcon
             {
                 if (_depth >= 64u)
                 {
-                    string = "Exceeded max depth of 64"sv;
+                    errorMessage = "Exceeded max depth of 64"sv;
                     return _state = DecodeState::error;
                 }
 
@@ -279,7 +280,7 @@ namespace qcon
             {
                 if (_depth >= 64u)
                 {
-                    string = "Exceeded max depth of 64"sv;
+                    errorMessage = "Exceeded max depth of 64"sv;
                     return _state = DecodeState::error;
                 }
 
@@ -419,7 +420,7 @@ namespace qcon
             }
         }
 
-        string = "Unknown value"sv;
+        errorMessage = "Unknown value"sv;
         return _state = DecodeState::error;
     }
 
@@ -499,8 +500,8 @@ namespace qcon
     {
         if (!_tryConsumeChar(c))
         {
-            string.clear();
-            std::format_to(std::back_inserter(string), "Expected `{}`"sv, c);
+            errorMessage.clear();
+            std::format_to(std::back_inserter(errorMessage), "Expected `{}`"sv, c);
             _state = DecodeState::error;
             return false;
         }
@@ -512,8 +513,8 @@ namespace qcon
     {
         if (_end - _pos < digits)
         {
-            string.clear();
-            std::format_to(std::back_inserter(string), "Expected {} code point digits"sv, digits);
+            errorMessage.clear();
+            std::format_to(std::back_inserter(errorMessage), "Expected {} code point digits"sv, digits);
             return false;
         }
 
@@ -521,7 +522,7 @@ namespace qcon
         const std::from_chars_result res{std::from_chars(_pos, _pos + digits, v, 16)};
         if (res.ec != std::errc{})
         {
-            string = "Invalid code point"sv;
+            errorMessage = "Invalid code point"sv;
             return false;
         }
 
@@ -535,7 +536,7 @@ namespace qcon
     {
         if (_pos >= _end)
         {
-            string = "Expected escape sequence"sv;
+            errorMessage = "Expected escape sequence"sv;
             return false;
         }
 
@@ -562,7 +563,7 @@ namespace qcon
                 }
                 else
                 {
-                    string = "Invalid escape sequence"sv;
+                    errorMessage = "Invalid escape sequence"sv;
                     return false;
                 }
             }
@@ -579,7 +580,7 @@ namespace qcon
         {
             if (_pos >= _end)
             {
-                string = "Expected end quote"sv;
+                errorMessage = "Expected end quote"sv;
                 return false;
             }
 
@@ -618,7 +619,7 @@ namespace qcon
             }
             else
             {
-                string = "Invalid string content"sv;
+                errorMessage = "Invalid string content"sv;
                 return false;
             }
         }
@@ -628,7 +629,7 @@ namespace qcon
     {
         if (_pos >= _end || *_pos != '"')
         {
-            string = "Expected key"sv;
+            errorMessage = "Expected key"sv;
             return false;
         }
 
@@ -684,7 +685,7 @@ namespace qcon
             // Check if would overflow
             if (v & (u64(0b1u) << 63))
             {
-                string = "Binary integer too large";
+                errorMessage = "Binary integer too large";
                 return false;
             }
 
@@ -693,7 +694,7 @@ namespace qcon
 
         if (_pos == start)
         {
-            string = "Missing binary digit";
+            errorMessage = "Missing binary digit";
             return false;
         }
 
@@ -711,7 +712,7 @@ namespace qcon
             // Check if would overflow
             if (v & (u64(0b111u) << 61))
             {
-                string = "Octal integer too large";
+                errorMessage = "Octal integer too large";
                 return false;
             }
 
@@ -720,7 +721,7 @@ namespace qcon
 
         if (_pos == start)
         {
-            string = "Missing octal digit";
+            errorMessage = "Missing octal digit";
             return false;
         }
 
@@ -741,7 +742,7 @@ namespace qcon
             // Check if would overflow
             if (v > riskyVal || v == riskyVal && d > riskyDigit) [[unlikely]]
             {
-                string = "Decimal integer too large";
+                errorMessage = "Decimal integer too large";
                 return false;
             }
 
@@ -750,7 +751,7 @@ namespace qcon
 
         if (_pos == start)
         {
-            string = "Missing decimal digit";
+            errorMessage = "Missing decimal digit";
             return false;
         }
 
@@ -770,7 +771,7 @@ namespace qcon
             // Check if would overflow
             if (v & (u64(0b1111u) << 60))
             {
-                string = "Hex integer too large";
+                errorMessage = "Hex integer too large";
                 return false;
             }
 
@@ -779,7 +780,7 @@ namespace qcon
 
         if (_pos == start)
         {
-            string = "Missing hex digit";
+            errorMessage = "Missing hex digit";
             return false;
         }
 
@@ -793,7 +794,7 @@ namespace qcon
         // There was an issue parsing
         if (res.ec != std::errc{})
         {
-            string = "Invalid floater"sv;
+            errorMessage = "Invalid floater"sv;
             return false;
         }
 
@@ -835,7 +836,7 @@ namespace qcon
         }
         if (!res)
         {
-            string = "Invalid integer";
+            errorMessage = "Invalid integer";
             return false;
         }
 
@@ -849,7 +850,7 @@ namespace qcon
             // The integer is too large to fit in an `s64` when negative
             if (v > u64(std::numeric_limits<s64>::min()))
             {
-                string = "Negative integer too large"sv;
+                errorMessage = "Negative integer too large"sv;
                 return false;
             }
 
@@ -911,7 +912,7 @@ namespace qcon
             }
             else
             {
-                string = "Number must not have trailing decimal"sv;
+                errorMessage = "Number must not have trailing decimal"sv;
                 _state = DecodeState::error;
             }
         }
@@ -955,8 +956,8 @@ namespace qcon
         }
         else
         {
-            string.clear();
-            std::format_to(std::back_inserter(string), "Expected {} decimal digits"sv, digits);
+            errorMessage.clear();
+            std::format_to(std::back_inserter(errorMessage), "Expected {} decimal digits"sv, digits);
             return false;
         }
     }
@@ -998,7 +999,7 @@ namespace qcon
             }
             if (month < 1u || month > 12u)
             {
-                string = "Invalid month";
+                errorMessage = "Invalid month"sv;
                 return false;
             }
 
@@ -1012,7 +1013,7 @@ namespace qcon
             }
             if (day < 1u || day > 31u)
             {
-                string = "Invalid day";
+                errorMessage = "Invalid day"sv;
                 return false;
             }
 
@@ -1035,7 +1036,7 @@ namespace qcon
             }
             if (hour >= 24u)
             {
-                string = "Invalid hour";
+                errorMessage = "Invalid hour"sv;
                 return false;
             }
 
@@ -1049,7 +1050,7 @@ namespace qcon
             }
             if (minute >= 60u)
             {
-                string = "Invalid minute";
+                errorMessage = "Invalid minute"sv;
                 return false;
             }
 
@@ -1063,7 +1064,7 @@ namespace qcon
             }
             if (second >= 60u)
             {
-                string = "Invalid second";
+                errorMessage = "Invalid second"sv;
                 return false;
             }
 
