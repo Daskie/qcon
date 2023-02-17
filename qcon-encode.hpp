@@ -354,11 +354,17 @@ namespace qcon
 
     inline Encoder & Encoder::operator<<(const std::string_view v)
     {
-        switch (_expect)
+        if (_expect == _Expect::any)
         {
-            case _Expect::any: _val(v); break;
-            case _Expect::key: _key(v); break;
-            default: _expect = _Expect::error;
+            _val(v);
+        }
+        else if (_expect == _Expect::key)
+        {
+            _key(v);
+        }
+        else
+        {
+            _expect = _Expect::error;
         }
 
         return *this;

@@ -66,7 +66,6 @@ namespace qcon
         bool positive{};
         Datetime datetime{};
         std::string errorMessage{};
-        // TODO: encoder should have error string
 
         Decoder() = default;
         Decoder(std::string_view qson);
