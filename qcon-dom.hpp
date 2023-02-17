@@ -33,6 +33,8 @@ namespace qcon
         integer,
         floater,
         boolean,
+        date,
+        time,
         datetime
     };
 
@@ -88,7 +90,9 @@ namespace qcon
         Value(double val);
         Value(float val);
         Value(bool val);
-        Value(Datetime val);
+        Value(const Date & val);
+        Value(const Time & val);
+        Value(const Datetime & val);
 
         Value(const Value &) = delete;
         Value(Value && other);
@@ -116,7 +120,9 @@ namespace qcon
         Value & operator=(float val);
         Value & operator=(bool val);
         Value & operator=(nullptr_t);
-        Value & operator=(Datetime val);
+        Value & operator=(const Date & val);
+        Value & operator=(const Time & val);
+        Value & operator=(const Datetime & val);
 
         Value & operator=(const Value &) = delete;
         Value & operator=(Value && other);
@@ -126,90 +132,104 @@ namespace qcon
         ///
         /// @return the type of the value
         ///
-        Type type() const { return _type; }
+        [[nodiscard]] Type type() const { return _type; }
 
         ///
         /// @return this value as an object if it is an object, otherwise null
         ///
-        Object * object();
-        const Object * object() const;
+        [[nodiscard]] Object * object();
+        [[nodiscard]] const Object * object() const;
 
         ///
         /// @return this value as an array if it is an array, otherwise null
         ///
-        Array * array();
-        const Array * array() const;
+        [[nodiscard]] Array * array();
+        [[nodiscard]] const Array * array() const;
 
         ///
         /// @return this value as a string if it is a string, otherwise null
         ///
-        std::string * string();
-        const std::string * string() const;
+        [[nodiscard]] std::string * string();
+        [[nodiscard]] const std::string * string() const;
 
         ///
         /// @return this value as an integer if it is an integer, otherwise null
         ///
-        s64 * integer();
-        const s64 * integer() const;
+        [[nodiscard]] s64 * integer();
+        [[nodiscard]] const s64 * integer() const;
 
         ///
         /// @return this value as a floater if it is a floater, otherwise null
         ///
-        double * floater();
-        const double * floater() const;
+        [[nodiscard]] double * floater();
+        [[nodiscard]] const double * floater() const;
 
         ///
         /// @return this value as a boolean if it is a boolean, otherwise null
         ///
-        bool * boolean();
-        const bool * boolean() const;
+        [[nodiscard]] bool * boolean();
+        [[nodiscard]] const bool * boolean() const;
 
         ///
         /// @return this value as a null if it is a null, otherwise null
         ///
-        nullptr_t * null();
-        const nullptr_t * null() const;
+        [[nodiscard]] nullptr_t * null();
+        [[nodiscard]] const nullptr_t * null() const;
+
+        ///
+        /// @return this value as a date if it is a date or datetime, otherwise null
+        ///
+        [[nodiscard]] Date * date();
+        [[nodiscard]] const Date * date() const;
+
+        ///
+        /// @return this value as a time if it is a time or datetime, otherwise null
+        ///
+        [[nodiscard]] Time * time();
+        [[nodiscard]] const Time * time() const;
 
         ///
         /// @return this value as a datetime if it is a datetime, otherwise null
         ///
-        Datetime * datetime();
-        const Datetime * datetime() const;
+        [[nodiscard]] Datetime * datetime();
+        [[nodiscard]] const Datetime * datetime() const;
 
         ///
         /// @return whether the number was positive; useful for unsigned integers too large to fit in a s64
         ///
-        bool positive() const { return _positive; }
+        [[nodiscard]] bool positive() const { return _positive; }
 
         ///
         /// Compares if two values are equivalent, that is they have the same type and value
         /// @param other the value to compare with
         /// @return whether this is equivalent to the other value
         ///
-        bool operator==(const Value & other) const;
+        [[nodiscard]] bool operator==(const Value & other) const;
 
         ///
         /// Directly compares if this value is equivalent to that provided
         ///
-        bool operator==(const Object & val) const;
-        bool operator==(const Array & val) const;
-        bool operator==(const std::string & val) const;
-        bool operator==(std::string_view val) const;
-        bool operator==(const char * val) const;
-        bool operator==(char val) const;
-        bool operator==(s64 val) const;
-        bool operator==(s32 val) const;
-        bool operator==(s16 val) const;
-        bool operator==(s8 val) const;
-        bool operator==(u64 val) const;
-        bool operator==(u32 val) const;
-        bool operator==(u16 val) const;
-        bool operator==(u8 val) const;
-        bool operator==(double val) const;
-        bool operator==(float val) const;
-        bool operator==(bool val) const;
-        bool operator==(nullptr_t) const;
-        bool operator==(Datetime val) const;
+        [[nodiscard]] bool operator==(const Object & val) const;
+        [[nodiscard]] bool operator==(const Array & val) const;
+        [[nodiscard]] bool operator==(const std::string & val) const;
+        [[nodiscard]] bool operator==(std::string_view val) const;
+        [[nodiscard]] bool operator==(const char * val) const;
+        [[nodiscard]] bool operator==(char val) const;
+        [[nodiscard]] bool operator==(s64 val) const;
+        [[nodiscard]] bool operator==(s32 val) const;
+        [[nodiscard]] bool operator==(s16 val) const;
+        [[nodiscard]] bool operator==(s8 val) const;
+        [[nodiscard]] bool operator==(u64 val) const;
+        [[nodiscard]] bool operator==(u32 val) const;
+        [[nodiscard]] bool operator==(u16 val) const;
+        [[nodiscard]] bool operator==(u8 val) const;
+        [[nodiscard]] bool operator==(double val) const;
+        [[nodiscard]] bool operator==(float val) const;
+        [[nodiscard]] bool operator==(bool val) const;
+        [[nodiscard]] bool operator==(nullptr_t) const;
+        [[nodiscard]] bool operator==(const Date & val) const;
+        [[nodiscard]] bool operator==(const Time & val) const;
+        [[nodiscard]] bool operator==(const Datetime & val) const;
 
       private:
 
@@ -222,7 +242,7 @@ namespace qcon
             double _floater;
             bool _boolean;
             nullptr_t _null;
-            Datetime _datetime;
+            Datetime * _datetime;
         };
         Type _type{};
         bool _positive{};
@@ -239,21 +259,21 @@ namespace qcon
     /// @param more any number of additional key and value arguments
     /// @return the created object
     ///
-    template <typename K, typename V, typename... MoreKVs> Object makeObject(K && key, V && val, MoreKVs &&... moreKVs);
-    Object makeObject();
+    template <typename K, typename V, typename... MoreKVs> [[nodiscard]] Object makeObject(K && key, V && val, MoreKVs &&... moreKVs);
+    [[nodiscard]] Object makeObject();
 
     ///
     /// Efficiently creates an array from the given value arguments
     /// @param vals the values, each forwarded to `qcon::Value` constructor
     /// @return the created array
     ///
-    template <typename... Vs> Array makeArray(Vs &&... vals);
+    template <typename... Vs> [[nodiscard]] Array makeArray(Vs &&... vals);
 
     ///
     /// @param qcon the QCON string to decode
     /// @return the decoded value of the QCON, or empty if the string is invalid or could otherwise not be parsed
     ///
-    std::optional<Value> decode(std::string_view qcon);
+    [[nodiscard]] std::optional<Value> decode(std::string_view qcon);
 
     ///
     /// @param val the QCON value to encode
@@ -263,7 +283,7 @@ namespace qcon
     /// @param identifiers whether to encode all eligible keys as identifiers instead of strings
     /// @return an encoded QCON string, or empty if there was an issue encoding the QCON
     ///
-    std::optional<std::string> encode(const Value & val, Density density = multiline, unat indentSpaces = 4u);
+    [[nodiscard]] std::optional<std::string> encode(const Value & val, Density density = multiline, unat indentSpaces = 4u);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -326,20 +346,25 @@ namespace qcon
                 encoder << val._boolean;
                 break;
             }
+            case Type::date:
+            {
+                encoder << val._datetime->date;
+                break;
+            }
+            case Type::time:
+            {
+                encoder << val._datetime->time;
+                break;
+            }
             case Type::datetime:
             {
-                encoder << utc << val._datetime;
+                encoder << *val._datetime;
+                break;
             }
         }
 
         return encoder;
     }
-
-    // `Datetime` (`std::chrono::system_clock::time_point`) isn't trivially constuctible, so technically it shouldn't be
-    //   used in a union, but it's really just a 64 bit integer, and it's *really* convenient to use it in the union,
-    //   so tell the compiler to deal
-    #pragma warning(push)
-    #pragma warning(disable: 4582)
 
     inline Value::Value(Object && val) :
         _object{new Object{std::move(val)}},
@@ -429,8 +454,18 @@ namespace qcon
         _type{Type::null}
     {}
 
-    inline Value::Value(const Datetime val) :
-        _datetime{val},
+    inline Value::Value(const Date & val) :
+        _datetime{new Datetime{.date = val}},
+        _type{Type::date}
+    {}
+
+    inline Value::Value(const Time & val) :
+        _datetime{new Datetime{.time = val}},
+        _type{Type::time}
+    {}
+
+    inline Value::Value(const Datetime & val) :
+        _datetime{new Datetime{val}},
         _type{Type::datetime}
     {}
 
@@ -441,8 +476,6 @@ namespace qcon
     {
         other._type = Type::null;
     }
-
-    #pragma warning(pop)
 
     inline Value & Value::operator=(Object && val)
     {
@@ -607,14 +640,48 @@ namespace qcon
         return *this;
     }
 
-    inline Value & Value::operator=(const Datetime val)
+    inline Value & Value::operator=(const Date & val)
     {
-        if (_type != Type::datetime)
+        if (_type == Type::date || _type == Type::time || _type == Type::datetime)
+        {
+            _datetime->date = val;
+        }
+        else
         {
             _deleteValue();
-            _type = Type::datetime;
+            _datetime = new Datetime{.date = val};
         }
-        _datetime = val;
+        _type = Type::date;
+        return *this;
+    }
+
+    inline Value & Value::operator=(const Time & val)
+    {
+        if (_type == Type::date || _type == Type::time || _type == Type::datetime)
+        {
+            _datetime->time = val;
+        }
+        else
+        {
+            _deleteValue();
+            _datetime = new Datetime{.time = val};
+        }
+        _type = Type::time;
+        return *this;
+    }
+
+    inline Value & Value::operator=(const Datetime & val)
+    {
+        if (_type == Type::date || _type == Type::time || _type == Type::datetime)
+        {
+            *_datetime = val;
+        }
+        else
+        {
+            _deleteValue();
+            _datetime = new Datetime{val};
+        }
+        _type = Type::datetime;
         return *this;
     }
 
@@ -703,14 +770,34 @@ namespace qcon
         return _type == Type::null ? &_null : nullptr;
     }
 
+    inline Date * Value::date()
+    {
+        return _type == Type::date || _type == Type::datetime ? &_datetime->date : nullptr;
+    }
+
+    inline const Date * Value::date() const
+    {
+        return _type == Type::date || _type == Type::datetime ? &_datetime->date : nullptr;
+    }
+
+    inline Time * Value::time()
+    {
+        return _type == Type::time || _type == Type::datetime ? &_datetime->time : nullptr;
+    }
+
+    inline const Time * Value::time() const
+    {
+        return _type == Type::time || _type == Type::datetime ? &_datetime->time : nullptr;
+    }
+
     inline Datetime * Value::datetime()
     {
-        return _type == Type::datetime ? &_datetime : nullptr;
+        return _type == Type::datetime ? _datetime : nullptr;
     }
 
     inline const Datetime * Value::datetime() const
     {
-        return _type == Type::datetime ? &_datetime : nullptr;
+        return _type == Type::datetime ? _datetime : nullptr;
     }
 
     inline bool Value::operator==(const Value & other) const
@@ -724,7 +811,9 @@ namespace qcon
             case Type::floater: return *this == other._floater;
             case Type::boolean: return *this == other._boolean;
             case Type::null: return *this == other._null;
-            case Type::datetime: return *this == other._datetime;
+            case Type::date: return *this == other._datetime->date;
+            case Type::time: return *this == other._datetime->time;
+            case Type::datetime: return *this == *other._datetime;
             default: return false;
         }
     }
@@ -819,9 +908,19 @@ namespace qcon
         return _type == Type::null;
     }
 
-    inline bool Value::operator==(const Datetime val) const
+    inline bool Value::operator==(const Date & val) const
     {
-        return _type == Type::datetime && _datetime == val;
+        return _type == Type::date && _datetime->date == val;
+    }
+
+    inline bool Value::operator==(const Time & val) const
+    {
+        return _type == Type::time && _datetime->time == val;
+    }
+
+    inline bool Value::operator==(const Datetime & val) const
+    {
+        return _type == Type::datetime && *_datetime == val;
     }
 
     inline void Value::_deleteValue()
@@ -831,6 +930,9 @@ namespace qcon
             case Type::object: delete _object; break;
             case Type::array: delete _array; break;
             case Type::string: delete _string; break;
+            case Type::date: [[fallthrough]];
+            case Type::time: [[fallthrough]];
+            case Type::datetime: delete _datetime; break;
             default: break;
         }
     }
@@ -930,6 +1032,16 @@ namespace qcon
                     object.emplace(std::move(decoder.key), nullptr);
                     break;
                 }
+                case DecodeState::date:
+                {
+                    object.emplace(std::move(decoder.key), decoder.date);
+                    break;
+                }
+                case DecodeState::time:
+                {
+                    object.emplace(std::move(decoder.key), decoder.time);
+                    break;
+                }
                 case DecodeState::datetime:
                 {
                     object.emplace(std::move(decoder.key), decoder.datetime);
@@ -1003,6 +1115,16 @@ namespace qcon
                     array.push_back(nullptr);
                     break;
                 }
+                case DecodeState::date:
+                {
+                    array.push_back(decoder.date);
+                    break;
+                }
+                case DecodeState::time:
+                {
+                    array.push_back(decoder.time);
+                    break;
+                }
                 case DecodeState::datetime:
                 {
                     array.push_back(decoder.datetime);
@@ -1072,6 +1194,16 @@ namespace qcon
             }
             case DecodeState::null:
             {
+                break;
+            }
+            case DecodeState::date:
+            {
+                value = decoder.date;
+                break;
+            }
+            case DecodeState::time:
+            {
+                value = decoder.time;
                 break;
             }
             case DecodeState::datetime:

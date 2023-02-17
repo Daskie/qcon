@@ -4,7 +4,7 @@ qc_setup_target(
     qcon-test
     EXECUTABLE
     SOURCE_FILES
-        test.cpp
+        test-dom.cpp
     PRIVATE_LINKS
         qcon
         GTest::gtest_main)

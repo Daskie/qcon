@@ -1,4 +1,4 @@
-#include <qcon.hpp>
+#include <qcon-dom.hpp>
 
 #include <gtest/gtest.h>
 
@@ -20,12 +20,50 @@ using qcon::Type;
 using qcon::Value;
 using qcon::Object;
 using qcon::Array;
+using qcon::Date;
+using qcon::Time;
 using qcon::Datetime;
+using qcon::Timepoint;
 using qcon::decode;
 using qcon::encode;
 
 using qcon::makeObject;
 using qcon::makeArray;
+
+template <typename T>
+std::ostream & operator<<(std::ostream & os, const std::optional<T> & v)
+{
+    if (v)
+    {
+        return os << *v;
+    }
+    else
+    {
+        return os << "Optional empty";
+    }
+}
+
+std::ostream & operator<<(std::ostream & os, const qcon::Date & date)
+{
+    return os << date.year << '-' << u32(date.month) << '-' << u32(date.day);
+}
+
+std::ostream & operator<<(std::ostream & os, const qcon::Time & time)
+{
+    os << u32(time.hour) << ':' << u32(time.minute) << ':' << u32(time.second) << '.' << time.subsecond;
+    switch (time.zone.format)
+    {
+        case qcon::localTime: break;
+        case qcon::utc: os << 'Z'; break;
+        case qcon::utcOffset: os << (time.zone.offset >= 0 ? '+' : '-') << std::abs(time.zone.offset); break;
+    }
+    return os;
+}
+
+std::ostream & operator<<(std::ostream & os, const qcon::Datetime & datetime)
+{
+    return os << datetime.date << ' ' << datetime.time;
+}
 
 TEST(qcon, encodeDecodeString)
 {
@@ -371,9 +409,53 @@ TEST(qcon, encodeDecodeBoolean)
     }
 }
 
+TEST(qcon, encodeDecodeDate)
+{
+    { // General
+        const Date date{.year = 2023u, .month = 2u, .day = 17u};
+        const std::optional<std::string> encoded{encode(date)};
+        ASSERT_TRUE(encoded);
+        const std::optional<Value> decoded{decode(*encoded)};
+        ASSERT_TRUE(decoded);
+        ASSERT_TRUE(decoded->date());
+        ASSERT_EQ(*decoded->date(), date);
+    }
+}
+
+TEST(qcon, encodeDecodeTime)
+{
+    { // Local time
+        const Time time{.hour = 12u, .minute = 34u, .second = 56u, .subsecond = 123456789u, .zone = {.format = qcon::localTime, .offset = 12 * 60 + 34}};
+        const std::optional<std::string> encoded{encode(time)};
+        ASSERT_TRUE(encoded);
+        const std::optional<Value> decoded{decode(*encoded)};
+        ASSERT_TRUE(decoded);
+        ASSERT_TRUE(decoded->time());
+        ASSERT_EQ(*decoded->time(), time);
+    }
+    { // UTC
+        const Time time{.hour = 12u, .minute = 34u, .second = 56u, .subsecond = 123456789u, .zone = {.format = qcon::utc, .offset = 12 * 60 + 34}};
+        const std::optional<std::string> encoded{encode(time)};
+        ASSERT_TRUE(encoded);
+        const std::optional<Value> decoded{decode(*encoded)};
+        ASSERT_TRUE(decoded);
+        ASSERT_TRUE(decoded->time());
+        ASSERT_EQ(*decoded->time(), time);
+    }
+    { // UTC offset
+        const Time time{.hour = 12u, .minute = 34u, .second = 56u, .subsecond = 123456789u, .zone = {.format = qcon::utcOffset, .offset = 12 * 60 + 34}};
+        const std::optional<std::string> encoded{encode(time)};
+        ASSERT_TRUE(encoded);
+        const std::optional<Value> decoded{decode(*encoded)};
+        ASSERT_TRUE(decoded);
+        ASSERT_TRUE(decoded->time());
+        ASSERT_EQ(*decoded->time(), time);
+    }
+}
+
 TEST(qcon, encodeDecodeDatetime)
 {
-    { // Epoch
+    { // Default
         const Datetime dt{};
         const std::optional<std::string> encoded{encode(dt)};
         ASSERT_TRUE(encoded);
@@ -382,8 +464,29 @@ TEST(qcon, encodeDecodeDatetime)
         ASSERT_TRUE(decoded->datetime());
         ASSERT_EQ(*decoded->datetime(), dt);
     }
-    { // Current time
-        const Datetime dt{std::chrono::system_clock::now()};
+    { // Current time local
+        Datetime dt;
+        ASSERT_TRUE(dt.fromTimepoint(std::chrono::system_clock::now(), qcon::localTime));
+        const std::optional<std::string> encoded{encode(dt)};
+        ASSERT_TRUE(encoded);
+        const std::optional<Value> decoded{decode(*encoded)};
+        ASSERT_TRUE(decoded);
+        ASSERT_TRUE(decoded->datetime());
+        ASSERT_EQ(*decoded->datetime(), dt);
+    }
+    { // Current time UTC
+        Datetime dt;
+        ASSERT_TRUE(dt.fromTimepoint(std::chrono::system_clock::now(), qcon::utc));
+        const std::optional<std::string> encoded{encode(dt)};
+        ASSERT_TRUE(encoded);
+        const std::optional<Value> decoded{decode(*encoded)};
+        ASSERT_TRUE(decoded);
+        ASSERT_TRUE(decoded->datetime());
+        ASSERT_EQ(*decoded->datetime(), dt);
+    }
+    { // Current time UTC offset
+        Datetime dt;
+        ASSERT_TRUE(dt.fromTimepoint(std::chrono::system_clock::now(), qcon::utcOffset));
         const std::optional<std::string> encoded{encode(dt)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -405,59 +508,65 @@ TEST(qcon, encodeDecodeNull)
 TEST(qcon, valueConstruction)
 {
     // Default
-    ASSERT_EQ(Type::null, Value().type());
+    ASSERT_EQ(Type::null, Value{}.type());
 
     // Object
-    ASSERT_EQ(Type::object, Value(Object()).type());
+    ASSERT_EQ(Type::object, Value{Object()}.type());
 
     // Array
-    ASSERT_EQ(Type::array, Value(Array()).type());
+    ASSERT_EQ(Type::array, Value{Array()}.type());
 
     // String
-    ASSERT_EQ(Type::string, Value("abc"sv).type());
-    ASSERT_EQ(Type::string, Value("abc"s).type());
-    ASSERT_EQ(Type::string, Value("abc").type());
-    ASSERT_EQ(Type::string, Value(const_cast<char *>("abc")).type());
-    ASSERT_EQ(Type::string, Value('a').type());
+    ASSERT_EQ(Type::string, Value{"abc"sv}.type());
+    ASSERT_EQ(Type::string, Value{"abc"s}.type());
+    ASSERT_EQ(Type::string, Value{"abc"}.type());
+    ASSERT_EQ(Type::string, Value{const_cast<char *>("abc")}.type());
+    ASSERT_EQ(Type::string, Value{'a'}.type());
 
     // Integer
-    ASSERT_EQ(Type::integer, Value(s64(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<s64>::max()).positive());
-    ASSERT_FALSE(Value(std::numeric_limits<s64>::min()).positive());
-    ASSERT_EQ(Type::integer, Value(s32(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<s32>::max()).positive());
-    ASSERT_FALSE(Value(std::numeric_limits<s32>::min()).positive());
-    ASSERT_EQ(Type::integer, Value(s16(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<s16>::max()).positive());
-    ASSERT_FALSE(Value(std::numeric_limits<s16>::min()).positive());
-    ASSERT_EQ(Type::integer, Value(s8(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<s8>::max()).positive());
-    ASSERT_FALSE(Value(std::numeric_limits<s8>::min()).positive());
-    ASSERT_EQ(Type::integer, Value(u64(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<u64>::max()).positive());
-    ASSERT_EQ(Type::integer, Value(u32(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<u32>::max()).positive());
-    ASSERT_EQ(Type::integer, Value(u16(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<u16>::max()).positive());
-    ASSERT_EQ(Type::integer, Value(u8(0)).type());
-    ASSERT_TRUE(Value(std::numeric_limits<u8>::max()).positive());
+    ASSERT_EQ(Type::integer, Value{s64(0)}.type());
+    ASSERT_TRUE(Value{std::numeric_limits<s64>::max()}.positive());
+    ASSERT_FALSE(Value{std::numeric_limits<s64>::min()}.positive());
+    ASSERT_EQ(Type::integer, Value{s32(0)}.type());
+    ASSERT_TRUE(Value{std::numeric_limits<s32>::max()}.positive());
+    ASSERT_FALSE(Value{std::numeric_limits<s32>::min()}.positive());
+    ASSERT_EQ(Type::integer, Value{s16(0)}.type());
+    ASSERT_TRUE(Value{std::numeric_limits<s16>::max()}.positive());
+    ASSERT_FALSE(Value{std::numeric_limits<s16>::min()}.positive());
+    ASSERT_EQ(Type::integer, Value{s8(0)}.type());
+    ASSERT_TRUE(Value{std::numeric_limits<s8>::max()}.positive());
+    ASSERT_FALSE(Value{std::numeric_limits<s8>::min()}.positive());
+    ASSERT_EQ(Type::integer, Value{u64(0)}.type());
+    ASSERT_TRUE(Value{std::numeric_limits<u64>::max()}.positive());
+    ASSERT_EQ(Type::integer, Value{u32(0)}.type());
+    ASSERT_TRUE(Value{std::numeric_limits<u32>::max()}.positive());
+    ASSERT_EQ(Type::integer, Value{u16(0)}.type());
+    ASSERT_TRUE(Value{std::numeric_limits<u16>::max()}.positive());
+    ASSERT_EQ(Type::integer, Value{u8(0)}.type());
+    ASSERT_TRUE(Value{std::numeric_limits<u8>::max()}.positive());
 
     // Floater
-    ASSERT_EQ(Type::floater, Value(0.0).type());
-    ASSERT_TRUE(Value(1.0).positive());
-    ASSERT_FALSE(Value(-1.0).positive());
-    ASSERT_EQ(Type::floater, Value(0.0f).type());
-    ASSERT_TRUE(Value(1.0f).positive());
-    ASSERT_FALSE(Value(-1.0f).positive());
+    ASSERT_EQ(Type::floater, Value{0.0}.type());
+    ASSERT_TRUE(Value{1.0}.positive());
+    ASSERT_FALSE(Value{-1.0}.positive());
+    ASSERT_EQ(Type::floater, Value{0.0f}.type());
+    ASSERT_TRUE(Value{1.0f}.positive());
+    ASSERT_FALSE(Value{-1.0f}.positive());
 
     // Boolean
-    ASSERT_EQ(Type::boolean, Value(false).type());
+    ASSERT_EQ(Type::boolean, Value{false}.type());
 
     // Null
-    ASSERT_EQ(Type::null, Value(nullptr).type());
+    ASSERT_EQ(Type::null, Value{nullptr}.type());
+
+    // Date
+    ASSERT_EQ(Type::date, Value{Date{}}.type());
+
+    // Time
+    ASSERT_EQ(Type::time, Value{Time{}}.type());
 
     // Datetime
-    ASSERT_EQ(Type::datetime, Value(Datetime{}).type());
+    ASSERT_EQ(Type::datetime, Value{Datetime{}}.type());
 }
 
 TEST(qcon, valueMove)
@@ -481,131 +590,152 @@ TEST(qcon, valueAssignAndEquality)
 {
     Value v{};
 
-    const Object objRef{makeObject("a", 1, "b", "wow", "c", nullptr)};
-    v = makeObject("a", 1, "b", "wow", "c", nullptr);
-    ASSERT_EQ(Type::object, v.type());
-    ASSERT_TRUE(v == objRef);
-    ASSERT_FALSE(v != objRef);
+    { // Object
+        const Object objRef{makeObject("a", 1, "b", "wow", "c", nullptr)};
+        v = makeObject("a", 1, "b", "wow", "c", nullptr);
+        ASSERT_EQ(Type::object, v.type());
+        ASSERT_TRUE(v == objRef);
+        ASSERT_FALSE(v != objRef);
+    }
+    { // Array
+        const Array arrRef{makeArray(0, "a", true)};
+        v = makeArray(0, "a", true);
+        ASSERT_EQ(Type::array, v.type());
+        ASSERT_TRUE(v == arrRef);
+        ASSERT_FALSE(v != arrRef);
+    }
+    { // String
+        v = "hello"s;
+        ASSERT_EQ(Type::string, v.type());
+        ASSERT_TRUE(v == "hello"s);
+        ASSERT_FALSE(v != "hello"s);
 
-    const Array arrRef{makeArray(0, "a", true)};
-    v = makeArray(0, "a", true);
-    ASSERT_EQ(Type::array, v.type());
-    ASSERT_TRUE(v == arrRef);
-    ASSERT_FALSE(v != arrRef);
+        v = "hellu"sv;
+        ASSERT_EQ(Type::string, v.type());
+        ASSERT_TRUE(v == "hellu"sv);
+        ASSERT_FALSE(v != "hellu"sv);
 
-    v = "hello"s;
-    ASSERT_EQ(Type::string, v.type());
-    ASSERT_TRUE(v == "hello"s);
-    ASSERT_FALSE(v != "hello"s);
+        v = "helli";
+        ASSERT_EQ(Type::string, v.type());
+        ASSERT_TRUE(v == "helli");
+        ASSERT_FALSE(v != "helli");
 
-    v = "hellu"sv;
-    ASSERT_EQ(Type::string, v.type());
-    ASSERT_TRUE(v == "hellu"sv);
-    ASSERT_FALSE(v != "hellu"sv);
+        v = const_cast<char *>("hella");
+        ASSERT_EQ(Type::string, v.type());
+        ASSERT_TRUE(v == const_cast<char *>("hella"));
+        ASSERT_FALSE(v != const_cast<char *>("hella"));
 
-    v = "helli";
-    ASSERT_EQ(Type::string, v.type());
-    ASSERT_TRUE(v == "helli");
-    ASSERT_FALSE(v != "helli");
+        v = 'h';
+        ASSERT_EQ(Type::string, v.type());
+        ASSERT_TRUE(v == 'h');
+        ASSERT_FALSE(v != 'h');
+    }
+    { // Integer
+        v = s64(5);
+        ASSERT_EQ(Type::integer, v.type());
+        ASSERT_TRUE(v == s64(5));
+        ASSERT_FALSE(v != s64(5));
+        v = std::numeric_limits<s64>::max();
+        ASSERT_TRUE(v.positive());
+        v = std::numeric_limits<s64>::min();
+        ASSERT_FALSE(v.positive());
 
-    v = const_cast<char *>("hella");
-    ASSERT_EQ(Type::string, v.type());
-    ASSERT_TRUE(v == const_cast<char *>("hella"));
-    ASSERT_FALSE(v != const_cast<char *>("hella"));
+        v = s32(6);
+        ASSERT_EQ(Type::integer, v.type());
+        ASSERT_TRUE(v == s32(6));
+        ASSERT_FALSE(v != s32(6));
+        v = std::numeric_limits<s32>::max();
+        ASSERT_TRUE(v.positive());
+        v = std::numeric_limits<s32>::min();
+        ASSERT_FALSE(v.positive());
 
-    v = 'h';
-    ASSERT_EQ(Type::string, v.type());
-    ASSERT_TRUE(v == 'h');
-    ASSERT_FALSE(v != 'h');
+        v = s16(7);
+        ASSERT_EQ(Type::integer, v.type());
+        ASSERT_TRUE(v == s16(7));
+        ASSERT_FALSE(v != s16(7));
+        v = std::numeric_limits<s16>::max();
+        ASSERT_TRUE(v.positive());
+        v = std::numeric_limits<s16>::min();
+        ASSERT_FALSE(v.positive());
 
-    v = s64(5);
-    ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == s64(5));
-    ASSERT_FALSE(v != s64(5));
-    v = std::numeric_limits<s64>::max();
-    ASSERT_TRUE(v.positive());
-    v = std::numeric_limits<s64>::min();
-    ASSERT_FALSE(v.positive());
+        v = s8(8);
+        ASSERT_EQ(Type::integer, v.type());
+        ASSERT_TRUE(v == s8(8));
+        ASSERT_FALSE(v != s8(8));
+        v = std::numeric_limits<s8>::max();
+        ASSERT_TRUE(v.positive());
+        v = std::numeric_limits<s8>::min();
+        ASSERT_FALSE(v.positive());
 
-    v = s32(6);
-    ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == s32(6));
-    ASSERT_FALSE(v != s32(6));
-    v = std::numeric_limits<s32>::max();
-    ASSERT_TRUE(v.positive());
-    v = std::numeric_limits<s32>::min();
-    ASSERT_FALSE(v.positive());
+        v = u64(10u);
+        ASSERT_EQ(Type::integer, v.type());
+        ASSERT_TRUE(v == u64(10u));
+        ASSERT_FALSE(v != u64(10u));
+        v = std::numeric_limits<u64>::max();
+        ASSERT_TRUE(v.positive());
 
-    v = s16(7);
-    ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == s16(7));
-    ASSERT_FALSE(v != s16(7));
-    v = std::numeric_limits<s16>::max();
-    ASSERT_TRUE(v.positive());
-    v = std::numeric_limits<s16>::min();
-    ASSERT_FALSE(v.positive());
+        v = u32(11u);
+        ASSERT_EQ(Type::integer, v.type());
+        ASSERT_TRUE(v == u32(11u));
+        ASSERT_FALSE(v != u32(11u));
+        v = std::numeric_limits<u32>::max();
+        ASSERT_TRUE(v.positive());
 
-    v = s8(8);
-    ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == s8(8));
-    ASSERT_FALSE(v != s8(8));
-    v = std::numeric_limits<s8>::max();
-    ASSERT_TRUE(v.positive());
-    v = std::numeric_limits<s8>::min();
-    ASSERT_FALSE(v.positive());
+        v = u16(12u);
+        ASSERT_EQ(Type::integer, v.type());
+        ASSERT_TRUE(v == u16(12u));
+        ASSERT_FALSE(v != u16(12u));
+        v = std::numeric_limits<u16>::max();
+        ASSERT_TRUE(v.positive());
 
-    v = u64(10u);
-    ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == u64(10u));
-    ASSERT_FALSE(v != u64(10u));
-    v = std::numeric_limits<u64>::max();
-    ASSERT_TRUE(v.positive());
+        v = u8(13u);
+        ASSERT_EQ(Type::integer, v.type());
+        ASSERT_TRUE(v == u8(13u));
+        ASSERT_FALSE(v != u8(13u));
+        v = std::numeric_limits<u8>::max();
+        ASSERT_TRUE(v.positive());
+    }
+    { // Floater
+        v = 7.7;
+        ASSERT_EQ(Type::floater, v.type());
+        ASSERT_TRUE(v == 7.7);
+        ASSERT_FALSE(v != 7.7);
 
-    v = u32(11u);
-    ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == u32(11u));
-    ASSERT_FALSE(v != u32(11u));
-    v = std::numeric_limits<u32>::max();
-    ASSERT_TRUE(v.positive());
-
-    v = u16(12u);
-    ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == u16(12u));
-    ASSERT_FALSE(v != u16(12u));
-    v = std::numeric_limits<u16>::max();
-    ASSERT_TRUE(v.positive());
-
-    v = u8(13u);
-    ASSERT_EQ(Type::integer, v.type());
-    ASSERT_TRUE(v == u8(13u));
-    ASSERT_FALSE(v != u8(13u));
-    v = std::numeric_limits<u8>::max();
-    ASSERT_TRUE(v.positive());
-
-    v = 7.7;
-    ASSERT_EQ(Type::floater, v.type());
-    ASSERT_TRUE(v == 7.7);
-    ASSERT_FALSE(v != 7.7);
-
-    v = 7.7f;
-    ASSERT_EQ(Type::floater, v.type());
-    ASSERT_TRUE(v == 7.7f);
-    ASSERT_FALSE(v != 7.7f);
-
-    v = true;
-    ASSERT_EQ(Type::boolean, v.type());
-    ASSERT_TRUE(v == true);
-    ASSERT_FALSE(v != true);
-
-    v = nullptr;
-    ASSERT_EQ(Type::null, v.type());
-    ASSERT_TRUE(v == nullptr);
-    ASSERT_FALSE(v != nullptr);
-
-    v = Datetime{};
-    ASSERT_EQ(Type::datetime, v.type());
-    ASSERT_TRUE(v == Datetime{});
-    ASSERT_FALSE(v != Datetime{});
+        v = 7.7f;
+        ASSERT_EQ(Type::floater, v.type());
+        ASSERT_TRUE(v == 7.7f);
+        ASSERT_FALSE(v != 7.7f);
+    }
+    { // Boolean
+        v = true;
+        ASSERT_EQ(Type::boolean, v.type());
+        ASSERT_TRUE(v == true);
+        ASSERT_FALSE(v != true);
+    }
+    { // Null
+        v = nullptr;
+        ASSERT_EQ(Type::null, v.type());
+        ASSERT_TRUE(v == nullptr);
+        ASSERT_FALSE(v != nullptr);
+    }
+    { // Date
+        v = Date{};
+        ASSERT_EQ(Type::date, v.type());
+        ASSERT_TRUE(v == Date{});
+        ASSERT_FALSE(v != Date{});
+    }
+    { // Time
+        v = Time{};
+        ASSERT_EQ(Type::time, v.type());
+        ASSERT_TRUE(v == Time{});
+        ASSERT_FALSE(v != Time{});
+    }
+    { // Datetime
+        v = Datetime{};
+        ASSERT_EQ(Type::datetime, v.type());
+        ASSERT_TRUE(v == Datetime{});
+        ASSERT_FALSE(v != Datetime{});
+    }
 }
 
 TEST(qcon, swap)
@@ -675,10 +805,22 @@ TEST(qcon, valueTypes)
         ASSERT_EQ(Type::null, v.type());
         ASSERT_TRUE(v.null());
     }
+    { // Date
+        Value v{Date{}};
+        ASSERT_EQ(Type::date, v.type());
+        ASSERT_TRUE(v.date());
+    }
+    { // Time
+        Value v{Time{}};
+        ASSERT_EQ(Type::time, v.type());
+        ASSERT_TRUE(v.time());
+    }
     { // Datetime
         Value v{Datetime{}};
         ASSERT_EQ(Type::datetime, v.type());
         ASSERT_TRUE(v.datetime());
+        ASSERT_TRUE(v.date());
+        ASSERT_TRUE(v.time());
     }
 }
 
@@ -690,6 +832,8 @@ TEST(qcon, wrongValueType)
     ASSERT_FALSE((Value{}.integer()));
     ASSERT_FALSE((Value{}.floater()));
     ASSERT_FALSE((Value{}.boolean()));
+    ASSERT_FALSE((Value{}.date()));
+    ASSERT_FALSE((Value{}.time()));
     ASSERT_FALSE((Value{}.datetime()));
 }
 
@@ -927,15 +1071,17 @@ TEST(qcon, general)
             "Title": "Server Boy"
         }
     ],
-    "Founded": D1964-03-17T13:59:11Z,
+    "Founded": D1964-03-17,
     "Green Eggs and Ham": "I do not like them in a box\nI do not like them with a fox\nI do not like them in a house\nI do not like them with a mouse\nI do not like them here or there\nI do not like them anywhere\nI do not like green eggs and ham\nI do not like them Sam I am\n",
     "Ha\x03r Name": "M\0\0n",
+    "Last Updated": D2003-06-28T13:59:11.067Z,
     "Magic Numbers": [
         777,
         777,
         777
     ],
     "Name": "Salt's Crust",
+    "Opens": T08:30:00,
     "Profit Margin": null
 })"s);
     const std::optional<Value> decoded{decode(qcon)};

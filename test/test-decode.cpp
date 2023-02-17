@@ -18,7 +18,7 @@ using namespace std::string_view_literals;
 
 using qcon::Decoder;
 using qcon::DecodeState;
-using qcon::Datetime;
+using qcon::Timepoint;
 
 std::ostream & operator<<(std::ostream & os, const DecodeState state)
 {
@@ -32,8 +32,10 @@ std::ostream & operator<<(std::ostream & os, const DecodeState state)
         case DecodeState::integer: os << "integer"; break;
         case DecodeState::floater: os << "floater"; break;
         case DecodeState::boolean: os << "boolean"; break;
-        case DecodeState::datetime: os << "datetime"; break;
         case DecodeState::null: os << "null"; break;
+        case DecodeState::date: os << "date"; break;
+        case DecodeState::time: os << "time"; break;
+        case DecodeState::datetime: os << "datetime"; break;
         case DecodeState::done: os << "done"; break;
     }
 
@@ -957,205 +959,508 @@ TEST(decode, null)
     ASSERT_EQ(decoder.step(), DecodeState::done);
 }
 
+TEST(decode, date)
+{
+    { // General
+        Decoder decoder{"D2023-02-16"};
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.year, 2023u);
+        ASSERT_EQ(decoder.date.month, 2u);
+        ASSERT_EQ(decoder.date.day, 16u);
+    }
+    { // Min
+        Decoder decoder{"D0000-01-01"};
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.year, 0000u);
+        ASSERT_EQ(decoder.date.month, 1u);
+        ASSERT_EQ(decoder.date.day, 1u);
+    }
+    { // Max
+        Decoder decoder{"D9999-12-31"};
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.year, 9999u);
+        ASSERT_EQ(decoder.date.month, 12u);
+        ASSERT_EQ(decoder.date.day, 31u);
+    }
+    { // Max month days
+        Decoder decoder{};
+
+        decoder.load("D1970-01-31");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 31u);
+
+        decoder.load("D1970-02-28");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 28u);
+
+        decoder.load("D1970-03-31");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 31u);
+
+        decoder.load("D1970-04-30");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 30u);
+
+        decoder.load("D1970-05-31");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 31u);
+
+        decoder.load("D1970-06-30");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 30u);
+
+        decoder.load("D1970-07-31");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 31u);
+
+        decoder.load("D1970-08-31");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 31u);
+
+        decoder.load("D1970-09-30");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 30u);
+
+        decoder.load("D1970-10-31");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 31u);
+
+        decoder.load("D1970-11-30");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 30u);
+
+        decoder.load("D1970-12-31");
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.day, 31u);
+    }
+    { // Leap
+        Decoder decoder{"D2024-02-29"};
+        ASSERT_EQ(decoder.step(), DecodeState::date);
+        ASSERT_EQ(decoder.date.year, 2024u);
+        ASSERT_EQ(decoder.date.month, 2u);
+        ASSERT_EQ(decoder.date.day, 29u);
+    }
+    { // Not leap
+        ASSERT_TRUE(fails("D2023-02-29"));
+    }
+    { // Invalid year
+        ASSERT_TRUE(fails("D-1970-01-01"));
+        ASSERT_TRUE(fails("D197X-01-01"));
+        ASSERT_TRUE(fails("D19700-01-01"));
+        ASSERT_TRUE(fails("D197-01-01"));
+    }
+    { // Invalid month
+        ASSERT_TRUE(fails("D1970-00-01"));
+        ASSERT_TRUE(fails("D1970-13-01"));
+        ASSERT_TRUE(fails("D1970-1X-01"));
+        ASSERT_TRUE(fails("D1970-001-01"));
+        ASSERT_TRUE(fails("D1970-1-01"));
+    }
+    { // Invalid day
+        ASSERT_TRUE(fails("D1970-01-00"));
+        ASSERT_TRUE(fails("D1970-01-32"));
+        ASSERT_TRUE(fails("D1970-01-0X"));
+        ASSERT_TRUE(fails("D1970-01-001"));
+        ASSERT_TRUE(fails("D1970-01-1"));
+
+        ASSERT_TRUE(fails("D1970-01-32"));
+        ASSERT_TRUE(fails("D1970-02-29"));
+        ASSERT_TRUE(fails("D1970-03-32"));
+        ASSERT_TRUE(fails("D1970-04-31"));
+        ASSERT_TRUE(fails("D1970-05-32"));
+        ASSERT_TRUE(fails("D1970-06-31"));
+        ASSERT_TRUE(fails("D1970-07-32"));
+        ASSERT_TRUE(fails("D1970-08-32"));
+        ASSERT_TRUE(fails("D1970-09-31"));
+        ASSERT_TRUE(fails("D1970-10-32"));
+        ASSERT_TRUE(fails("D1970-11-31"));
+        ASSERT_TRUE(fails("D1970-12-32"));
+    }
+    { // Invalid misc
+        ASSERT_TRUE(fails("1970-01-01"));
+        ASSERT_TRUE(fails("d1970-01-01"));
+        ASSERT_TRUE(fails("D1970/01/01"));
+        ASSERT_TRUE(fails("D197001-01"));
+        ASSERT_TRUE(fails("D1970-0101"));
+        ASSERT_TRUE(fails("D19700101"));
+    }
+}
+
+TEST(decode, time)
+{
+    { // General
+        Decoder decoder{"T18:36:09"};
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.hour, 18u);
+        ASSERT_EQ(decoder.time.minute, 36u);
+        ASSERT_EQ(decoder.time.second, 9u);
+        ASSERT_EQ(decoder.time.subsecond, 0u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::localTime);
+        ASSERT_EQ(decoder.time.zone.offset, 0);
+    }
+    { // Subseconds
+        Decoder decoder{"T18:36:09.123456789"};
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.hour, 18u);
+        ASSERT_EQ(decoder.time.minute, 36u);
+        ASSERT_EQ(decoder.time.second, 9u);
+        ASSERT_EQ(decoder.time.subsecond, 123456789u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::localTime);
+        ASSERT_EQ(decoder.time.zone.offset, 0);
+    }
+    { // Timezone
+        Decoder decoder{};
+
+        decoder.load("T18:36:09Z");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.hour, 18u);
+        ASSERT_EQ(decoder.time.minute, 36u);
+        ASSERT_EQ(decoder.time.second, 9u);
+        ASSERT_EQ(decoder.time.subsecond, 0u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utc);
+        ASSERT_EQ(decoder.time.zone.offset, 0);
+
+        decoder.load("T18:36:09+12:34");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.hour, 18u);
+        ASSERT_EQ(decoder.time.minute, 36u);
+        ASSERT_EQ(decoder.time.second, 9u);
+        ASSERT_EQ(decoder.time.subsecond, 0u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.time.zone.offset, 12 * 60 + 34);
+
+        decoder.load("T18:36:09-12:34");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.hour, 18u);
+        ASSERT_EQ(decoder.time.minute, 36u);
+        ASSERT_EQ(decoder.time.second, 9u);
+        ASSERT_EQ(decoder.time.subsecond, 0u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.time.zone.offset, -(12 * 60 + 34));
+    }
+    { // Timezone and subseconds
+        Decoder decoder{};
+
+        decoder.load("T18:36:09.123456789Z");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.hour, 18u);
+        ASSERT_EQ(decoder.time.minute, 36u);
+        ASSERT_EQ(decoder.time.second, 9u);
+        ASSERT_EQ(decoder.time.subsecond, 123456789u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utc);
+        ASSERT_EQ(decoder.time.zone.offset, 0);
+
+        decoder.load("T18:36:09.123456789+12:34");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.hour, 18u);
+        ASSERT_EQ(decoder.time.minute, 36u);
+        ASSERT_EQ(decoder.time.second, 9u);
+        ASSERT_EQ(decoder.time.subsecond, 123456789u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.time.zone.offset, 12 * 60 + 34);
+
+        decoder.load("T18:36:09.123456789-12:34");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.hour, 18u);
+        ASSERT_EQ(decoder.time.minute, 36u);
+        ASSERT_EQ(decoder.time.second, 9u);
+        ASSERT_EQ(decoder.time.subsecond, 123456789u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.time.zone.offset, -(12 * 60 + 34));
+    }
+    { // Min
+        Decoder decoder{"T00:00:00-99:59"};
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.hour, 0u);
+        ASSERT_EQ(decoder.time.minute, 0u);
+        ASSERT_EQ(decoder.time.second, 0u);
+        ASSERT_EQ(decoder.time.subsecond, 0u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.time.zone.offset, -(99 * 60 + 59));
+    }
+    { // Max
+        Decoder decoder{"T23:59:59.999999999+99:59"};
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.hour, 23u);
+        ASSERT_EQ(decoder.time.minute, 59u);
+        ASSERT_EQ(decoder.time.second, 59u);
+        ASSERT_EQ(decoder.time.subsecond, 999999999u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.time.zone.offset, 99 * 60 + 59);
+    }
+    { // Subsecond digits
+        Decoder decoder{};
+
+        decoder.load("T00:00:00.1");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 100'000'000u);
+
+        decoder.load("T00:00:00.01");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 10'000'000u);
+
+        decoder.load("T00:00:00.001");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 1'000'000);
+
+        decoder.load("T00:00:00.0001");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 100'000u);
+
+        decoder.load("T00:00:00.00001");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 10'000u);
+
+        decoder.load("T00:00:00.000001");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 1'000u);
+
+        decoder.load("T00:00:00.0000001");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 100u);
+
+        decoder.load("T00:00:00.00000001");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 10u);
+
+        decoder.load("T00:00:00.000000001");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 1u);
+
+        decoder.load("T00:00:00.0000000005");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 1u);
+
+        decoder.load("T00:00:00.0000000004");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 0u);
+    }
+    { // Zero timezone
+        Decoder decoder{};
+
+        decoder.load("T00:00:00+00:00");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.time.zone.offset, 0);
+
+        decoder.load("T00:00:00-00:00");
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.time.zone.offset, 0);
+    }
+    { // Subsecond clear
+        Decoder decoder{};
+
+        decoder.load("[ T00:00:00.000000123, T00:00:00 ]");
+        decoder.step();
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 123u);
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.time.subsecond, 0u);
+    }
+    { // Invalid hour
+        ASSERT_TRUE(fails("T60:00:00Z"));
+        ASSERT_TRUE(fails("T0X:00:00Z"));
+        ASSERT_TRUE(fails("T0:00:00Z"));
+        ASSERT_TRUE(fails("T000:00:00Z"));
+    }
+    { // Invalid minute
+        ASSERT_TRUE(fails("T00:60:00Z"));
+        ASSERT_TRUE(fails("T00:0X:00Z"));
+        ASSERT_TRUE(fails("T00:0:00Z"));
+        ASSERT_TRUE(fails("T00:000:00Z"));
+    }
+    { // Invalid second
+        ASSERT_TRUE(fails("T00:00:60Z"));
+        ASSERT_TRUE(fails("T00:00:0XZ"));
+        ASSERT_TRUE(fails("T00:00:0Z"));
+        ASSERT_TRUE(fails("T00:00:000Z"));
+    }
+    { // Invalid subseconds
+        ASSERT_TRUE(fails("T00:00:00.Z"));
+        ASSERT_TRUE(fails("T00:00:00..Z"));
+        ASSERT_TRUE(fails("T00:00:00.00XZ"));
+        ASSERT_TRUE(fails("T00:00:00,0Z"));
+    }
+    { // Invalid timezone
+        ASSERT_TRUE(fails("T00:00:00Y"));
+        ASSERT_TRUE(fails("T00:00:00z"));
+        ASSERT_TRUE(fails("T00:00:0000"));
+        ASSERT_TRUE(fails("T00:00:00+1"));
+        ASSERT_TRUE(fails("T00:00:00+11"));
+        ASSERT_TRUE(fails("T00:00:00+111"));
+        ASSERT_TRUE(fails("T00:00:00+11111"));
+        ASSERT_TRUE(fails("T00:00:00+0X:00"));
+        ASSERT_TRUE(fails("T00:00:00+00:0X"));
+        ASSERT_TRUE(fails("T00:00:00+0:00"));
+        ASSERT_TRUE(fails("T00:00:00+00:0"));
+        ASSERT_TRUE(fails("T00:00:00+000:00"));
+        ASSERT_TRUE(fails("T00:00:00+00:000"));
+        ASSERT_TRUE(fails("T00:00:00+00-00"));
+    }
+    { // Invalid misc
+        ASSERT_TRUE(fails("00:00:00Z"));
+        ASSERT_TRUE(fails("t00:00:00Z"));
+        ASSERT_TRUE(fails("T00-00-00Z"));
+        ASSERT_TRUE(fails("T0000:00Z"));
+        ASSERT_TRUE(fails("T00:0000Z"));
+        ASSERT_TRUE(fails("T000000Z"));
+    }
+}
+
 TEST(decode, datetime)
 {
     { // Epoch
-        const Datetime tp{};
         Decoder decoder{};
 
         decoder.load("D1969-12-31T16:00:00-08:00");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{});
 
         decoder.load("D1970-01-01T00:00:00Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{});
 
         decoder.load("D1969-12-31T16:00:00");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{});
     }
     { // Positive timestamp
-        const Datetime tp{std::chrono::seconds{1676337198} + std::chrono::microseconds{123456}};
+        const Timepoint tp{std::chrono::seconds{1676337198} + std::chrono::microseconds{123456}};
         Decoder decoder{};
 
         decoder.load("D2023-02-13T17:13:18.123456-08:00");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.date.year, 2023u);
+        ASSERT_EQ(decoder.date.month, 2u);
+        ASSERT_EQ(decoder.date.day, 13u);
+        ASSERT_EQ(decoder.time.hour, 17u);
+        ASSERT_EQ(decoder.time.minute, 13u);
+        ASSERT_EQ(decoder.time.second, 18u);
+        ASSERT_EQ(decoder.time.subsecond, 123456000u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.time.zone.offset, -480);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
 
-        decoder.load("D2023-02-13T17:13:18.123456-08:00");
+        decoder.load("D2023-02-14T01:13:18.123456Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.date.year, 2023u);
+        ASSERT_EQ(decoder.date.month, 2u);
+        ASSERT_EQ(decoder.date.day, 14u);
+        ASSERT_EQ(decoder.time.hour, 1u);
+        ASSERT_EQ(decoder.time.minute, 13u);
+        ASSERT_EQ(decoder.time.second, 18u);
+        ASSERT_EQ(decoder.time.subsecond, 123456000u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::utc);
+        ASSERT_EQ(decoder.time.zone.offset, 0);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
 
-        decoder.load("D2023-02-13T17:13:18.123456-08:00");
+        decoder.load("D2023-02-13T17:13:18.123456");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.date.year, 2023u);
+        ASSERT_EQ(decoder.date.month, 2u);
+        ASSERT_EQ(decoder.date.day, 13u);
+        ASSERT_EQ(decoder.time.hour, 17u);
+        ASSERT_EQ(decoder.time.minute, 13u);
+        ASSERT_EQ(decoder.time.second, 18u);
+        ASSERT_EQ(decoder.time.subsecond, 123456000u);
+        ASSERT_EQ(decoder.time.zone.format, qcon::localTime);
+        ASSERT_EQ(decoder.time.zone.offset, 0);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
     }
     { // Negative timestamp
-        const Datetime tp{std::chrono::seconds{-777777777} + std::chrono::microseconds{142536}};
+        const Timepoint tp{std::chrono::seconds{-777777777} + std::chrono::microseconds{142536}};
         Decoder decoder{};
 
         decoder.load("D1945-05-09T15:37:03.142536-07:00");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
 
         decoder.load("D1945-05-09T22:37:03.142536Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
 
         decoder.load("D1945-05-09T15:37:03.142536");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
     }
     { // Future timestamp
-        const Datetime tp{std::chrono::seconds{253402300799}};
+        const Timepoint tp{std::chrono::seconds{253402300799}};
         Decoder decoder{"D9999-12-31T23:59:59Z"};
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
     }
     { // Past timestamp
-        const Datetime tp{std::chrono::seconds{-62167219200}};
+        const Timepoint tp{std::chrono::seconds{-62167219200}};
         Decoder decoder{"D0000-01-01T00:00:00Z"};
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
     }
-    { // Fractional seconds
+    { // Subseconds
         static_assert(std::chrono::system_clock::duration::period::den == 10'000'000);
 
         Decoder decoder{};
 
         decoder.load("D1970-01-01T00:00:00.1Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::system_clock::duration{1'000'000}});
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{1'000'000}});
 
         decoder.load("D1970-01-01T00:00:00.01Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::system_clock::duration{100'000}});
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{100'000}});
 
         decoder.load("D1970-01-01T00:00:00.001Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::system_clock::duration{10'000}});
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{10'000}});
 
         decoder.load("D1970-01-01T00:00:00.0001Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::system_clock::duration{1'000}});
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{1'000}});
 
         decoder.load("D1970-01-01T00:00:00.00001Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::system_clock::duration{100}});
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{100}});
 
         decoder.load("D1970-01-01T00:00:00.000001Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::system_clock::duration{10}});
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{10}});
 
         decoder.load("D1970-01-01T00:00:00.0000001Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::system_clock::duration{1}});
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{1}});
 
-        decoder.load("D1970-01-01T00:00:00.00000005Z");
+        decoder.load("D1970-01-01T00:00:00.00000006Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::system_clock::duration{1}});
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{1}});
 
         decoder.load("D1970-01-01T00:00:00.00000004Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{});
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{});
     }
     { // Zero timezone
-        const Datetime tp{};
         Decoder decoder{};
 
         decoder.load("D1970-01-01T00:00:00+00:00");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{});
 
         decoder.load("D1970-01-01T00:00:00-00:00");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, tp);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{});
     }
     { // Timezone minutes
         Decoder decoder{};
 
         decoder.load("D1970-01-01T00:00:00+12:34");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::hours{-12} + std::chrono::minutes{-34}});
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::hours{-12} + std::chrono::minutes{-34}});
 
         decoder.load("D1970-01-01T00:00:00-12:34");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::hours{12} + std::chrono::minutes{34}});
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::hours{12} + std::chrono::minutes{34}});
     }
-    { // Invalid year
-        ASSERT_TRUE(fails("D-1970-01-01T00:00:00Z"));
-        ASSERT_TRUE(fails("D197X-01-01T00:00:00Z"));
-        ASSERT_TRUE(fails("D19700-01-01T00:00:00Z"));
-        ASSERT_TRUE(fails("D197-01-01T00:00:00Z"));
-    }
-    { // Invalid month
-        ASSERT_TRUE(fails("D1970-00-01T00:00:00Z"));
-        ASSERT_TRUE(fails("D1970-13-01T00:00:00Z"));
-        ASSERT_TRUE(fails("D1970-1X-01T00:00:00Z"));
-        ASSERT_TRUE(fails("D1970-001-01T00:00:00Z"));
-        ASSERT_TRUE(fails("D1970-1-01T00:00:00Z"));
-    }
-    { // Invalid day
-        ASSERT_TRUE(fails("D1970-01-00T00:00:00Z"));
-        ASSERT_TRUE(fails("D1970-01-32T00:00:00Z"));
-        ASSERT_TRUE(fails("D1970-01-0XT00:00:00Z"));
-        ASSERT_TRUE(fails("D1970-01-001T00:00:00Z"));
-        ASSERT_TRUE(fails("D1970-01-1T00:00:00Z"));
-    }
-    { // Invalid hour
-        ASSERT_TRUE(fails("D1970-01-01T60:00:00Z"));
-        ASSERT_TRUE(fails("D1970-01-01T0X:00:00Z"));
-        ASSERT_TRUE(fails("D1970-01-01T0:00:00Z"));
-        ASSERT_TRUE(fails("D1970-01-01T000:00:00Z"));
-    }
-    { // Invalid minute
-        ASSERT_TRUE(fails("D1970-01-01T00:60:00Z"));
-        ASSERT_TRUE(fails("D1970-01-01T00:0X:00Z"));
-        ASSERT_TRUE(fails("D1970-01-01T00:0:00Z"));
-        ASSERT_TRUE(fails("D1970-01-01T00:000:00Z"));
-    }
-    { // Invalid second
-        ASSERT_TRUE(fails("D1970-01-01T00:00:60Z"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:0XZ"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:0Z"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:000Z"));
-    }
-    { // Invalid fractional
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00.Z"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00..Z"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00.00XZ"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00,0Z"));
-    }
-    { // Invalid timezone
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00Y"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00z"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:0000"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+1"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+11"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+111"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+11111"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+0X:00"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+00:0X"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+0:00"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+00:0"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+000:00"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+00:000"));
-        ASSERT_TRUE(fails("D1970-01-01T00:00:00+00-00"));
-    }
-    { // Invalid misc
-        ASSERT_TRUE(fails("1970-01-01T00:00:00Z"));
-        ASSERT_TRUE(fails("d1970-01-01T00:00:00Z"));
+    { // Invalid combo
         ASSERT_TRUE(fails("D1970-01-0100:00:00Z"));
-        ASSERT_TRUE(fails("D1970-01-01t00:00:00Z"));
-        ASSERT_TRUE(fails("D1970/01/01T00:00:00Z"));
-        ASSERT_TRUE(fails("D1970-01-01T00-00-00Z"));
-        ASSERT_TRUE(fails("D197001-01T00:00:00Z"));
-        ASSERT_TRUE(fails("D1970-0101T00:00:00Z"));
-        ASSERT_TRUE(fails("D19700101T00:00:00Z"));
-        ASSERT_TRUE(fails("D1970-01-01T0000:00Z"));
-        ASSERT_TRUE(fails("D1970-01-01T00:0000Z"));
-        ASSERT_TRUE(fails("D1970-01-01T000000Z"));
         ASSERT_TRUE(fails("D19700101T000000Z"));
     }
 }
@@ -1454,7 +1759,8 @@ R"(
 # Protected information, do not propagate!
 {
     "Name": "Salt's Crust",
-    "Founded": D1964-03-17T13:59:11Z,
+    "Founded": D1964-03-17,
+    "Opens": T08:30:00,
     # Not necessarily up to date
     "Employees": [
         { "Name": "Ol' Joe Fisher", "Title": "Fisherman", "Age": 69 },
@@ -1494,16 +1800,24 @@ I do not like them anywhere\n\
 I do not like green eggs and ham\n\
 I do not like them Sam I am\n\
 ",
-    "Magic Numbers": [0x309,0o1411,0b1100001001] # What could they mean?!
+    "Magic Numbers": [0x309,0o1411,0b1100001001], # What could they mean?!
+    "Last Updated": D2003-06-28T13:59:11.067Z
 })"sv};
     Decoder decoder{qcon};
     ASSERT_EQ(decoder.step(), DecodeState::object);
         ASSERT_EQ(decoder.step(), DecodeState::string);
         ASSERT_EQ(decoder.key, "Name"sv);
         ASSERT_EQ(decoder.string, "Salt's Crust"sv);
-        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.step(), DecodeState::date);
         ASSERT_EQ(decoder.key, "Founded"sv);
-        ASSERT_EQ(decoder.datetime, Datetime{std::chrono::seconds{-182772049}});
+        ASSERT_EQ(decoder.date.year, 1964u);
+        ASSERT_EQ(decoder.date.month, 3u);
+        ASSERT_EQ(decoder.date.day, 17u);
+        ASSERT_EQ(decoder.step(), DecodeState::time);
+        ASSERT_EQ(decoder.key, "Opens"sv);
+        ASSERT_EQ(decoder.time.hour, 8u);
+        ASSERT_EQ(decoder.time.minute, 30u);
+        ASSERT_EQ(decoder.time.second, 0u);
         ASSERT_EQ(decoder.step(), DecodeState::array);
         ASSERT_EQ(decoder.key, "Employees"sv);
             ASSERT_EQ(decoder.step(), DecodeState::object);
@@ -1623,6 +1937,9 @@ I do not like them Sam I am
             ASSERT_EQ(decoder.step(), DecodeState::integer);
             ASSERT_EQ(decoder.integer, 777);
         ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.key, "Last Updated"sv);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::seconds{1056808751} + std::chrono::milliseconds{67}});
     ASSERT_EQ(decoder.step(), DecodeState::end);
     ASSERT_EQ(decoder.step(), DecodeState::done);
 }

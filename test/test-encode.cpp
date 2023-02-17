@@ -19,6 +19,9 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 using qcon::Encoder;
+using qcon::Timepoint;
+using qcon::Date;
+using qcon::Time;
 using qcon::Datetime;
 using enum qcon::Container;
 using enum qcon::Density;
@@ -567,19 +570,208 @@ TEST(encode, null)
     ASSERT_EQ(R"(null)"s, encoder.finish());
 }
 
+TEST(encode, date)
+{
+    { // Default
+        Encoder encoder{};
+        encoder << Date{};
+        ASSERT_EQ("D1970-01-01", encoder.finish());
+    }
+    { // General
+        Encoder encoder{};
+        encoder << Date{.year = 2023u, .month = 2u, .day = 17u};
+        ASSERT_EQ("D2023-02-17", encoder.finish());
+    }
+    { // Min
+        Encoder encoder{};
+        encoder << Date{.year = 0u, .month = 1u, .day = 1u};
+        ASSERT_EQ("D0000-01-01", encoder.finish());
+    }
+    { // Max
+        Encoder encoder{};
+        encoder << Date{.year = 9999u, .month = 12u, .day = 31u};
+        ASSERT_EQ("D9999-12-31", encoder.finish());
+    }
+    { // Invalid
+        Encoder encoder{};
+        encoder << Date{.year = 10000u, .month = 1u, .day = 1u};
+        ASSERT_FALSE(encoder.status());
+
+        encoder.reset();
+        encoder << Date{.year = 0u, .month = 0u, .day = 1u};
+        ASSERT_FALSE(encoder.status());
+
+        encoder.reset();
+        encoder << Date{.year = 0u, .month = 13u, .day = 1u};
+        ASSERT_FALSE(encoder.status());
+
+        encoder.reset();
+        encoder << Date{.year = 0u, .month = 1u, .day = 0u};
+        ASSERT_FALSE(encoder.status());
+
+        encoder.reset();
+        encoder << Date{.year = 0u, .month = 1u, .day = 32u};
+        ASSERT_FALSE(encoder.status());
+    }
+}
+
+// TODO: Capitalize test classes and reorder asserts
+TEST(encoder, time)
+{
+    { // Default
+        Encoder encoder{};
+        encoder << Time{};
+        ASSERT_EQ(encoder.finish(), "T00:00:00");
+    }
+    { // General
+        Encoder encoder{};
+        encoder << Time{.hour = 12u, .minute = 34u, .second = 56u};
+        ASSERT_EQ(encoder.finish(), "T12:34:56");
+    }
+    { // Min
+        Encoder encoder{};
+        encoder << Time{.hour = 0u, .minute = 0u, .second = 0u, .subsecond = 0u};
+        ASSERT_EQ(encoder.finish(), "T00:00:00");
+    }
+    { // Max
+        Encoder encoder{};
+        encoder << Time{.hour = 23u, .minute = 59u, .second = 59u, .subsecond = 999'999'999u};
+        ASSERT_EQ(encoder.finish(), "T23:59:59.999999999");
+    }
+    { // Too large
+        Encoder encoder{};
+        encoder << Time{.hour = 24u};
+        ASSERT_FALSE(encoder.status());
+
+        encoder.reset();
+        encoder << Time{.minute = 60u};
+        ASSERT_FALSE(encoder.status());
+
+        encoder.reset();
+        encoder << Time{.second = 60u};
+        ASSERT_FALSE(encoder.status());
+
+        encoder.reset();
+        encoder << Time{.subsecond = 1'000'000'000u};
+        ASSERT_FALSE(encoder.status());
+    }
+    { // Subsecond digits
+        Encoder encoder{};
+        encoder << Time{.subsecond = 1u};
+        ASSERT_EQ(encoder.finish(), "T00:00:00.000000001");
+
+        encoder.reset();
+        encoder << Time{.subsecond = 10u};
+        ASSERT_EQ(encoder.finish(), "T00:00:00.00000001");
+
+        encoder.reset();
+        encoder << Time{.subsecond = 100u};
+        ASSERT_EQ(encoder.finish(), "T00:00:00.0000001");
+
+        encoder.reset();
+        encoder << Time{.subsecond = 1000u};
+        ASSERT_EQ(encoder.finish(), "T00:00:00.000001");
+
+        encoder.reset();
+        encoder << Time{.subsecond = 10000u};
+        ASSERT_EQ(encoder.finish(), "T00:00:00.00001");
+
+        encoder.reset();
+        encoder << Time{.subsecond = 100000u};
+        ASSERT_EQ(encoder.finish(), "T00:00:00.0001");
+
+        encoder.reset();
+        encoder << Time{.subsecond = 1000000u};
+        ASSERT_EQ(encoder.finish(), "T00:00:00.001");
+
+        encoder.reset();
+        encoder << Time{.subsecond = 10000000u};
+        ASSERT_EQ(encoder.finish(), "T00:00:00.01");
+
+        encoder.reset();
+        encoder << Time{.subsecond = 100000000u};
+        ASSERT_EQ(encoder.finish(), "T00:00:00.1");
+    }
+    { // UTC timezone format
+        Encoder encoder{};
+        encoder << Time{.zone = {.format = utc}};
+        ASSERT_EQ(encoder.finish(), "T00:00:00Z");
+    }
+    { // UTC offset timezone format
+        Encoder encoder{};
+        encoder << Time{.zone = {.format = utcOffset}};
+        ASSERT_EQ(encoder.finish(), "T00:00:00+00:00");
+
+        encoder.reset();
+        encoder << Time{.zone = {.format = utcOffset, .offset = 12 * 60 + 34}};
+        ASSERT_EQ(encoder.finish(), "T00:00:00+12:34");
+
+        encoder.reset();
+        encoder << Time{.zone = {.format = utcOffset, .offset = -(12 * 60 + 34)}};
+        ASSERT_EQ(encoder.finish(), "T00:00:00-12:34");
+
+        encoder.reset();
+        encoder << Time{.zone = {.format = utcOffset, .offset = 100 * 60 - 1}};
+        ASSERT_EQ(encoder.finish(), "T00:00:00+99:59");
+
+        encoder.reset();
+        encoder << Time{.zone = {.format = utcOffset, .offset = 100 * 60}};
+        ASSERT_FALSE(encoder.status());
+
+        encoder.reset();
+        encoder << Time{.zone = {.format = utcOffset, .offset = -(100 * 60 - 1)}};
+        ASSERT_EQ(encoder.finish(), "T00:00:00-99:59");
+
+        encoder.reset();
+        encoder << Time{.zone = {.format = utcOffset, .offset = -(100 * 60)}};
+        ASSERT_FALSE(encoder.status());
+    }
+}
+
 TEST(encode, datetime)
+{
+    { // General
+        Encoder encoder{};
+        Datetime datetime{.date = {.year = 2023, .month = 2, .day = 17}, .time = {.hour = 12, .minute = 34, .second = 56, .subsecond = 123456789, .zone = {.format = localTime, .offset = 12 * 60 + 34}}};
+        encoder << datetime;
+        ASSERT_EQ("D2023-02-17T12:34:56.123456789", encoder.finish());
+        datetime.time.zone.format = utc;
+        encoder << datetime;
+        ASSERT_EQ("D2023-02-17T12:34:56.123456789Z", encoder.finish());
+        datetime.time.zone.format = utcOffset;
+        encoder << datetime;
+        ASSERT_EQ("D2023-02-17T12:34:56.123456789+12:34", encoder.finish());
+    }
+    { // Default
+        Encoder encoder{};
+        const Datetime datetime{};
+        encoder << datetime;
+        ASSERT_EQ("D1970-01-01T00:00:00", encoder.finish());
+    }
+    { // Either is invalid
+        Encoder encoder{};
+        encoder << Datetime{.date = {.year = 10000}};
+        ASSERT_FALSE(encoder.status());
+
+        encoder.reset();
+        encoder << Datetime{.time = {.hour = 24}};
+        ASSERT_FALSE(encoder.status());
+    }
+}
+
+TEST(encode, timepoint)
 {
     { // Epoch
         Encoder encoder{};
-        encoder << utcOffset << Datetime{};
+        encoder << utcOffset << Timepoint{};
         ASSERT_EQ("D1969-12-31T16:00:00-08:00", encoder.finish());
-        encoder << utc << Datetime{};
+        encoder << utc << Timepoint{};
         ASSERT_EQ("D1970-01-01T00:00:00Z", encoder.finish());
-        encoder << localTime << Datetime{};
+        encoder << localTime << Timepoint{};
         ASSERT_EQ("D1969-12-31T16:00:00", encoder.finish());
     }
     { // Positive timestamp
-        const Datetime tp{std::chrono::seconds{1676337198} + std::chrono::microseconds{123456}};
+        const Timepoint tp{std::chrono::seconds{1676337198} + std::chrono::microseconds{123456}};
         Encoder encoder{};
         encoder << utcOffset << tp;
         ASSERT_EQ("D2023-02-13T17:13:18.123456-08:00", encoder.finish());
@@ -589,7 +781,7 @@ TEST(encode, datetime)
         ASSERT_EQ("D2023-02-13T17:13:18.123456", encoder.finish());
     }
     { // Negative timestamp
-        const Datetime tp{std::chrono::seconds{-777777777} + std::chrono::microseconds{142536}};
+        const Timepoint tp{std::chrono::seconds{-777777777} + std::chrono::microseconds{142536}};
         Encoder encoder{};
         encoder << utcOffset << tp;
         ASSERT_EQ("D1945-05-09T15:37:03.142536-07:00", encoder.finish());
@@ -599,25 +791,25 @@ TEST(encode, datetime)
         ASSERT_EQ("D1945-05-09T15:37:03.142536", encoder.finish());
     }
     { // Future timestamp
-        const Datetime tp{std::chrono::seconds{253402300799}};
+        const Timepoint tp{std::chrono::seconds{253402300799}};
         Encoder encoder{};
         encoder << utc << tp;
         ASSERT_EQ("D9999-12-31T23:59:59Z", encoder.finish());
     }
     { // Past timestamp
-        const Datetime tp{std::chrono::seconds{-62167219200}};
+        const Timepoint tp{std::chrono::seconds{-62167219200}};
         Encoder encoder{};
         encoder << utc << tp;
         ASSERT_EQ("D0000-01-01T00:00:00Z", encoder.finish());
     }
     { // Too far in the future
         Encoder encoder{};
-        encoder << utc << Datetime{std::chrono::seconds{253402300800}};
+        encoder << utc << Timepoint{std::chrono::seconds{253402300800}};
         ASSERT_FALSE(encoder.status());
     }
     { // Too far in the past
         Encoder encoder{};
-        encoder << utc << Datetime{std::chrono::seconds{-62167219201}};
+        encoder << utc << Timepoint{std::chrono::seconds{-62167219201}};
         ASSERT_FALSE(encoder.status());
     }
     { // utcOffset and local match
@@ -628,22 +820,22 @@ TEST(encode, datetime)
         const std::string s2{*encoder.finish()};
         ASSERT_EQ(s1.substr(0u, 20u), s2.substr(0u, 20u));
     }
-    { // Fractional seconds
+    { // Subseconds
         static_assert(std::chrono::system_clock::duration::period::den == 10'000'000);
         Encoder encoder{};
-        encoder << utc << Datetime{std::chrono::system_clock::duration{1'000'000}};
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{1'000'000}};
         ASSERT_EQ("D1970-01-01T00:00:00.1Z", encoder.finish());
-        encoder << utc << Datetime{std::chrono::system_clock::duration{100'000}};
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{100'000}};
         ASSERT_EQ("D1970-01-01T00:00:00.01Z", encoder.finish());
-        encoder << utc << Datetime{std::chrono::system_clock::duration{10'000}};
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{10'000}};
         ASSERT_EQ("D1970-01-01T00:00:00.001Z", encoder.finish());
-        encoder << utc << Datetime{std::chrono::system_clock::duration{1'000}};
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{1'000}};
         ASSERT_EQ("D1970-01-01T00:00:00.0001Z", encoder.finish());
-        encoder << utc << Datetime{std::chrono::system_clock::duration{100}};
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{100}};
         ASSERT_EQ("D1970-01-01T00:00:00.00001Z", encoder.finish());
-        encoder << utc << Datetime{std::chrono::system_clock::duration{10}};
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{10}};
         ASSERT_EQ("D1970-01-01T00:00:00.000001Z", encoder.finish());
-        encoder << utc << Datetime{std::chrono::system_clock::duration{1}};
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{1}};
         ASSERT_EQ("D1970-01-01T00:00:00.0000001Z", encoder.finish());
     }
 }
@@ -836,8 +1028,23 @@ TEST(encode, flagTokens)
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 
+        // Date after density
+        encoder << nospace << Date{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Time after density
+        encoder << nospace << Time{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
         // Datetime after density
-        encoder << utc << nospace << Datetime{};
+        encoder << nospace << Datetime{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Timestamp after density
+        encoder << nospace << Timepoint{};
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 
@@ -888,6 +1095,26 @@ TEST(encode, flagTokens)
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 
+        // Date after base
+        encoder << hex << Date{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Time after base
+        encoder << hex << Time{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Datetime after base
+        encoder << hex << Datetime{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Timestamp after base
+        encoder << hex << Timepoint{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
         // Density after base
         encoder << hex << nospace;
         ASSERT_FALSE(encoder.status());
@@ -901,10 +1128,8 @@ TEST(encode, flagTokens)
     { // Time zone format
         Encoder encoder{};
 
-        const Datetime tp{};
-
         // Mutliple time zone formats
-        encoder << localTime << utc << tp;
+        encoder << localTime << utc << Timepoint{};
         ASSERT_EQ("D1970-01-01T00:00:00Z", encoder.finish());
 
         // Object after time zone format
@@ -932,8 +1157,23 @@ TEST(encode, flagTokens)
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 
-        // Null after time zone formatse
+        // Null after time zone format
         encoder << utc << nullptr;
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Date after time zone format
+        encoder << utc << Date{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Time after time zone format
+        encoder << utc << Time{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Datetime after time zone format
+        encoder << utc << Datetime{};
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 
@@ -942,7 +1182,7 @@ TEST(encode, flagTokens)
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 
-        // bASE after time zone format
+        // Base after time zone format
         encoder << utc << hex;
         ASSERT_FALSE(encoder.status());
         encoder.reset();
@@ -965,7 +1205,8 @@ TEST(encode, general)
     Encoder encoder{};
     encoder << object;
         encoder << "Name"sv << "Salt's Crust"sv;
-        encoder << "Founded"sv << utc << Datetime{std::chrono::seconds{-182772049}};
+        encoder << "Founded"sv << Date{.year = 1964u, .month = 3u, .day = 17u};
+        encoder << "Opens"sv << Time{.hour = 8u, .minute = 30u};
         encoder << "Employees"sv << array;
             encoder << uniline << object << "Name"sv << "Ol' Joe Fisher"sv << "Title"sv << "Fisherman"sv << "Age"sv << 69 << end;
             encoder << uniline << object << "Name"sv << "Mark Rower"sv << "Title"sv << "Cook"sv << "Age"sv << 41 << end;
@@ -1004,11 +1245,13 @@ I do not like green eggs and ham
 I do not like them Sam I am
 )";
         encoder << "Magic Numbers"sv << nospace << array << hex << 777 << octal << 777u << binary << 777 << end;
+        encoder << "Last Updated"sv << utc << Timepoint{std::chrono::seconds{1056808751} + std::chrono::milliseconds{67}};
     encoder << end;
 
     ASSERT_EQ(R"({
     "Name": "Salt's Crust",
-    "Founded": D1964-03-17T13:59:11Z,
+    "Founded": D1964-03-17,
+    "Opens": T08:30:00,
     "Employees": [
         { "Name": "Ol' Joe Fisher", "Title": "Fisherman", "Age": 69 },
         { "Name": "Mark Rower", "Title": "Cook", "Age": 41 },
@@ -1037,6 +1280,7 @@ I do not like them Sam I am
     "Profit Margin": null,
     "Ha\x03r Name": "M\0\0n",
     "Green Eggs and Ham": "I do not like them in a box\nI do not like them with a fox\nI do not like them in a house\nI do not like them with a mouse\nI do not like them here or there\nI do not like them anywhere\nI do not like green eggs and ham\nI do not like them Sam I am\n",
-    "Magic Numbers": [0x309,0o1411,0b1100001001]
+    "Magic Numbers": [0x309,0o1411,0b1100001001],
+    "Last Updated": D2003-06-28T13:59:11.067Z
 })"s, encoder.finish());
 }

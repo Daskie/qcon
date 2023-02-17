@@ -9,6 +9,7 @@
 
 #include <cctype>
 
+#include <array>
 #include <bit>
 #include <charconv>
 #include <chrono>
@@ -20,27 +21,10 @@
 #include <utility>
 #include <vector>
 
+#include <qcon-common.hpp>
+
 namespace qcon
 {
-    using s8 = int8_t;
-    using s16 = int16_t;
-    using s32 = int32_t;
-    using s64 = int64_t;
-    using u8 = uint8_t;
-    using u16 = uint16_t;
-    using u32 = uint32_t;
-    using u64 = uint64_t;
-
-    using unat = size_t;
-
-    using namespace std::string_literals;
-    using namespace std::string_view_literals;
-
-    using Datetime = std::chrono::system_clock::time_point;
-
-    ///
-    /// Stream to the encoder to specify the density of the next container
-    ///
     enum class Density
     {
         multiline, /// Elements are put on new lines
@@ -49,9 +33,6 @@ namespace qcon
     };
     using enum Density;
 
-    ///
-    /// Simple enum representing a QCON container type
-    ///
     enum class Container
     {
         end,
@@ -60,9 +41,6 @@ namespace qcon
     };
     using enum Container;
 
-    ///
-    /// Stream to the encoder to specify the base of the next integer
-    ///
     enum class Base
     {
         decimal,
@@ -71,17 +49,6 @@ namespace qcon
         hex
     };
     using enum Base;
-
-    ///
-    /// Stream to the encoder to specify a timezone format
-    ///
-    enum class TimezoneFormat
-    {
-        utcOffset, /// The next datetime will be given an offset specifier, e.g. `+03:00`
-        utc,       /// The next datetime will be given the `Z` specifier
-        localTime, /// The next datetime will be given no timezone specifier
-    };
-    using enum TimezoneFormat;
 
     ///
     /// Instantiate this class to do the encoding
@@ -172,7 +139,10 @@ namespace qcon
         Encoder & operator<<(float v);
         Encoder & operator<<(bool v);
         Encoder & operator<<(std::nullptr_t);
-        Encoder & operator<<(Datetime v);
+        Encoder & operator<<(const Date & v);
+        Encoder & operator<<(const Time & v);
+        Encoder & operator<<(const Datetime & v);
+        Encoder & operator<<(Timepoint v);
 
         ///
         /// @return whether the encoding has been thusfar successful
@@ -200,7 +170,7 @@ namespace qcon
             key,
             container,
             integer,
-            datetime,
+            timepoint,
             nothing,
             error
         };
@@ -244,8 +214,9 @@ namespace qcon
         [[nodiscard]] bool _encode(double v);
         [[nodiscard]] bool _encode(bool v);
         [[nodiscard]] bool _encode(std::nullptr_t);
-        void _encodeDatetime(u32 year, u32 month, u32 day, u32 seconds, u32 nanoseconds, s32 zoneOffsetMinutes);
-        [[nodiscard]] bool _encode(Datetime v);
+        [[nodiscard]] bool _encode(const Date & v);
+        [[nodiscard]] bool _encode(const Time & v);
+        [[nodiscard]] bool _encode(const Datetime & v);
     };
 }
 
@@ -347,16 +318,16 @@ namespace qcon
         return *this;
     }
 
-    inline Encoder & Encoder::operator<<(const TimezoneFormat timezone)
+    inline Encoder & Encoder::operator<<(const TimezoneFormat timezoneFormat)
     {
-        if (_expect != _Expect::any && _expect != _Expect::datetime)
+        if (_expect != _Expect::any && _expect != _Expect::timepoint)
         {
             _expect = _Expect::error;
             return *this;
         }
 
-        _nextTimezoneFormat = timezone;
-        _expect = _Expect::datetime;
+        _nextTimezoneFormat = timezoneFormat;
+        _expect = _Expect::timepoint;
         return *this;
     }
 
@@ -505,12 +476,63 @@ namespace qcon
         return *this;
     }
 
-    inline Encoder & Encoder::operator<<(const Datetime v)
+    inline Encoder & Encoder::operator<<(const Date & v)
     {
-        if (_expect == _Expect::any || _expect == _Expect::datetime)
+        if (_expect == _Expect::any)
+        {
+            _val(v);
+        }
+        else
+        {
+            _expect = _Expect::error;
+        }
+
+        return *this;
+    }
+
+    inline Encoder & Encoder::operator<<(const Time & v)
+    {
+        if (_expect == _Expect::any)
         {
             _val(v);
             _nextTimezoneFormat = utcOffset;
+        }
+        else
+        {
+            _expect = _Expect::error;
+        }
+
+        return *this;
+    }
+
+    inline Encoder & Encoder::operator<<(const Datetime & v)
+    {
+        if (_expect == _Expect::any)
+        {
+            _val(v);
+        }
+        else
+        {
+            _expect = _Expect::error;
+        }
+
+        return *this;
+    }
+
+    inline Encoder & Encoder::operator<<(const Timepoint v)
+    {
+        if (_expect == _Expect::any || _expect == _Expect::timepoint)
+        {
+            Datetime datetime;
+            if (datetime.fromTimepoint(v, _nextTimezoneFormat))
+            {
+                _val(datetime);
+                _nextTimezoneFormat = utcOffset;
+            }
+            else
+            {
+                _expect = _Expect::error;
+            }
         }
         else
         {
@@ -660,7 +682,7 @@ namespace qcon
 
     inline bool Encoder::_encode(const std::string_view v)
     {
-        static constexpr char hexChars[16u]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+        static constexpr std::array<char, 16u> hexChars{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
         _str += '"';
 
@@ -684,8 +706,8 @@ namespace qcon
                     case '\r': _str += R"(\r)"; break;
                     default:
                         _str += "\\x"sv;
-                        _str += hexChars[(u8(c) >> 4) & 0xF];
-                        _str += hexChars[u8(c) & 0xF];
+                        _str += hexChars[(u8(c) >> 4) & 0xFu];
+                        _str += hexChars[u8(c) & 0xFu];
                 }
             }
         }
@@ -722,7 +744,7 @@ namespace qcon
     inline void Encoder::_encodeBinary(u64 v)
     {
         // Digits reversed due to endianess
-        static constexpr u32 binaryTable[16u]{
+        static constexpr std::array<u32, 16u> binaryTable{
             '0000', '1000', '0100', '1100',
             '0010', '1010', '0110', '1110',
             '0001', '1001', '0101', '1101',
@@ -785,7 +807,7 @@ namespace qcon
     {
         // We're hand rolling this because `std::to_chars` doesn't support uppercase hex
         // Also, this is likely faster for our use case
-        static constexpr char hexTable[16u]{
+        static constexpr std::array<char, 16u> hexTable{
             '0', '1', '2', '3',
             '4', '5', '6', '7',
             '8', '9', 'A', 'B',
@@ -856,15 +878,18 @@ namespace qcon
         return true;
     }
 
-    inline void Encoder::_encodeDatetime(u32 year, const u32 month, const u32 day, u32 seconds, u32 nanoseconds, const s32 zoneOffsetMinutes)
+    inline bool Encoder::_encode(const Date & v)
     {
-        static thread_local char buffer[36u]{"DYYYY-MM-DDThh:mm:ss"/*fffffffff+hh:mm*/};
-
-        // Encode date
+        static thread_local char buffer[]{"DYYYY-MM-DD"};
 
         // `D` already in buffer
 
         // Encode year
+        if (v.year > 9999u)
+        {
+            return false;
+        }
+        unat year{v.year};
         buffer[4] = char('0' + year % 10u); year /= 10u;
         buffer[3] = char('0' + year % 10u); year /= 10u;
         buffer[2] = char('0' + year % 10u); year /= 10u;
@@ -873,51 +898,76 @@ namespace qcon
         // `-` already in buffer
 
         // Encode month
-        buffer[6] = char('0' + month / 10u);
-        buffer[7] = char('0' + month % 10u);
+        if (v.month == 0u || v.month > 12u)
+        {
+            return false;
+        }
+        buffer[6] = char('0' + v.month / 10u);
+        buffer[7] = char('0' + v.month % 10u);
 
         // `-` already in buffer
 
         // Encode day
-        buffer[ 9] = char('0' + day / 10u);
-        buffer[10] = char('0' + day % 10u);
+        if (v.day == 0u || v.day > 31u)
+        {
+            return false;
+        }
+        buffer[ 9] = char('0' + v.day / 10u);
+        buffer[10] = char('0' + v.day % 10u);
 
-        // Encode time
+        _str.append(buffer, 11u);
+        return true;
+    }
+
+    inline bool Encoder::_encode(const Time & v)
+    {
+        static thread_local char buffer[]{"Thh:mm:ss.fffffffff+hh:mm"};
 
         // `T` already in buffer
 
-        u32 minutes{seconds / 60u};
-        seconds %= 60u;
-
-        u32 hours{minutes / 60u};
-        minutes %= 60u;
-
         // Encode hours
-        buffer[12] = char('0' + hours / 10u);
-        buffer[13] = char('0' + hours % 10u);
+        if (v.hour > 23u)
+        {
+            return false;
+        }
+        buffer[1] = char('0' + v.hour / 10u);
+        buffer[2] = char('0' + v.hour % 10u);
 
         // `:` already in buffer
 
         // Encode minutes
-        buffer[15] = char('0' + minutes / 10u);
-        buffer[16] = char('0' + minutes % 10u);
+        if (v.minute > 59u)
+        {
+            return false;
+        }
+        buffer[4] = char('0' + v.minute / 10u);
+        buffer[5] = char('0' + v.minute % 10u);
 
         // `:` already in buffer
 
         // Encode seconds
-        buffer[18] = char('0' + seconds / 10u);
-        buffer[19] = char('0' + seconds % 10u);
+        if (v.second > 59u)
+        {
+            return false;
+        }
+        buffer[7] = char('0' + v.second / 10u);
+        buffer[8] = char('0' + v.second % 10u);
 
-        char * bufferEnd{buffer + 20};
+        char * bufferEnd{buffer + 9};
 
-        // Encode fractional seconds
-        if (nanoseconds)
+        // Encode subseconds
+        if (v.subsecond)
         {
             *bufferEnd = '.';
 
             // Temporarily point to the last element instead of one-past for simplicity
             bufferEnd += 9u;
 
+            unat nanoseconds{v.subsecond};
+            if (nanoseconds > 999'999'999u)
+            {
+                return false;
+            }
             for (int i{0}; i < 8; ++i)
             {
                 *bufferEnd = char('0' + nanoseconds % 10u);
@@ -925,6 +975,7 @@ namespace qcon
                 --bufferEnd;
             }
             *bufferEnd = char('0' + nanoseconds);
+
             bufferEnd += 8;
 
             // Drop trialing zeroes
@@ -935,35 +986,32 @@ namespace qcon
         }
 
         // Encode timezone
-        switch (_nextTimezoneFormat)
+        switch (v.zone.format)
         {
             case utcOffset:
             {
-                u32 absOffsetMinutes;
-
-                if (zoneOffsetMinutes >= 0)
+                unat offset;
+                if (v.zone.offset >= 0)
                 {
                     bufferEnd[0] = '+';
-                    absOffsetMinutes = u32(zoneOffsetMinutes);
+                    offset = unat(v.zone.offset);
                 }
                 else
                 {
                     bufferEnd[0] = '-';
-                    absOffsetMinutes = u32(-zoneOffsetMinutes);
+                    offset = unat(-v.zone.offset);
                 }
 
-                const u32 offsetHours{absOffsetMinutes / 60u};
-                const u32 offsetMinutes{absOffsetMinutes % 60u};
+                if (offset >= 100u * 60u)
+                {
+                    return false;
+                }
 
-                // Encode offset hours
-                bufferEnd[1] = char('0' + offsetHours / 10u);
-                bufferEnd[2] = char('0' + offsetHours % 10u);
-
+                bufferEnd[5] = char('0' + offset % 10u); offset /= 10u;
+                bufferEnd[4] = char('0' + offset % 6u); offset /= 6u;
                 bufferEnd[3] = ':';
-
-                // Encode offset minutes
-                bufferEnd[4] = char('0' + offsetMinutes / 10u);
-                bufferEnd[5] = char('0' + offsetMinutes % 10u);
+                bufferEnd[2] = char('0' + offset % 10u); offset /= 10;
+                bufferEnd[1] = char('0' + offset);
 
                 bufferEnd += 6;
                 break;
@@ -981,48 +1029,12 @@ namespace qcon
         }
 
         _str.append(buffer, bufferEnd);
+        return true;
     }
 
     // Utterly ignoring leap seconds with righteous conviction
-    inline bool Encoder::_encode(const Datetime v)
+    inline bool Encoder::_encode(const Datetime & v)
     {
-        std::chrono::system_clock::duration time{v.time_since_epoch()};
-        std::chrono::minutes timezoneOffset{};
-
-        // Determine timezone offset
-        if (_nextTimezoneFormat != utc)
-        {
-            const std::chrono::time_zone * const timeZone{std::chrono::current_zone()};
-            timezoneOffset = std::chrono::round<std::chrono::minutes>(timeZone->get_info(v).offset);
-
-            // Verify offset is no more than two hour and two minute digits worth
-            if (std::chrono::abs(timezoneOffset) >= std::chrono::minutes{100 * 60})
-            {
-                return false;
-            }
-
-            time += timezoneOffset;
-        }
-
-        // Extract days
-        const std::chrono::days days{std::chrono::floor<std::chrono::days>(time)};
-        time -= days;
-
-        // Determine YMD
-        const std::chrono::year_month_day ymd{std::chrono::sys_days{days}};
-
-        // Verify year is four digits
-        if (ymd.year() < std::chrono::year{0} || ymd.year() > std::chrono::year{9999})
-        {
-            return false;
-        }
-
-        // Split intra-day time into seconds and nanoseconds
-        const std::chrono::seconds seconds{std::chrono::duration_cast<std::chrono::seconds>(time)};
-        const std::chrono::nanoseconds nanoseconds{time - seconds};
-
-        _encodeDatetime(u32(s32(ymd.year())), u32(ymd.month()), u32(ymd.day()), u32(seconds.count()), u32(nanoseconds.count()), timezoneOffset.count());
-
-        return true;
+        return _encode(v.date) && _encode(v.time);
     }
 }

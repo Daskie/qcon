@@ -21,24 +21,10 @@
 #include <system_error>
 #include <utility>
 
+#include <qcon-common.hpp>
+
 namespace qcon
 {
-    using s8 = int8_t;
-    using s16 = int16_t;
-    using s32 = int32_t;
-    using s64 = int64_t;
-    using u8 = uint8_t;
-    using u16 = uint16_t;
-    using u32 = uint32_t;
-    using u64 = uint64_t;
-
-    using unat = size_t;
-
-    using namespace std::string_literals;
-    using namespace std::string_view_literals;
-
-    using Datetime = std::chrono::system_clock::time_point;
-
     enum class DecodeState
     {
         error,
@@ -50,6 +36,8 @@ namespace qcon
         floater,
         boolean,
         null,
+        date,
+        time,
         datetime,
         done
     };
@@ -65,6 +53,8 @@ namespace qcon
         bool boolean{};
         bool positive{};
         Datetime datetime{};
+        Date & date{datetime.date};
+        Time & time{datetime.time};
         std::string errorMessage{};
 
         Decoder() = default;
@@ -73,6 +63,10 @@ namespace qcon
         void load(std::string_view qcon);
 
         DecodeState step();
+
+        DecodeState state() const { return _state; }
+
+        const char * position() const { return _pos; }
 
       private:
 
@@ -121,7 +115,11 @@ namespace qcon
 
         [[nodiscard]] bool _consumeDecimalDigits(u64 & v, unat digits);
 
-        [[nodiscard]] bool _consumeDatetime();
+        [[nodiscard]] bool _consumeDate();
+
+        [[nodiscard]] bool _consumeTime();
+
+        [[nodiscard]] bool _consumeTimezone();
     };
 }
 
@@ -408,7 +406,25 @@ namespace qcon
             case 'D':
             {
                 ++_pos;
-                return _state = _consumeDatetime() ? DecodeState::datetime : DecodeState::error;
+                if (!_consumeDate())
+                {
+                    return _state = DecodeState::error;
+                }
+
+                if (_pos < _end && *_pos == 'T')
+                {
+                    ++_pos;
+                    return _state = _consumeTime() ? DecodeState::datetime : DecodeState::error;
+                }
+                else
+                {
+                    return _state = DecodeState::date;
+                }
+            }
+            case 'T':
+            {
+                ++_pos;
+                return _state = _consumeTime() ? DecodeState::time : DecodeState::error;
             }
         }
 
@@ -955,90 +971,183 @@ namespace qcon
         }
     }
 
-    // Compile time compute the floored base-10 logarithm of the given value
-    inline consteval unat _floorLog10(unat v)
+    inline u8 _lastMonthDay(const u16 year, const u8 month)
     {
-        unat log{0u};
-        v /= 10u;
-        while (v)
+        static constexpr std::array<u8, 16u> monthDayCounts{31u, 28u, 31u, 30u, 31u, 30u, 31u, 31u, 30u, 31u, 30u, 31u, 0u, 0u, 0u, 0u};
+
+        if (month == 2u)
         {
-            ++log;
-            v /= 10u;
+            return 28u + std::chrono::year{year}.is_leap();
         }
-        return log;
+        else
+        {
+            return monthDayCounts[(month - 1u) & 15u];
+        }
     }
 
     // Utterly ignoring leap seconds with righteous conviction
-    inline bool Decoder::_consumeDatetime()
+    inline bool Decoder::_consumeDate()
     {
         // Already consumed `D`
 
-        // Consume date
+        // Consume year
+        u64 year;
+        if (!_consumeDecimalDigits(year, 4u))
         {
-            // Consume year
-            u64 year;
-            if (!_consumeDecimalDigits(year, 4u))
-            {
-                return false;
-            }
+            return false;
+        }
+        date.year = u16(year);
 
-            if (!_consumeChar('-'))
-            {
-                return false;
-            }
-
-            // Consume month
-            u64 month;
-            if (!_consumeDecimalDigits(month, 2u))
-            {
-                return false;
-            }
-            if (month < 1u || month > 12u)
-            {
-                _pos -= 2;
-                errorMessage = "Invalid month"sv;
-                return false;
-            }
-
-            if (!_consumeChar('-'))
-            {
-                return false;
-            }
-
-            // Consume day
-            u64 day;
-            if (!_consumeDecimalDigits(day, 2u))
-            {
-                return false;
-            }
-            if (day < 1u || day > 31u)
-            {
-                _pos -= 2;
-                errorMessage = "Invalid day"sv;
-                return false;
-            }
-
-            if (!_consumeChar('T'))
-            {
-                return false;
-            }
-
-            const std::chrono::year_month_day ymd{std::chrono::year{int(year)}, std::chrono::month{static_cast<unsigned int>(month)}, std::chrono::day{static_cast<unsigned int>(day)}};
-            datetime = std::chrono::sys_days{ymd};
+        if (!_consumeChar('-'))
+        {
+            return false;
         }
 
-        // Consume time
+        // Consume month
+        u64 month;
+        if (!_consumeDecimalDigits(month, 2u))
         {
-            // Consume hour
+            return false;
+        }
+        if (month == 0u || month > 12u)
+        {
+            errorMessage = "Invalid month"sv;
+            return false;
+        }
+        date.month = u8(month);
+
+        if (!_consumeChar('-'))
+        {
+            return false;
+        }
+
+        // Consume day
+        u64 day;
+        if (!_consumeDecimalDigits(day, 2u))
+        {
+            return false;
+        }
+        if (day == 0u || day > _lastMonthDay(date.year, date.month))
+        {
+            errorMessage = "Invalid day"sv;
+            return false;
+        }
+        date.day = u8(day);
+
+        return true;
+    }
+
+    // Utterly ignoring leap seconds with righteous conviction
+    inline bool Decoder::_consumeTime()
+    {
+        // Already consumed `T`
+
+        // Consume hour
+        u64 hour;
+        if (!_consumeDecimalDigits(hour, 2u))
+        {
+            return false;
+        }
+        if (hour >= 24u)
+        {
+            _pos -= 2;
+            errorMessage = "Invalid hour"sv;
+            return false;
+        }
+        time.hour = u8(hour);
+
+        if (!_consumeChar(':'))
+        {
+            return false;
+        }
+
+        // Consume minute
+        u64 minute;
+        if (!_consumeDecimalDigits(minute, 2u))
+        {
+            return false;
+        }
+        if (minute >= 60u)
+        {
+            _pos -= 2;
+            errorMessage = "Invalid minute"sv;
+            return false;
+        }
+        time.minute = u8(minute);
+
+        if (!_consumeChar(':'))
+        {
+            return false;
+        }
+
+        // Consume second
+        u64 second;
+        if (!_consumeDecimalDigits(second, 2u))
+        {
+            return false;
+        }
+        if (second >= 60u)
+        {
+            _pos -= 2;
+            errorMessage = "Invalid second"sv;
+            return false;
+        }
+        time.second = u8(second);
+
+        // Consume subseconds
+        if (_tryConsumeChar('.'))
+        {
+            const char * const start{_pos};
+            u64 subsecond;
+            if (!_consumeDecimal(subsecond))
+            {
+                return false;
+            }
+
+            static constexpr std::array<u64, 20u> powersOf10{
+                1u, 10u, 100u, 1'000u, 10'000u, 100'000u, 1'000'000u, 10'000'000u,
+                100'000'000u, 1'000'000'000u, 10'000'000'000u, 100'000'000'000u, 1'000'000'000'000u,
+                10'000'000'000'000u, 100'000'000'000'000u, 1'000'000'000'000'000u, 10'000'000'000'000'000u,
+                100'000'000'000'000'000u, 1'000'000'000'000'000'000u, 10'000'000'000'000'000'000u};
+
+            const unat digits{unat(_pos - start)};
+            if (digits < 9u)
+            {
+                time.subsecond = u32(subsecond * powersOf10[9u - digits]);
+            }
+            else if (digits > 9u)
+            {
+                // Appropriate rounding
+                const u64 divisor{powersOf10[digits - 9u]};
+                time.subsecond = u32((subsecond + divisor / 2u) / divisor);
+            }
+            else
+            {
+                time.subsecond = u32(subsecond);
+            }
+        }
+        else
+        {
+            time.subsecond = 0u;
+        }
+
+        return _consumeTimezone();
+    }
+
+    inline bool Decoder::_consumeTimezone()
+    {
+        // GMT time
+        if (_tryConsumeChar('Z'))
+        {
+            time.zone.format = utc;
+            time.zone.offset = 0u;
+        }
+        // Has timezone offset
+        else if (int sign{_tryConsumeSign()}; sign)
+        {
             u64 hour;
             if (!_consumeDecimalDigits(hour, 2u))
             {
-                return false;
-            }
-            if (hour >= 24u)
-            {
-                _pos -= 2;
-                errorMessage = "Invalid hour"sv;
                 return false;
             }
 
@@ -1047,112 +1156,27 @@ namespace qcon
                 return false;
             }
 
-            // Consume minute
             u64 minute;
             if (!_consumeDecimalDigits(minute, 2u))
             {
                 return false;
             }
-            if (minute >= 60u)
+            if (minute > 59u)
             {
                 _pos -= 2;
                 errorMessage = "Invalid minute"sv;
                 return false;
             }
 
-            if (!_consumeChar(':'))
-            {
-                return false;
-            }
-
-            // Consume second
-            u64 second;
-            if (!_consumeDecimalDigits(second, 2u))
-            {
-                return false;
-            }
-            if (second >= 60u)
-            {
-                _pos -= 2;
-                errorMessage = "Invalid second"sv;
-                return false;
-            }
-
-            datetime += std::chrono::hours{hour} + std::chrono::minutes{minute} + std::chrono::seconds{second};
-
-            // Consume fractional seconds
-            if (_tryConsumeChar('.'))
-            {
-                const char * const start{_pos};
-                u64 fractionalVal;
-                if (!_consumeDecimal(fractionalVal))
-                {
-                    return false;
-                }
-
-                static constexpr unat sysDigits{_floorLog10(std::chrono::system_clock::duration::period::den)};
-                static constexpr u64 powersOf10[20u]{
-                    1u, 10u, 100u, 1'000u, 10'000u, 100'000u, 1'000'000u, 10'000'000u,
-                    100'000'000u, 1'000'000'000u, 10'000'000'000u, 100'000'000'000u, 1'000'000'000'000u,
-                    10'000'000'000'000u, 100'000'000'000'000u, 1'000'000'000'000'000u, 10'000'000'000'000'000u,
-                    100'000'000'000'000'000u, 1'000'000'000'000'000'000u, 10'000'000'000'000'000'000u};
-
-                const unat digits{unat(_pos - start)};
-                if (digits < sysDigits)
-                {
-                    datetime += std::chrono::system_clock::duration{fractionalVal * powersOf10[sysDigits - digits]};
-                }
-                else if (digits > sysDigits)
-                {
-                    // Appropriate rounding
-                    const u64 divisor{powersOf10[digits - sysDigits]};
-                    datetime += std::chrono::system_clock::duration{(fractionalVal + divisor / 2u) / divisor};
-                }
-                else
-                {
-                    datetime += std::chrono::system_clock::duration{fractionalVal};
-                }
-            }
+            time.zone.format = utcOffset;
+            time.zone.offset = s16(hour * 60u + minute);
+            if (sign < 0) time.zone.offset = -time.zone.offset;
         }
-
-        // Consume timezone
+        // No timezone, local time
+        else
         {
-            // GMT time
-            if (_tryConsumeChar('Z'))
-            {
-                // No-op
-            }
-            // Has timezone offset
-            else if (int sign{_tryConsumeSign()}; sign)
-            {
-                u64 hour;
-                if (!_consumeDecimalDigits(hour, 2u))
-                {
-                    return false;
-                }
-
-                if (!_consumeChar(':'))
-                {
-                    return false;
-                }
-
-                u64 minute{0u};
-                if (!_consumeDecimalDigits(minute, 2u))
-                {
-                    return false;
-                }
-
-                // Subtract offset
-                std::chrono::minutes offset{hour * 60u + minute};
-                if (sign < 0) offset = -offset;
-                datetime -= offset;
-            }
-            // No timezone, local time
-            else
-            {
-                // Determine and subtract local offset
-                datetime -= std::chrono::current_zone()->get_info(datetime).offset;
-            }
+            time.zone.format = localTime;
+            time.zone.offset = 0u;
         }
 
         return true;
