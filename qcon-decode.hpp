@@ -316,18 +316,19 @@ namespace qcon
                         _ingestNumber(1);
                         return _state;
                     }
-                    else if (*_pos == 'i' || *_pos == 'I')
+                    else if (*_pos == 'i')
                     {
                         ++_pos;
                         if (_tryConsumeChars("nf"sv))
                         {
-                            _tryConsumeChars("inity"sv);
                             floater = std::numeric_limits<double>::infinity();
                             positive = true;
                             return _state = DecodeState::floater;
                         }
+                        --_pos;
                     }
                 }
+                --_pos;
                 break;
             }
             case '-':
@@ -340,31 +341,31 @@ namespace qcon
                         _ingestNumber(-1);
                         return _state;
                     }
-                    else if (*_pos == 'i' || *_pos == 'I')
+                    else if (*_pos == 'i')
                     {
                         ++_pos;
                         if (_tryConsumeChars("nf"sv))
                         {
-                            _tryConsumeChars("inity"sv);
                             floater = -std::numeric_limits<double>::infinity();
                             positive = false;
                             return _state = DecodeState::floater;
                         }
+                        --_pos;
                     }
                 }
+                --_pos;
                 break;
             }
-            case 'i': [[fallthrough]];
-            case 'I':
+            case 'i':
             {
                 ++_pos;
                 if (_tryConsumeChars("nf"sv))
                 {
-                    _tryConsumeChars("inity"sv);
                     floater = std::numeric_limits<double>::infinity();
                     positive = true;
                     return _state = DecodeState::floater;
                 }
+                --_pos;
                 break;
             }
             case 't':
@@ -375,6 +376,7 @@ namespace qcon
                     boolean = true;
                     return _state = DecodeState::boolean;
                 }
+                --_pos;
                 break;
             }
             case 'f':
@@ -385,6 +387,7 @@ namespace qcon
                     boolean = false;
                     return _state = DecodeState::boolean;
                 }
+                --_pos;
                 break;
             }
             case 'n':
@@ -399,17 +402,7 @@ namespace qcon
                     positive = true;
                     return _state = DecodeState::floater;
                 }
-                break;
-            }
-            case 'N':
-            {
-                ++_pos;
-                if (_tryConsumeChars("aN"sv))
-                {
-                    floater = std::numeric_limits<double>::quiet_NaN();
-                    positive = true;
-                    return _state = DecodeState::floater;
-                }
+                --_pos;
                 break;
             }
             case 'D':
@@ -562,6 +555,7 @@ namespace qcon
                 }
                 else
                 {
+                    --_pos;
                     errorMessage = "Invalid escape sequence"sv;
                     return false;
                 }
@@ -998,6 +992,7 @@ namespace qcon
             }
             if (month < 1u || month > 12u)
             {
+                _pos -= 2;
                 errorMessage = "Invalid month"sv;
                 return false;
             }
@@ -1012,6 +1007,7 @@ namespace qcon
             }
             if (day < 1u || day > 31u)
             {
+                _pos -= 2;
                 errorMessage = "Invalid day"sv;
                 return false;
             }
@@ -1035,6 +1031,7 @@ namespace qcon
             }
             if (hour >= 24u)
             {
+                _pos -= 2;
                 errorMessage = "Invalid hour"sv;
                 return false;
             }
@@ -1049,6 +1046,7 @@ namespace qcon
             }
             if (minute >= 60u)
             {
+                _pos -= 2;
                 errorMessage = "Invalid minute"sv;
                 return false;
             }
@@ -1063,6 +1061,7 @@ namespace qcon
             }
             if (second >= 60u)
             {
+                _pos -= 2;
                 errorMessage = "Invalid second"sv;
                 return false;
             }

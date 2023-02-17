@@ -876,62 +876,9 @@ TEST(decode, floater)
         ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
         ASSERT_TRUE(decoder.positive);
         ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load(R"(Inf)");
-        ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.positive);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load(R"(-Inf)");
-        ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
-        ASSERT_FALSE(decoder.positive);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load(R"(+Inf)");
-        ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.positive);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load(R"(infinity)");
-        ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.positive);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load(R"(-infinity)");
-        ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
-        ASSERT_FALSE(decoder.positive);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load(R"(+infinity)");
-        ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.positive);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load(R"(Infinity)");
-        ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.positive);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load(R"(-Infinity)");
-        ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
-        ASSERT_FALSE(decoder.positive);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load(R"(+Infinity)");
-        ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
-        ASSERT_TRUE(decoder.positive);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid infinity
+        ASSERT_TRUE(fails(R"(Inf)"));
         ASSERT_TRUE(fails(R"(iNf)"));
         ASSERT_TRUE(fails(R"(inF)"));
         ASSERT_TRUE(fails(R"(INF)"));
@@ -939,6 +886,8 @@ TEST(decode, floater)
         ASSERT_TRUE(fails(R"(infin)"));
         ASSERT_TRUE(fails(R"(infini)"));
         ASSERT_TRUE(fails(R"(infinit)"));
+        ASSERT_TRUE(fails(R"(infinity)"));
+        ASSERT_TRUE(fails(R"(Infinity)"));
         ASSERT_TRUE(fails(R"(iNfinity)"));
         ASSERT_TRUE(fails(R"(inFinity)"));
         ASSERT_TRUE(fails(R"(infInity)"));
@@ -946,20 +895,8 @@ TEST(decode, floater)
         ASSERT_TRUE(fails(R"(infinIty)"));
         ASSERT_TRUE(fails(R"(infiniTy)"));
         ASSERT_TRUE(fails(R"(infinitY)"));
-        ASSERT_TRUE(fails(R"(Infi)"));
-        ASSERT_TRUE(fails(R"(Infin)"));
-        ASSERT_TRUE(fails(R"(Infini)"));
-        ASSERT_TRUE(fails(R"(Infinit)"));
-        ASSERT_TRUE(fails(R"(INfinity)"));
-        ASSERT_TRUE(fails(R"(InFinity)"));
-        ASSERT_TRUE(fails(R"(InfInity)"));
-        ASSERT_TRUE(fails(R"(InfiNity)"));
-        ASSERT_TRUE(fails(R"(InfinIty)"));
-        ASSERT_TRUE(fails(R"(InfiniTy)"));
-        ASSERT_TRUE(fails(R"(InfinitY)"));
         ASSERT_TRUE(fails(R"(INFINITY)"));
         ASSERT_TRUE(fails(R"(infstuff)"));
-        ASSERT_TRUE(fails(R"(infinitystuff)"));
     }
     { // Valid NaN
         Decoder decoder{};
@@ -968,19 +905,14 @@ TEST(decode, floater)
         ASSERT_EQ(decoder.step(), DecodeState::floater);
         ASSERT_TRUE(std::isnan(decoder.floater));
         ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load(R"(NaN)");
-        ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_TRUE(std::isnan(decoder.floater));
-        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Invalid NaN
         ASSERT_TRUE(fails(R"(Nan)"));
         ASSERT_TRUE(fails(R"(nAn)"));
         ASSERT_TRUE(fails(R"(naN)"));
+        ASSERT_TRUE(fails(R"(NaN)"));
         ASSERT_TRUE(fails(R"(NAN)"));
         ASSERT_TRUE(fails(R"(nanstuff)"));
-        ASSERT_TRUE(fails(R"(NaNstuff)"));
     }
     { // Exponent decimal point
         ASSERT_TRUE(fails(R"(1.0e1.0)"));
