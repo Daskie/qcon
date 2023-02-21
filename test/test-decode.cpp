@@ -230,28 +230,22 @@ TEST(Decode, string)
         ASSERT_EQ(decoder.string, ""sv);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
-    { // All printable
-        Decoder decoder{R"(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")"sv};
+    { // All ASCII
+        Decoder decoder{"\"\\0\\x01\\x02\\x03\\x04\\x05\\x06\\a\\b\\t\\n\\v\\f\\r\\x0E\\x0F\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1A\\x1B\\x1C\\x1D\\x1E\\x1F !\\\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\x7F\""sv};
         ASSERT_EQ(decoder.step(), DecodeState::string);
-        ASSERT_EQ(decoder.string, R"( !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~)"sv);
+        ASSERT_EQ(decoder.string, "\0\x01\x02\x03\x04\x05\x06\a\b\t\n\v\f\r\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\x7F"sv);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
-    { // All non-printable
-        std::string decodeStr{R"(" ")"};
-        for (int i{0}; i < 256; ++i)
+    { // All non-ASCII
+        std::string actual{};
+        for (unat c{128u}; c < 256u; ++c)
         {
-            if (!std::isprint(i))
-            {
-                decodeStr[1] = char(i);
-                ASSERT_TRUE(fails(decodeStr));
-            }
+            actual.push_back(char(c));
         }
-    }
-    { // Escape characters
-        Decoder decoder{R"("\0\b\t\n\v\f\r")"sv};
+        std::string decodeStr{'"' + actual + '"'};
+        Decoder decoder{decodeStr};
         ASSERT_EQ(decoder.step(), DecodeState::string);
-        ASSERT_EQ(decoder.string, "\0\b\t\n\v\f\r"sv);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
+        ASSERT_EQ(decoder.string, actual);
     }
     { // Missing escape sequence
         const std::string_view brokenSeq{R"("\\\")"};
@@ -263,55 +257,131 @@ TEST(Decode, string)
         ASSERT_TRUE(fails("\"\\\0\""));
     }
     { // 'x' code point
-        std::string expectedStr(256, '\0');
-        std::string decodeStr(1 + 256 * 4 + 1, '\0');
-        decodeStr.front() = '"';
-        decodeStr.back() = '"';
-        for (unat i{0u}; i < 256u; ++i)
+        Decoder decoder{};
+
+        for (unat i{0u}; i < 128u; ++i)
         {
-            expectedStr[i] = char(i);
-            std::format_to_n(&decodeStr[1u + 4u * i], 4, "\\x{:02X}"sv, i);
+            const std::string expectedStr{char(i)};
+            const std::string decodeStr{std::format("\"\\x{:02X}\""sv, i)};
+
+            decoder.load(decodeStr);
+            ASSERT_EQ(decoder.step(), DecodeState::string);
+            ASSERT_EQ(decoder.string, expectedStr);
+            ASSERT_EQ(decoder.step(), DecodeState::done);
         }
-        Decoder decoder{decodeStr};
-        ASSERT_EQ(decoder.step(), DecodeState::string);
-        ASSERT_EQ(decoder.string, expectedStr);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
+        for (unat i{128u}; i < 256u; ++i)
+        {
+            const std::string expectedStr{char(u8(0b110'00000u | (i >> 6))), char(u8(0b10'000000u | (i & 0b111111u)))};
+            const std::string decodeStr{std::format("\"\\x{:02X}\""sv, i)};
+
+            decoder.load(decodeStr);
+            ASSERT_EQ(decoder.step(), DecodeState::string);
+            ASSERT_EQ(decoder.string, expectedStr);
+            ASSERT_EQ(decoder.step(), DecodeState::done);
+        }
     }
     { // 'u' code point
-        std::string expectedStr(256, '\0');
-        std::string decodeStr(1 + 256 * 6 + 1, '\0');
-        decodeStr.front() = '"';
-        decodeStr.back() = '"';
-        for (unat i{0u}; i < 256u; ++i)
+        Decoder decoder{};
+
+        for (unat i{0u}; i < 128u; ++i)
         {
-            expectedStr[i] = char(i);
-            std::format_to_n(&decodeStr[1u + 6u * i], 6, "\\u{:04X}"sv, i);
+            const std::string expectedStr{char(i)};
+            const std::string decodeStr{std::format("\"\\u{:04X}\""sv, i)};
+
+            decoder.load(decodeStr);
+            ASSERT_EQ(decoder.step(), DecodeState::string);
+            ASSERT_EQ(decoder.string, expectedStr);
+            ASSERT_EQ(decoder.step(), DecodeState::done);
         }
-        Decoder decoder{decodeStr};
-        ASSERT_EQ(decoder.step(), DecodeState::string);
-        ASSERT_EQ(decoder.string, expectedStr);
-        ASSERT_EQ(decoder.step(), DecodeState::done);
+        for (unat i{128u}; i < 2048u; ++i)
+        {
+            const std::string expectedStr{char(u8(0b110'00000u | (i >> 6))), char(u8(0b10'000000u | (i & 0b111111u)))};
+            const std::string decodeStr{std::format("\"\\u{:04X}\""sv, i)};
+
+            decoder.load(decodeStr);
+            ASSERT_EQ(decoder.step(), DecodeState::string);
+            ASSERT_EQ(decoder.string, expectedStr);
+            ASSERT_EQ(decoder.step(), DecodeState::done);
+        }
+        for (unat i{2048u}; i < 65536u; ++i)
+        {
+            const std::string expectedStr{char(u8(0b1110'0000u | (i >> 12))), char(u8(0b10'000000u | ((i >> 6) & 0b111111u))), char(u8(0b10'000000u | (i & 0b111111u)))};
+            const std::string decodeStr{std::format("\"\\u{:04X}\""sv, i)};
+
+            decoder.load(decodeStr);
+            ASSERT_EQ(decoder.step(), DecodeState::string);
+            ASSERT_EQ(decoder.string, expectedStr);
+            ASSERT_EQ(decoder.step(), DecodeState::done);
+        }
     }
     { // 'U' code point
-        Decoder decoder{R"("\U00000077\U000000FF\UFFFFFFFF")"};
+        Decoder decoder{};
+
+        decoder.load(R"("\U00000000")");
         ASSERT_EQ(decoder.step(), DecodeState::string);
-        ASSERT_EQ(decoder.string, "\u0077\u00FF\u00FF");
+        ASSERT_EQ(decoder.string.size(), 1u);
+        ASSERT_EQ(decoder.string.front(), '\0');
         ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"("\U0000007F")");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\x7F");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"("\U00000080")");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xC2\x80");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"("\U000007FF")");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xDF\xBF");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"("\U00000800")");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xE0\xA0\x80");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"("\U0000FFFF")");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xEF\xBF\xBF");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"("\U00010000")");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xF0\x90\x80\x80");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load(R"("\U001FFFFF")");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xF7\xBF\xBF\xBF");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        ASSERT_TRUE(fails("\"\\U00200000\""));
     }
     { // Uppercase and lowercase code point hex digits
-        Decoder decoder{R"("\u00aa\u00BB\u00cC\u00Dd")"};
+        Decoder decoder{R"("\x0a\x0A\x0b\x0B\x0c\x0C\x0d\x0D")"};
         ASSERT_EQ(decoder.step(), DecodeState::string);
-        ASSERT_EQ(decoder.string, "\u00AA\u00BB\u00CC\u00DD");
+        ASSERT_EQ(decoder.string, "\x0A\x0A\x0B\x0B\x0C\x0C\x0D\x0D");
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
     { // Incorrect number of code point digits
         // Raw strings, `\x`/`\u`, and macros don't play nice together
         ASSERT_TRUE(fails("\"\\x\""));
-        ASSERT_TRUE(fails("\"\\x1\""));
+        ASSERT_TRUE(fails("\"\\x0\""));
         ASSERT_TRUE(fails("\"\\u\""));
-        ASSERT_TRUE(fails("\"\\u1\""));
-        ASSERT_TRUE(fails("\"\\u11\""));
-        ASSERT_TRUE(fails("\"\\u111\""));
+        ASSERT_TRUE(fails("\"\\u0\""));
+        ASSERT_TRUE(fails("\"\\u00\""));
+        ASSERT_TRUE(fails("\"\\u000\""));
+        ASSERT_TRUE(fails("\"\\U\""));
+        ASSERT_TRUE(fails("\"\\U0\""));
+        ASSERT_TRUE(fails("\"\\U00\""));
+        ASSERT_TRUE(fails("\"\\U000\""));
+        ASSERT_TRUE(fails("\"\\U0000\""));
+        ASSERT_TRUE(fails("\"\\U00000\""));
+        ASSERT_TRUE(fails("\"\\U000000\""));
+        ASSERT_TRUE(fails("\"\\U0000000\""));
     }
     { // Missing end quote
         ASSERT_TRUE(fails(R"("abc)"));
@@ -342,6 +412,64 @@ TEST(Decode, string)
     }
     { // Single quotes
         ASSERT_TRUE(fails(R"('abc')"));
+    }
+    { // Unicode limits
+        Decoder decoder{};
+
+        decoder.load("\"\\x00\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string.size(), 1u);
+        ASSERT_EQ(decoder.string.front(), '\0');
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("\"\\x7F\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\x7F");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("\"\xC2\x80\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xC2\x80");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("\"\xDF\xBF\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xDF\xBF");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("\"\xE0\xA0\x80\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xE0\xA0\x80");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("\"\xEF\xBF\xBF\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xEF\xBF\xBF");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("\"\xF0\x90\x80\x80\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xF0\x90\x80\x80");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("\"\xF7\xBF\xBF\xBF\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "\xF7\xBF\xBF\xBF");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+    }
+    { // Unicode string
+        // Randomly generated UTF-8
+        const std::string_view str{
+            "\xd1\x82\xe3\xa7\x8e\xef\xbf\x9d\xdf\x8e\xd3\x81\xef\xa9\xac\xf1\x8d\xb2\xa7\xf1\xbe\xae\x84\x56"
+            "\xde\x88\xf1\xa3\xbd\xb4\xf3\xa0\xa3\x90\xeb\xa8\x9d\xef\x83\x8a\xd0\xa5\x4b\xe8\x84\xb3\xc9\x82"
+            "\xe4\xbf\xa2\xe2\xaa\xa9\xcc\xbd\xcb\xb5\xd0\x88\xd1\xb0\xf3\x84\x8c\x82\xf3\x9a\x8f\xb2\x4f\xdc\x8b"
+            "\xcf\x8a\x60\xdb\x8f\x41"};
+
+        const std::string decodeStr{std::format("\"{}\"", str)};
+        Decoder decoder{decodeStr};
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, str);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
     }
 }
 

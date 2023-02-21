@@ -84,6 +84,16 @@ namespace qcon
 
 namespace qcon
 {
+    inline constexpr bool _isDigit(const char c)
+    {
+        return unat(c - '0') < 10u;
+    }
+
+    inline constexpr bool _isControl(const char c)
+    {
+        return u8(c) < 32u;
+    }
+
     inline bool Timezone::operator==(const Timezone & other) const
     {
         if (format == other.format)

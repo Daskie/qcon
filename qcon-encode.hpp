@@ -7,9 +7,6 @@
 /// See the README for more info and examples!
 ///
 
-#include <cctype>
-
-#include <array>
 #include <bit>
 #include <charconv>
 #include <chrono>
@@ -234,6 +231,12 @@ namespace qcon
 
 namespace qcon
 {
+    constexpr char _hexEncodeTable[16u]{
+        '0', '1', '2', '3',
+        '4', '5', '6', '7',
+        '8', '9', 'A', 'B',
+        'C', 'D', 'E', 'F'};
+
     inline Encoder::Encoder(const Density density, const unat indentSpaces) :
         _baseDensity{density},
         _indentSpaces{indentSpaces}
@@ -682,33 +685,49 @@ namespace qcon
 
     inline bool Encoder::_encode(const std::string_view v)
     {
-        static constexpr std::array<char, 16u> hexChars{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+        struct ControlString
+        {
+            alignas(4u) char chars[4u];
+
+            consteval ControlString(const char c)
+            {
+                chars[0] = '\\';
+                if (_isControl(c))
+                {
+                    chars[1] = 'x';
+                    chars[2] = _hexEncodeTable[u8(c) / 16u];
+                    chars[3] = _hexEncodeTable[u8(c) % 16u];
+                }
+                else
+                {
+                    chars[1] = c;
+                    chars[2] = '\0';
+                    chars[3] = '\0';
+                }
+            }
+
+            unat length() const { return chars[2] ? 4u : 2u; };
+        };
+
+        static constexpr ControlString controlStrings[32u]{
+            '0',
+            1, 2, 3, 4, 5, 6,
+            'a', 'b', 't', 'n', 'v', 'f', 'r',
+            14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 
         _str += '"';
 
         for (const char c : v)
         {
-            if (std::isprint(u8(c)))
+            if (_isControl(c))
             {
-                if (c == '"' || c == '\\') _str += '\\';
-                _str += c;
+                const ControlString controlStr{controlStrings[c]};
+                _str.append(controlStr.chars, controlStr.length());
             }
             else
             {
-                switch (c)
-                {
-                    case '\0': _str += R"(\0)"; break;
-                    case '\b': _str += R"(\b)"; break;
-                    case '\t': _str += R"(\t)"; break;
-                    case '\n': _str += R"(\n)"; break;
-                    case '\v': _str += R"(\v)"; break;
-                    case '\f': _str += R"(\f)"; break;
-                    case '\r': _str += R"(\r)"; break;
-                    default:
-                        _str += "\\x"sv;
-                        _str += hexChars[(u8(c) >> 4) & 0xFu];
-                        _str += hexChars[u8(c) & 0xFu];
-                }
+                if (c == '"' || c == '\\') _str += '\\';
+                _str += c;
             }
         }
 
@@ -744,7 +763,7 @@ namespace qcon
     inline void Encoder::_encodeBinary(u64 v)
     {
         // Digits reversed due to endianess
-        static constexpr std::array<u32, 16u> binaryTable{
+        static constexpr u32 binaryTable[16u]{
             '0000', '1000', '0100', '1100',
             '0010', '1010', '0110', '1110',
             '0001', '1001', '0101', '1101',
@@ -805,14 +824,6 @@ namespace qcon
 
     inline void Encoder::_encodeHex(u64 v)
     {
-        // We're hand rolling this because `std::to_chars` doesn't support uppercase hex
-        // Also, this is likely faster for our use case
-        static constexpr std::array<char, 16u> hexTable{
-            '0', '1', '2', '3',
-            '4', '5', '6', '7',
-            '8', '9', 'A', 'B',
-            'C', 'D', 'E', 'F'};
-
         static thread_local char buffer[16u];
 
         char * const bufferEnd{buffer + sizeof(buffer)};
@@ -820,7 +831,7 @@ namespace qcon
 
         do
         {
-            *--dst = hexTable[v & 0b1111u];
+            *--dst = _hexEncodeTable[v & 0b1111u];
             v >>= 4;
         } while (v);
 
@@ -844,7 +855,7 @@ namespace qcon
         _str.append(buffer, length);
 
         // Add trailing `.0` if necessary
-        if (std::isdigit(buffer[length - 1u]))
+        if (_isDigit(buffer[length - 1u]))
         {
             bool needsZero{true};
             for (unat i{0u}; i < length; ++i)

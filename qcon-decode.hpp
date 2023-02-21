@@ -7,8 +7,6 @@
 /// See the README for more info and examples!
 ///
 
-#include <cctype>
-
 #include <array>
 #include <bit>
 #include <charconv>
@@ -59,8 +57,12 @@ namespace qcon
 
         Decoder() = default;
         Decoder(std::string_view qson);
+        Decoder(const char * qson) : Decoder{std::string_view{qson}} {}
+        Decoder(std::string &&) = delete; // Prevent binding to temporary
 
         void load(std::string_view qcon);
+        void load(const char * qson) { return load(std::string_view{qson}); }
+        void load(std::string &&) = delete; // Prevent binding to temporary
 
         DecodeState step();
 
@@ -87,11 +89,27 @@ namespace qcon
 
         bool _tryConsumeChars(std::string_view str);
 
+        template <bool checkOverflow> bool _tryConsumeBinaryDigit(u64 & v);
+
+        template <bool checkOverflow> bool _tryConsumeOctalDigit(u64 & v);
+
+        template <bool checkOverflow> bool _tryConsumeDecimalDigit(u64 & v);
+
+        template <bool checkOverflow> bool _tryConsumeHexDigit(u64 & v);
+
+        bool _tryConsumeDecimalDigits(u64 & v, unat digits);
+
+        bool _tryConsumeHexDigits(u64 & v, unat digits);
+
         [[nodiscard]] bool _consumeChar(char c);
 
-        [[nodiscard]] bool _consumeCodePoint(char & c, int digits);
+        [[nodiscard]] bool _consumeDecimalDigits(u64 & v, unat digits);
 
-        [[nodiscard]] bool _consumeEscaped(char & c);
+        [[nodiscard]] bool _consumeHexDigits(u64 & v, unat digits);
+
+        [[nodiscard]] bool _consumeCodePoint(std::string & dst, unat digits);
+
+        [[nodiscard]] bool _consumeEscaped(std::string & dst);
 
         [[nodiscard]] bool _consumeString(std::string & dst);
 
@@ -111,10 +129,6 @@ namespace qcon
 
         void _ingestNumber(int sign);
 
-        bool _tryConsumeDecimalDigits(u64 & v, unat digits);
-
-        [[nodiscard]] bool _consumeDecimalDigits(u64 & v, unat digits);
-
         [[nodiscard]] bool _consumeDate();
 
         [[nodiscard]] bool _consumeTime();
@@ -127,9 +141,30 @@ namespace qcon
 
 namespace qcon
 {
-    inline constexpr bool _isDigit(const char c)
+    inline consteval std::array<u8, 256u> _createHexTable()
     {
-        return unat(c - '0') < 10u;
+        std::array<u8, 256u> table;
+
+        // Fill table with 255
+        for (u8 & v : table)
+        {
+            v = 255u;
+        }
+
+        // Set '0' - '9'
+        for (unat v{0u}; v < 10u; ++v)
+        {
+            table[unat('0') + v] = u8(v);
+        }
+
+        // Set 'A' - 'F' and 'a' - 'f'
+        for (unat v{0u}; v < 6u; ++v)
+        {
+            table[unat('A') + v] = u8(10u + v);
+            table[unat('a') + v] = u8(10u + v);
+        }
+
+        return table;
     }
 
     inline Decoder::Decoder(const std::string_view qson)
@@ -504,6 +539,165 @@ namespace qcon
         }
     }
 
+    template <bool checkOverflow> inline bool Decoder::_tryConsumeBinaryDigit(u64 & v)
+    {
+        if (_pos >= _end)
+        {
+            return false;
+        }
+
+        const u64 b{u64(*_pos - '0')};
+
+        if (b >= 2u)
+        {
+            return false;
+        }
+
+        // Check if would overflow
+        if constexpr (checkOverflow)
+        {
+            if (v & (u64(0b1u) << 63))
+            {
+                return false;
+            }
+        }
+
+        v = (v << 1) | b;
+
+        ++_pos;
+        return true;
+    }
+
+    template <bool checkOverflow> inline bool Decoder::_tryConsumeOctalDigit(u64 & v)
+    {
+        if (_pos >= _end)
+        {
+            return false;
+        }
+
+        const u64 o{u64(*_pos - '0')};
+
+        if (o >= 8u)
+        {
+            return false;
+        }
+
+        // Check if would overflow
+        if constexpr (checkOverflow)
+        {
+            if (v & (u64(0b111u) << 61))
+            {
+                return false;
+            }
+        }
+
+        v = (v << 3) | o;
+
+        ++_pos;
+        return true;
+    }
+
+    template <bool checkOverflow> inline bool Decoder::_tryConsumeDecimalDigit(u64 & v)
+    {
+        static constexpr u64 riskyVal{std::numeric_limits<u64>::max() / 10u};
+        static constexpr u64 riskyDigit{std::numeric_limits<u64>::max() % 10u};
+
+        if (_pos >= _end)
+        {
+            return false;
+        }
+
+        const u64 d{u64(*_pos - '0')};
+
+        if (d >= 10u)
+        {
+            return false;
+        }
+
+        // Check if would overflow
+        if constexpr (checkOverflow)
+        {
+            if (v > riskyVal || v == riskyVal && d > riskyDigit)
+            {
+                return false;
+            }
+        }
+
+        v = v * 10u + d;
+
+        ++_pos;
+        return true;
+    }
+
+    template <bool checkOverflow> inline bool Decoder::_tryConsumeHexDigit(u64 & v)
+    {
+        static constexpr std::array<u8, 256u> hexTable{_createHexTable()};
+
+        if (_pos >= _end)
+        {
+            return false;
+        }
+
+        const u64 h{hexTable[u8(*_pos)]};
+
+        if (h >= 16u)
+        {
+            return false;
+        }
+
+        // Check if would overflow
+        if constexpr (checkOverflow)
+        {
+            if (v & (u64(0b1111u) << 60))
+            {
+                return false;
+            }
+        }
+
+        v = (v << 4) | h;
+
+        ++_pos;
+        return true;
+    }
+
+    // Assumed to not overflow
+    inline bool Decoder::_tryConsumeDecimalDigits(u64 & v, unat digits)
+    {
+        const char * const start{_pos};
+
+        v = 0u;
+
+        for (; digits; --digits)
+        {
+            if (!_tryConsumeDecimalDigit<false>(v))
+            {
+                _pos = start;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // Assumed to not overflow
+    inline bool Decoder::_tryConsumeHexDigits(u64 & v, unat digits)
+    {
+        const char * const start{_pos};
+
+        v = 0u;
+
+        for (; digits; --digits)
+        {
+            if (!_tryConsumeHexDigit<false>(v))
+            {
+                _pos = start;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     inline bool Decoder::_consumeChar(const char c)
     {
         if (!_tryConsumeChar(c))
@@ -517,30 +711,81 @@ namespace qcon
         return true;
     }
 
-    inline bool Decoder::_consumeCodePoint(char & c, const int digits)
+    inline bool Decoder::_consumeDecimalDigits(u64 & v, const unat digits)
     {
-        if (_end - _pos < digits)
+        if (_tryConsumeDecimalDigits(v, digits))
+        {
+            return true;
+        }
+        else
         {
             errorMessage.clear();
-            std::format_to(std::back_inserter(errorMessage), "Expected {} code point digits"sv, digits);
+            std::format_to(std::back_inserter(errorMessage), "Expected {} decimal digits"sv, digits);
             return false;
         }
+    }
 
-        u32 v;
-        const std::from_chars_result res{std::from_chars(_pos, _pos + digits, v, 16)};
-        if (res.ec != std::errc{})
+    inline bool Decoder::_consumeHexDigits(u64 & v, const unat digits)
+    {
+        if (_tryConsumeHexDigits(v, digits))
         {
-            errorMessage = "Invalid code point"sv;
+            return true;
+        }
+        else
+        {
+            errorMessage.clear();
+            std::format_to(std::back_inserter(errorMessage), "Expected {} hex digits"sv, digits);
+            return false;
+        }
+    }
+
+    inline bool Decoder::_consumeCodePoint(std::string & dst, const unat digits)
+    {
+        u64 v;
+        if (!_consumeHexDigits(v, digits))
+        {
             return false;
         }
 
-        _pos += digits;
+        const u32 codepoint{u32(v)};
 
-        c = char(v);
+        // Convert codepoint to UTF-8
+        // AAABBBBBBCCCCCCDDDDDD -> 11110AAA 10BBBBBB 10CCCCCC 10DDDDDD
+        //      AAAABBBBBBCCCCCC -> 1110AAAA 10BBBBBB 10CCCCCC
+        //           AAAAABBBBBB -> 110AAAAA 10BBBBBB
+        //               AAAAAAA -> 0AAAAAAA
+        if (codepoint >= (1u << 21))
+        {
+            errorMessage = "Codepoint too large"sv;
+            return false;
+        }
+        else if (codepoint >= (1u << 16))
+        {
+            dst.push_back(char(u8((0b11110'000u | (codepoint >> 18)))));
+            dst.push_back(char(u8((0b10'000000u | ((codepoint >> 12) & 0b111111u)))));
+            dst.push_back(char(u8((0b10'000000u | ((codepoint >> 6) & 0b111111u)))));
+            dst.push_back(char(u8((0b10'000000u | (codepoint & 0b111111u)))));
+        }
+        else if (codepoint >= (1u << 11))
+        {
+            dst.push_back(char(u8((0b1110'0000u | (codepoint >> 12)))));
+            dst.push_back(char(u8((0b10'000000u | ((codepoint >> 6) & 0b111111u)))));
+            dst.push_back(char(u8((0b10'000000u | (codepoint & 0b111111u)))));
+        }
+        else if (codepoint >= (1u << 7))
+        {
+            dst.push_back(char(u8((0b110'00000u | (codepoint >> 6)))));
+            dst.push_back(char(u8((0b10'000000u | (codepoint & 0b111111u)))));
+        }
+        else
+        {
+            dst.push_back(char(u8(codepoint)));
+        }
+
         return true;
     }
 
-    inline bool Decoder::_consumeEscaped(char & c)
+    inline bool Decoder::_consumeEscaped(std::string & dst)
     {
         if (_pos >= _end)
         {
@@ -548,35 +793,34 @@ namespace qcon
             return false;
         }
 
-        c = *_pos;
+        char c{*_pos};
         ++_pos;
 
         switch (c)
         {
-            case '0': { c = '\0'; return true; }
-            case 'b': { c = '\b'; return true; }
-            case 't': { c = '\t'; return true; }
-            case 'n': { c = '\n'; return true; }
-            case 'v': { c = '\v'; return true; }
-            case 'f': { c = '\f'; return true; }
-            case 'r': { c = '\r'; return true; }
-            case 'x': { return _consumeCodePoint(c, 2); }
-            case 'u': { return _consumeCodePoint(c, 4); }
-            case 'U': { return _consumeCodePoint(c, 8); }
+            case '0': c = '\0'; break;
+            case 'a': c = '\a'; break;
+            case 'b': c = '\b'; break;
+            case 't': c = '\t'; break;
+            case 'n': c = '\n'; break;
+            case 'v': c = '\v'; break;
+            case 'f': c = '\f'; break;
+            case 'r': c = '\r'; break;
+            case 'x': return _consumeCodePoint(dst, 2u);
+            case 'u': return _consumeCodePoint(dst, 4u);
+            case 'U': return _consumeCodePoint(dst, 8u);
+            case '"': break;
+            case '\\': break;
             default:
             {
-                if (std::isprint(u8(c)))
-                {
-                    return true;
-                }
-                else
-                {
-                    --_pos;
-                    errorMessage = "Invalid escape sequence"sv;
-                    return false;
-                }
+                --_pos;
+                errorMessage = "Invalid escape sequence"sv;
+                return false;
             }
         }
+
+        dst.push_back(c);
+        return true;
     }
 
     inline bool Decoder::_consumeString(std::string & dst)
@@ -614,22 +858,21 @@ namespace qcon
                 }
                 else
                 {
-                    if (!_consumeEscaped(c))
+                    if (!_consumeEscaped(dst))
                     {
                         return false;
                     }
-                    dst.push_back(c);
                 }
             }
-            else if (std::isprint(u8(c)))
-            {
-                dst.push_back(c);
-                ++_pos;
-            }
-            else
+            else if (_isControl(c))
             {
                 errorMessage = "Invalid string content"sv;
                 return false;
+            }
+            else
+            {
+                dst.push_back(c);
+                ++_pos;
             }
         }
     }
@@ -657,53 +900,17 @@ namespace qcon
         return true;
     }
 
-    inline consteval std::array<u8, 256u> _createHexTable()
-    {
-        std::array<u8, 256u> table;
-
-        // Fill table with 255
-        for (u8 & v : table)
-        {
-            v = 255u;
-        }
-
-        // Set '0' - '9'
-        for (unat v{0u}; v < 10u; ++v)
-        {
-            table[unat('0') + v] = u8(v);
-        }
-
-        // Set 'A' - 'F' and 'a' - 'f'
-        for (unat v{0u}; v < 6u; ++v)
-        {
-            table[unat('A') + v] = u8(10u + v);
-            table[unat('a') + v] = u8(10u + v);
-        }
-
-        return table;
-    }
-
     inline bool Decoder::_consumeBinary(u64 & v)
     {
         const char * start{_pos};
 
         v = 0u;
 
-        for (u64 b; _pos < _end && (b = u64(*_pos - '0')) <= 1u; ++_pos)
-        {
-            // Check if would overflow
-            if (v & (u64(0b1u) << 63))
-            {
-                errorMessage = "Binary integer too large";
-                return false;
-            }
-
-            v = (v << 1) | b;
-        }
+        while (_tryConsumeBinaryDigit<true>(v));
 
         if (_pos == start)
         {
-            errorMessage = "Missing binary digit";
+            errorMessage = "Missing binary digit"sv;
             return false;
         }
 
@@ -716,21 +923,11 @@ namespace qcon
 
         v = 0u;
 
-        for (u64 o; _pos < _end && (o = u64(*_pos - '0')) <= 7u; ++_pos)
-        {
-            // Check if would overflow
-            if (v & (u64(0b111u) << 61))
-            {
-                errorMessage = "Octal integer too large";
-                return false;
-            }
-
-            v = (v << 3) | o;
-        }
+        while (_tryConsumeOctalDigit<true>(v))
 
         if (_pos == start)
         {
-            errorMessage = "Missing octal digit";
+            errorMessage = "Missing octal digit"sv;
             return false;
         }
 
@@ -739,28 +936,16 @@ namespace qcon
 
     inline bool Decoder::_consumeDecimal(u64 & v)
     {
-        static constexpr u64 riskyVal{std::numeric_limits<u64>::max() / 10u};
-        static constexpr u64 riskyDigit{std::numeric_limits<u64>::max() % 10u};
 
         const char * start{_pos};
 
         v = 0u;
 
-        for (u64 d; _pos < _end && (d = u64(*_pos - '0')) <= 9u; ++_pos)
-        {
-            // Check if would overflow
-            if (v > riskyVal || v == riskyVal && d > riskyDigit) [[unlikely]]
-            {
-                errorMessage = "Decimal integer too large";
-                return false;
-            }
-
-            v = v * 10u + d;
-        }
+        while (_tryConsumeDecimalDigit<true>(v));
 
         if (_pos == start)
         {
-            errorMessage = "Missing decimal digit";
+            errorMessage = "Missing decimal digit"sv;
             return false;
         }
 
@@ -769,27 +954,15 @@ namespace qcon
 
     inline bool Decoder::_consumeHex(u64 & v)
     {
-        static constexpr std::array<u8, 256u> hexTable{_createHexTable()};
-
         const char * start{_pos};
 
         v = 0u;
 
-        for (u64 h; _pos < _end && (h = hexTable[u8(*_pos)]) <= 15u; ++_pos)
-        {
-            // Check if would overflow
-            if (v & (u64(0b1111u) << 60))
-            {
-                errorMessage = "Hex integer too large";
-                return false;
-            }
-
-            v = (v << 4) | h;
-        }
+        while (_tryConsumeHexDigit<true>(v));
 
         if (_pos == start)
         {
-            errorMessage = "Missing hex digit";
+            errorMessage = "Missing hex digit"sv;
             return false;
         }
 
@@ -845,7 +1018,7 @@ namespace qcon
         }
         if (!res)
         {
-            errorMessage = "Invalid integer";
+            errorMessage = "Invalid integer"sv;
             return false;
         }
 
@@ -931,49 +1104,9 @@ namespace qcon
         }
     }
 
-    inline bool Decoder::_tryConsumeDecimalDigits(u64 & v, unat digits)
-    {
-        // Assumed to never overflow
-
-        if (_pos + digits > _end)
-        {
-            return false;
-        }
-
-        v = 0u;
-
-        for (; digits; --digits, ++_pos)
-        {
-            const u64 d{u64(*_pos - '0')};
-
-            if (d > 9u)
-            {
-                return false;
-            }
-
-            v = v * 10u + d;
-        }
-
-        return true;
-    }
-
-    inline bool Decoder::_consumeDecimalDigits(u64 & v, const unat digits)
-    {
-        if (_tryConsumeDecimalDigits(v, digits))
-        {
-            return true;
-        }
-        else
-        {
-            errorMessage.clear();
-            std::format_to(std::back_inserter(errorMessage), "Expected {} decimal digits"sv, digits);
-            return false;
-        }
-    }
-
     inline u8 _lastMonthDay(const u16 year, const u8 month)
     {
-        static constexpr std::array<u8, 16u> monthDayCounts{31u, 28u, 31u, 30u, 31u, 30u, 31u, 31u, 30u, 31u, 30u, 31u, 0u, 0u, 0u, 0u};
+        static constexpr u8 monthDayCounts[16u]{31u, 28u, 31u, 30u, 31u, 30u, 31u, 31u, 30u, 31u, 30u, 31u, 0u, 0u, 0u, 0u};
 
         if (month == 2u)
         {
@@ -1104,7 +1237,7 @@ namespace qcon
                 return false;
             }
 
-            static constexpr std::array<u64, 20u> powersOf10{
+            static constexpr u64 powersOf10[20u]{
                 1u, 10u, 100u, 1'000u, 10'000u, 100'000u, 1'000'000u, 10'000'000u,
                 100'000'000u, 1'000'000'000u, 10'000'000'000u, 100'000'000'000u, 1'000'000'000'000u,
                 10'000'000'000'000u, 100'000'000'000'000u, 1'000'000'000'000'000u, 10'000'000'000'000'000u,

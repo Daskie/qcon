@@ -192,41 +192,22 @@ TEST(Encode, string)
         encoder << const_cast<char *>("hello");
         ASSERT_EQ(encoder.finish(), R"("hello")");
     }
-    { // Printable characters
+    { // All ASCII characters
         Encoder encoder{};
-        const std::string actual{R"( !"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~)"};
-        const std::string expected{R"(" !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~")"};
+        const std::string actual{"\0\x01\x02\x03\x04\x05\x06\a\b\t\n\v\f\r\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\x7F"sv};
+        const std::string expected{"\"\\0\\x01\\x02\\x03\\x04\\x05\\x06\\a\\b\\t\\n\\v\\f\\r\\x0E\\x0F\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1A\\x1B\\x1C\\x1D\\x1E\\x1F !\\\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\x7F\""sv};
         encoder << actual;
         ASSERT_EQ(encoder.finish(), expected);
     }
-    { // Escape characters
-        Encoder encoder{};
-        encoder << "\0\b\t\n\v\f\r"sv;
-        ASSERT_EQ(encoder.finish(), R"("\0\b\t\n\v\f\r")");
-    }
-    { // `\x` code point
-        std::string decodeStr(154, '\0');
-        std::string expectedStr(1 + 154 * 4 + 1, '\0');
-        expectedStr.front() = '"';
-        expectedStr.back() = '"';
-        unat i{0u};
-        for (unat cp{1u}; cp < 8u; ++cp, ++i)
+    { // All non-ASCII characters
+        std::string actual{};
+        for (unat c{128u}; c < 256u; ++c)
         {
-            decodeStr[i] = char(cp);
-            std::format_to_n(&expectedStr[1u + 4u * i], 6, "\\x{:02X}"sv, cp);
-        }
-        for (unat cp{14u}; cp < 32u; ++cp, ++i)
-        {
-            decodeStr[i] = char(cp);
-            std::format_to_n(&expectedStr[1u + 4u * i], 6, "\\x{:02X}"sv, cp);
-        }
-        for (unat cp{127u}; cp < 256u; ++cp, ++i)
-        {
-            decodeStr[i] = char(cp);
-            std::format_to_n(&expectedStr[1u + 4u * i], 6, "\\x{:02X}"sv, cp);
+            actual.push_back(char(c));
         }
         Encoder encoder{};
-        encoder << decodeStr;
+        encoder << actual;
+        const std::string expectedStr{'"' + actual + '"'};
         ASSERT_EQ(encoder.finish(), expectedStr);
     }
     { // Single char
@@ -246,6 +227,11 @@ TEST(Encode, string)
         encoder << object << R"(''')" << R"(""")" << end;
         expected = R"({ "'''": "\"\"\"" })";
         ASSERT_EQ(encoder.finish(), expected);
+    }
+    { // Unicode
+        Encoder encoder{};
+        encoder << "\x41 \xD7\x90 \xEA\xB0\x80 \xF0\x9F\x98\x82";
+        ASSERT_EQ(encoder.finish(), "\"\x41 \xD7\x90 \xEA\xB0\x80 \xF0\x9F\x98\x82\"");
     }
 }
 
