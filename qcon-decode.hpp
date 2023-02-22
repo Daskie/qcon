@@ -56,13 +56,15 @@ namespace qcon
         std::string errorMessage{};
 
         Decoder() = default;
-        Decoder(std::string_view qson);
-        Decoder(const char * qson) : Decoder{std::string_view{qson}} {}
+        Decoder(const char * qson);
+        Decoder(const std::string & qson) : Decoder{qson.c_str()} {}
         Decoder(std::string &&) = delete; // Prevent binding to temporary
+        Decoder(std::string_view) = delete; // QCON string must be null terminated
 
-        void load(std::string_view qcon);
-        void load(const char * qson) { return load(std::string_view{qson}); }
+        void load(const char * qson);
+        void load(const std::string & qson) { load(qson.c_str()); }
         void load(std::string &&) = delete; // Prevent binding to temporary
+        void load(std::string_view) = delete; // QCON string must be null terminated
 
         DecodeState step();
 
@@ -73,11 +75,11 @@ namespace qcon
       private:
 
         DecodeState _state{DecodeState::done};
-        const char * _start{};
-        const char * _end{};
+        const char * _qcon{};
         const char * _pos{};
         u64 _stack{};
         unat _depth{};
+        const char * _cachedEnd{}; // Only used for floating point `from_chars`
 
         void _skipSpace();
 
@@ -181,17 +183,17 @@ namespace qcon
         }
     }
 
-    inline Decoder::Decoder(const std::string_view qson)
+    inline Decoder::Decoder(const char * const qcon)
     {
-        load(qson);
+        load(qcon);
     }
 
-    inline void Decoder::load(const std::string_view qcon)
+    inline void Decoder::load(const char * const qcon)
     {
         _state = DecodeState::done;
-        _start = qcon.data();
-        _end = _start + qcon.size();
-        _pos = _start;
+        _qcon = qcon;
+        _pos = _qcon;
+        _cachedEnd = nullptr;
     }
 
     inline DecodeState Decoder::step()
@@ -201,12 +203,12 @@ namespace qcon
             return _state;
         }
 
-        const bool content{_pos != _start};
+        const bool content{_pos != _qcon};
 
         _skipSpaceAndComments();
 
         // At end of QCON
-        if (_pos >= _end)
+        if (!*_pos)
         {
             if (_depth == 0u && content)
             {
@@ -356,24 +358,21 @@ namespace qcon
             case '+':
             {
                 ++_pos;
-                if (_pos < _end)
+                if (_isDigit(*_pos))
                 {
-                    if (_isDigit(*_pos))
+                    _ingestNumber(1);
+                    return _state;
+                }
+                else if (*_pos == 'i')
+                {
+                    ++_pos;
+                    if (_tryConsumeChars("nf"sv))
                     {
-                        _ingestNumber(1);
-                        return _state;
+                        floater = std::numeric_limits<double>::infinity();
+                        positive = true;
+                        return _state = DecodeState::floater;
                     }
-                    else if (*_pos == 'i')
-                    {
-                        ++_pos;
-                        if (_tryConsumeChars("nf"sv))
-                        {
-                            floater = std::numeric_limits<double>::infinity();
-                            positive = true;
-                            return _state = DecodeState::floater;
-                        }
-                        --_pos;
-                    }
+                    --_pos;
                 }
                 --_pos;
                 break;
@@ -381,24 +380,21 @@ namespace qcon
             case '-':
             {
                 ++_pos;
-                if (_pos < _end)
+                if (_isDigit(*_pos))
                 {
-                    if (_isDigit(*_pos))
+                    _ingestNumber(-1);
+                    return _state;
+                }
+                else if (*_pos == 'i')
+                {
+                    ++_pos;
+                    if (_tryConsumeChars("nf"sv))
                     {
-                        _ingestNumber(-1);
-                        return _state;
+                        floater = -std::numeric_limits<double>::infinity();
+                        positive = false;
+                        return _state = DecodeState::floater;
                     }
-                    else if (*_pos == 'i')
-                    {
-                        ++_pos;
-                        if (_tryConsumeChars("nf"sv))
-                        {
-                            floater = -std::numeric_limits<double>::infinity();
-                            positive = false;
-                            return _state = DecodeState::floater;
-                        }
-                        --_pos;
-                    }
+                    --_pos;
                 }
                 --_pos;
                 break;
@@ -460,7 +456,7 @@ namespace qcon
                     return _state = DecodeState::error;
                 }
 
-                if (_pos < _end && *_pos == 'T')
+                if (*_pos == 'T')
                 {
                     ++_pos;
                     return _state = _consumeTime() ? DecodeState::datetime : DecodeState::error;
@@ -483,7 +479,7 @@ namespace qcon
 
     inline void Decoder::_skipSpace()
     {
-        for (; _pos < _end && _isSpace(*_pos); ++_pos);
+        while (_isSpace(*_pos)) ++_pos;
     }
 
     inline void Decoder::_skipSpaceAndComments()
@@ -491,13 +487,13 @@ namespace qcon
         _skipSpace();
 
         // Skip comments and space
-        while (_pos < _end && *_pos == '#')
+        while (*_pos == '#')
         {
             // Skip `#`
             ++_pos;
 
             // Skip rest of line
-            for (; _pos < _end && *_pos != '\n'; ++_pos);
+            while (*_pos && *_pos != '\n') ++_pos;
 
             _skipSpace();
         }
@@ -505,16 +501,11 @@ namespace qcon
 
     inline int Decoder::_tryConsumeSign()
     {
-        int sign{0};
+        const int sign{(*_pos == '+') - (*_pos == '-')};
 
-        if (_pos < _end)
+        if (sign)
         {
-            sign = (*_pos == '+') - (*_pos == '-');
-
-            if (sign)
-            {
-                ++_pos;
-            }
+            ++_pos;
         }
 
         return sign;
@@ -522,7 +513,7 @@ namespace qcon
 
     inline bool Decoder::_tryConsumeChar(const char c)
     {
-        if (_pos < _end && *_pos == c)
+        if (*_pos == c)
         {
             ++_pos;
             return true;
@@ -535,31 +526,24 @@ namespace qcon
 
     inline bool Decoder::_tryConsumeChars(const std::string_view str)
     {
-        if (unat(_end - _pos) >= str.length())
+        const char * const start{_pos};
+
+        for (const char c : str)
         {
-            for (unat i{0u}; i < str.length(); ++i)
+            if (*_pos != c)
             {
-                if (_pos[i] != str[i])
-                {
-                    return false;
-                }
+                _pos = start;
+                return false;
             }
-            _pos += str.length();
-            return true;
+
+            ++_pos;
         }
-        else
-        {
-            return false;
-        }
+
+        return true;
     }
 
     template <bool checkOverflow> inline bool Decoder::_tryConsumeBinaryDigit(u64 & v)
     {
-        if (_pos >= _end)
-        {
-            return false;
-        }
-
         const u64 b{u64(*_pos - '0')};
 
         if (b >= 2u)
@@ -584,11 +568,6 @@ namespace qcon
 
     template <bool checkOverflow> inline bool Decoder::_tryConsumeOctalDigit(u64 & v)
     {
-        if (_pos >= _end)
-        {
-            return false;
-        }
-
         const u64 o{u64(*_pos - '0')};
 
         if (o >= 8u)
@@ -616,11 +595,6 @@ namespace qcon
         static constexpr u64 riskyVal{std::numeric_limits<u64>::max() / 10u};
         static constexpr u64 riskyDigit{std::numeric_limits<u64>::max() % 10u};
 
-        if (_pos >= _end)
-        {
-            return false;
-        }
-
         const u64 d{u64(*_pos - '0')};
 
         if (d >= 10u)
@@ -646,11 +620,6 @@ namespace qcon
     template <bool checkOverflow> inline bool Decoder::_tryConsumeHexDigit(u64 & v)
     {
         static constexpr std::array<u8, 256u> hexTable{_createHexTable()};
-
-        if (_pos >= _end)
-        {
-            return false;
-        }
 
         const u64 h{hexTable[u8(*_pos)]};
 
@@ -801,26 +770,13 @@ namespace qcon
 
     inline bool Decoder::_consumeEscaped(std::string & dst)
     {
-        if (_pos >= _end)
-        {
-            errorMessage = "Expected escape sequence"sv;
-            return false;
-        }
-
         char c{*_pos};
         ++_pos;
 
         switch (c)
         {
             case '\n': return true;
-            case '\r':
-            {
-                if (_pos < _end && *_pos == '\n')
-                {
-                    ++_pos;
-                }
-                return true;
-            }
+            case '\r': if (*_pos == '\n') ++_pos; return true;
             case '0': c = '\0'; break;
             case 'a': c = '\a'; break;
             case 'b': c = '\b'; break;
@@ -854,12 +810,6 @@ namespace qcon
 
         while (true)
         {
-            if (_pos >= _end)
-            {
-                errorMessage = "Expected end quote"sv;
-                return false;
-            }
-
             char c{*_pos};
             if (c == '"')
             {
@@ -890,7 +840,7 @@ namespace qcon
 
     inline bool Decoder::_consumeKey()
     {
-        if (_pos >= _end || *_pos != '"')
+        if (*_pos != '"')
         {
             errorMessage = "Expected key"sv;
             return false;
@@ -982,7 +932,13 @@ namespace qcon
 
     inline bool Decoder::_consumeFloater(const int sign)
     {
-        const std::from_chars_result res{std::from_chars(_pos, _end, floater)};
+        // Determine end of QCON
+        if (!_cachedEnd) [[unlikely]]
+        {
+            _cachedEnd = _pos + std::strlen(_pos);
+        }
+
+        const std::from_chars_result res{std::from_chars(_pos, _cachedEnd, floater)};
 
         // There was an issue parsing
         if (res.ec != std::errc{})
@@ -1061,26 +1017,23 @@ namespace qcon
         {
             ++_pos;
 
-            if (_pos < _end)
+            if (*_pos == 'b')
             {
-                if (*_pos == 'b')
-                {
-                    ++_pos;
-                    _state = _consumeInteger<2>(sign) ? DecodeState::integer : DecodeState::error;
-                    return;
-                }
-                else if (*_pos == 'o')
-                {
-                    ++_pos;
-                    _state = _consumeInteger<8>(sign) ? DecodeState::integer : DecodeState::error;
-                    return;
-                }
-                else if (*_pos == 'x')
-                {
-                    ++_pos;
-                    _state = _consumeInteger<16>(sign) ? DecodeState::integer : DecodeState::error;
-                    return;
-                }
+                ++_pos;
+                _state = _consumeInteger<2>(sign) ? DecodeState::integer : DecodeState::error;
+                return;
+            }
+            else if (*_pos == 'o')
+            {
+                ++_pos;
+                _state = _consumeInteger<8>(sign) ? DecodeState::integer : DecodeState::error;
+                return;
+            }
+            else if (*_pos == 'x')
+            {
+                ++_pos;
+                _state = _consumeInteger<16>(sign) ? DecodeState::integer : DecodeState::error;
+                return;
             }
 
             --_pos;
@@ -1088,18 +1041,10 @@ namespace qcon
 
         // Determine if integer or floater
         const char * integerEnd{_pos + 1};
-        for (; integerEnd < _end && _isDigit(*integerEnd); ++integerEnd);
-        if (integerEnd >= _end)
+        while (_isDigit(*integerEnd)) ++integerEnd;
+        if (*integerEnd == '.')
         {
-            _state = _consumeInteger<10>(sign) ? DecodeState::integer : DecodeState::error;
-        }
-        else if (*integerEnd == 'e' || *integerEnd == 'E')
-        {
-            _state = _consumeFloater(sign) ? DecodeState::floater : DecodeState::error;
-        }
-        else if (*integerEnd == '.')
-        {
-            if (integerEnd + 1 < _end && _isDigit(integerEnd[1]))
+            if (_isDigit(integerEnd[1]))
             {
                 _state = _consumeFloater(sign) ? DecodeState::floater : DecodeState::error;
             }
@@ -1108,6 +1053,10 @@ namespace qcon
                 errorMessage = "Number must not have trailing decimal"sv;
                 _state = DecodeState::error;
             }
+        }
+        else if (*integerEnd == 'e' || *integerEnd == 'E')
+        {
+            _state = _consumeFloater(sign) ? DecodeState::floater : DecodeState::error;
         }
         else
         {

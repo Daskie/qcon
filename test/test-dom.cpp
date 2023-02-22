@@ -945,7 +945,7 @@ TEST(Dom, comments)
     } # Blah
     # Blah
 ] # Blah
-# Blah)"sv)};
+# Blah)")};
         const Array & rootArr{*qcon.array()};
         ASSERT_EQ(rootArr.size(), 2u);
         const Array & innerArr{*rootArr.at(0).array()};

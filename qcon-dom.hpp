@@ -273,7 +273,10 @@ namespace qcon
     /// @param qcon the QCON string to decode
     /// @return the decoded value of the QCON, or empty if the string is invalid or could otherwise not be parsed
     ///
-    [[nodiscard]] std::optional<Value> decode(std::string_view qcon);
+    [[nodiscard]] std::optional<Value> decode(const char * qcon);
+    [[nodiscard]] std::optional<Value> decode(const std::string & qcon) { return decode(qcon.c_str()); }
+    [[nodiscard]] std::optional<Value> decode(std::string &&) = delete; // Prevent binding to temporary
+    [[nodiscard]] std::optional<Value> decode(std::string_view) = delete; // QCON string must be null terminated
 
     ///
     /// @param val the QCON value to encode
@@ -1138,7 +1141,7 @@ namespace qcon
         }
     }
 
-    inline std::optional<Value> decode(const std::string_view qcon)
+    inline std::optional<Value> decode(const char * const qcon)
     {
         Value value{};
         Decoder decoder{qcon};
