@@ -409,6 +409,15 @@ TEST(Decode, string)
         ASSERT_EQ(decoder.step(), DecodeState::string);
         ASSERT_EQ(decoder.string, "");
         ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        decoder.load("\"a\\\rb\\\r\\\nc\"");
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "abc");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+
+        ASSERT_TRUE(fails("\"a\rb\""));
+        ASSERT_TRUE(fails("\"a\nb\""));
+        ASSERT_TRUE(fails("\"a\r\nb\""));
     }
     { // Single quotes
         ASSERT_TRUE(fails(R"('abc')"));

@@ -812,6 +812,15 @@ namespace qcon
 
         switch (c)
         {
+            case '\n': return true;
+            case '\r':
+            {
+                if (_pos < _end && *_pos == '\n')
+                {
+                    ++_pos;
+                }
+                return true;
+            }
             case '0': c = '\0'; break;
             case 'a': c = '\a'; break;
             case 'b': c = '\b'; break;
@@ -861,21 +870,9 @@ namespace qcon
             {
                 ++_pos;
 
-                // Check for escaped newline
-                if (*_pos == '\n')
+                if (!_consumeEscaped(dst))
                 {
-                    ++_pos;
-                }
-                else if (*_pos == '\r' && _pos + 1 < _end && _pos[1] == '\n')
-                {
-                    _pos += 2;
-                }
-                else
-                {
-                    if (!_consumeEscaped(dst))
-                    {
-                        return false;
-                    }
+                    return false;
                 }
             }
             else if (_isControl(c))
