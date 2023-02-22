@@ -167,6 +167,20 @@ namespace qcon
         return table;
     }
 
+    [[nodiscard]] inline bool _isSpace(const char c)
+    {
+        switch (c)
+        {
+            case '\t': [[fallthrough]];
+            case '\n': [[fallthrough]];
+            case '\v': [[fallthrough]];
+            case '\f': [[fallthrough]];
+            case '\r': [[fallthrough]];
+            case ' ': return true;
+            default: return false;
+        }
+    }
+
     inline Decoder::Decoder(const std::string_view qson)
     {
         load(qson);
@@ -469,7 +483,7 @@ namespace qcon
 
     inline void Decoder::_skipSpace()
     {
-        for (; _pos < _end && std::isspace(u8(*_pos)); ++_pos);
+        for (; _pos < _end && _isSpace(*_pos); ++_pos);
     }
 
     inline void Decoder::_skipSpaceAndComments()
