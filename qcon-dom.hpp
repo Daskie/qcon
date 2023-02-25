@@ -119,10 +119,10 @@ namespace qcon
         Value & operator=(double val);
         Value & operator=(float val);
         Value & operator=(bool val);
-        Value & operator=(nullptr_t);
         Value & operator=(const Date & val);
         Value & operator=(const Time & val);
         Value & operator=(const Datetime & val);
+        Value & operator=(nullptr_t);
 
         Value & operator=(const Value &) = delete;
         Value & operator=(Value && other);
@@ -171,12 +171,6 @@ namespace qcon
         [[nodiscard]] const bool * boolean() const;
 
         ///
-        /// @return this value as a null if it is a null, otherwise null
-        ///
-        [[nodiscard]] nullptr_t * null();
-        [[nodiscard]] const nullptr_t * null() const;
-
-        ///
         /// @return this value as a date if it is a date or datetime, otherwise null
         ///
         [[nodiscard]] Date * date();
@@ -193,6 +187,12 @@ namespace qcon
         ///
         [[nodiscard]] Datetime * datetime();
         [[nodiscard]] const Datetime * datetime() const;
+
+        ///
+        /// @return this value as a null if it is a null, otherwise null
+        ///
+        [[nodiscard]] nullptr_t * null();
+        [[nodiscard]] const nullptr_t * null() const;
 
         ///
         /// @return whether the number was positive; useful for unsigned integers too large to fit in a s64
@@ -226,10 +226,10 @@ namespace qcon
         [[nodiscard]] bool operator==(double val) const;
         [[nodiscard]] bool operator==(float val) const;
         [[nodiscard]] bool operator==(bool val) const;
-        [[nodiscard]] bool operator==(nullptr_t) const;
         [[nodiscard]] bool operator==(const Date & val) const;
         [[nodiscard]] bool operator==(const Time & val) const;
         [[nodiscard]] bool operator==(const Datetime & val) const;
+        [[nodiscard]] bool operator==(nullptr_t) const;
 
       private:
 
@@ -241,8 +241,8 @@ namespace qcon
             s64 _integer;
             double _floater;
             bool _boolean;
-            nullptr_t _null;
             Datetime * _datetime;
+            nullptr_t _null;
         };
         Type _type{};
         bool _positive{};
@@ -452,11 +452,6 @@ namespace qcon
         _type{Type::boolean}
     {}
 
-    inline Value::Value(nullptr_t) :
-        _null{},
-        _type{Type::null}
-    {}
-
     inline Value::Value(const Date & val) :
         _datetime{new Datetime{.date = val}},
         _type{Type::date}
@@ -470,6 +465,11 @@ namespace qcon
     inline Value::Value(const Datetime & val) :
         _datetime{new Datetime{val}},
         _type{Type::datetime}
+    {}
+
+    inline Value::Value(nullptr_t) :
+        _null{},
+        _type{Type::null}
     {}
 
     inline Value::Value(Value && other) :
@@ -632,17 +632,6 @@ namespace qcon
         return *this;
     }
 
-    inline Value & Value::operator=(const nullptr_t)
-    {
-        if (_type != Type::null)
-        {
-            _deleteValue();
-            _type = Type::null;
-        }
-        _null = nullptr;
-        return *this;
-    }
-
     inline Value & Value::operator=(const Date & val)
     {
         if (_type == Type::date || _type == Type::time || _type == Type::datetime)
@@ -685,6 +674,17 @@ namespace qcon
             _datetime = new Datetime{val};
         }
         _type = Type::datetime;
+        return *this;
+    }
+
+    inline Value & Value::operator=(const nullptr_t)
+    {
+        if (_type != Type::null)
+        {
+            _deleteValue();
+            _type = Type::null;
+        }
+        _null = nullptr;
         return *this;
     }
 
@@ -763,16 +763,6 @@ namespace qcon
         return _type == Type::boolean ? &_boolean : nullptr;
     }
 
-    inline nullptr_t * Value::null()
-    {
-        return _type == Type::null ? &_null : nullptr;
-    }
-
-    inline const nullptr_t * Value::null() const
-    {
-        return _type == Type::null ? &_null : nullptr;
-    }
-
     inline Date * Value::date()
     {
         return _type == Type::date || _type == Type::datetime ? &_datetime->date : nullptr;
@@ -803,17 +793,27 @@ namespace qcon
         return _type == Type::datetime ? _datetime : nullptr;
     }
 
+    inline nullptr_t * Value::null()
+    {
+        return _type == Type::null ? &_null : nullptr;
+    }
+
+    inline const nullptr_t * Value::null() const
+    {
+        return _type == Type::null ? &_null : nullptr;
+    }
+
     inline bool Value::operator==(const Value & other) const
     {
         switch (other._type)
         {
+            case Type::null: return *this == other._null;
             case Type::object: return *this == *other._object;
             case Type::array: return *this == *other._array;
             case Type::string: return *this == *other._string;
             case Type::integer: return *this == other._integer;
             case Type::floater: return *this == other._floater;
             case Type::boolean: return *this == other._boolean;
-            case Type::null: return *this == other._null;
             case Type::date: return *this == other._datetime->date;
             case Type::time: return *this == other._datetime->time;
             case Type::datetime: return *this == *other._datetime;
@@ -906,11 +906,6 @@ namespace qcon
         return _type == Type::boolean && _boolean == val;
     }
 
-    inline bool Value::operator==(const nullptr_t) const
-    {
-        return _type == Type::null;
-    }
-
     inline bool Value::operator==(const Date & val) const
     {
         return _type == Type::date && _datetime->date == val;
@@ -924,6 +919,11 @@ namespace qcon
     inline bool Value::operator==(const Datetime & val) const
     {
         return _type == Type::datetime && *_datetime == val;
+    }
+
+    inline bool Value::operator==(const nullptr_t) const
+    {
+        return _type == Type::null;
     }
 
     inline void Value::_deleteValue()
@@ -1030,11 +1030,6 @@ namespace qcon
                     object.emplace(std::move(decoder.key), decoder.boolean);
                     break;
                 }
-                case DecodeState::null:
-                {
-                    object.emplace(std::move(decoder.key), nullptr);
-                    break;
-                }
                 case DecodeState::date:
                 {
                     object.emplace(std::move(decoder.key), decoder.date);
@@ -1048,6 +1043,11 @@ namespace qcon
                 case DecodeState::datetime:
                 {
                     object.emplace(std::move(decoder.key), decoder.datetime);
+                    break;
+                }
+                case DecodeState::null:
+                {
+                    object.emplace(std::move(decoder.key), nullptr);
                     break;
                 }
                 default:
@@ -1113,11 +1113,6 @@ namespace qcon
                     array.push_back(decoder.boolean);
                     break;
                 }
-                case DecodeState::null:
-                {
-                    array.push_back(nullptr);
-                    break;
-                }
                 case DecodeState::date:
                 {
                     array.push_back(decoder.date);
@@ -1131,6 +1126,11 @@ namespace qcon
                 case DecodeState::datetime:
                 {
                     array.push_back(decoder.datetime);
+                    break;
+                }
+                case DecodeState::null:
+                {
+                    array.push_back(nullptr);
                     break;
                 }
                 default:
@@ -1195,10 +1195,6 @@ namespace qcon
                 value = decoder.boolean;
                 break;
             }
-            case DecodeState::null:
-            {
-                break;
-            }
             case DecodeState::date:
             {
                 value = decoder.date;
@@ -1212,6 +1208,10 @@ namespace qcon
             case DecodeState::datetime:
             {
                 value = decoder.datetime;
+                break;
+            }
+            case DecodeState::null:
+            {
                 break;
             }
             default:

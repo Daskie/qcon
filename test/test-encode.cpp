@@ -549,13 +549,6 @@ TEST(Encode, boolean)
     }
 }
 
-TEST(Encode, null)
-{
-    Encoder encoder{};
-    encoder << nullptr;
-    ASSERT_EQ(encoder.finish(), "null");
-}
-
 TEST(Encode, date)
 {
     { // Default
@@ -825,6 +818,13 @@ TEST(Encode, timepoint)
     }
 }
 
+TEST(Encode, null)
+{
+    Encoder encoder{};
+    encoder << nullptr;
+    ASSERT_EQ(encoder.finish(), "null");
+}
+
 TEST(Encode, custom)
 {
     Encoder encoder{};
@@ -1008,11 +1008,6 @@ TEST(Encode, flagTokens)
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 
-        // Null after density
-        encoder << nospace << nullptr;
-        ASSERT_FALSE(encoder.status());
-        encoder.reset();
-
         // Date after density
         encoder << nospace << Date{};
         ASSERT_FALSE(encoder.status());
@@ -1030,6 +1025,11 @@ TEST(Encode, flagTokens)
 
         // Timestamp after density
         encoder << nospace << Timepoint{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Null after density
+        encoder << nospace << nullptr;
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 
@@ -1075,11 +1075,6 @@ TEST(Encode, flagTokens)
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 
-        // Null after base
-        encoder << hex << nullptr;
-        ASSERT_FALSE(encoder.status());
-        encoder.reset();
-
         // Date after base
         encoder << hex << Date{};
         ASSERT_FALSE(encoder.status());
@@ -1097,6 +1092,11 @@ TEST(Encode, flagTokens)
 
         // Timestamp after base
         encoder << hex << Timepoint{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Null after base
+        encoder << hex << nullptr;
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 
@@ -1142,11 +1142,6 @@ TEST(Encode, flagTokens)
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 
-        // Null after time zone format
-        encoder << utc << nullptr;
-        ASSERT_FALSE(encoder.status());
-        encoder.reset();
-
         // Date after time zone format
         encoder << utc << Date{};
         ASSERT_FALSE(encoder.status());
@@ -1159,6 +1154,11 @@ TEST(Encode, flagTokens)
 
         // Datetime after time zone format
         encoder << utc << Datetime{};
+        ASSERT_FALSE(encoder.status());
+        encoder.reset();
+
+        // Null after time zone format
+        encoder << utc << nullptr;
         ASSERT_FALSE(encoder.status());
         encoder.reset();
 

@@ -135,11 +135,11 @@ namespace qcon
         Encoder & operator<<(double v);
         Encoder & operator<<(float v);
         Encoder & operator<<(bool v);
-        Encoder & operator<<(std::nullptr_t);
         Encoder & operator<<(const Date & v);
         Encoder & operator<<(const Time & v);
         Encoder & operator<<(const Datetime & v);
         Encoder & operator<<(Timepoint v);
+        Encoder & operator<<(std::nullptr_t);
 
         ///
         /// @return whether the encoding has been thusfar successful
@@ -210,10 +210,10 @@ namespace qcon
         void _encodeHex(u64 v);
         [[nodiscard]] bool _encode(double v);
         [[nodiscard]] bool _encode(bool v);
-        [[nodiscard]] bool _encode(std::nullptr_t);
         [[nodiscard]] bool _encode(const Date & v);
         [[nodiscard]] bool _encode(const Time & v);
         [[nodiscard]] bool _encode(const Datetime & v);
+        [[nodiscard]] bool _encode(std::nullptr_t);
     };
 }
 
@@ -465,20 +465,6 @@ namespace qcon
         return *this;
     }
 
-    inline Encoder & Encoder::operator<<(const std::nullptr_t)
-    {
-        if (_expect == _Expect::any)
-        {
-            _val(nullptr);
-        }
-        else
-        {
-            _expect = _Expect::error;
-        }
-
-        return *this;
-    }
-
     inline Encoder & Encoder::operator<<(const Date & v)
     {
         if (_expect == _Expect::any)
@@ -536,6 +522,20 @@ namespace qcon
             {
                 _expect = _Expect::error;
             }
+        }
+        else
+        {
+            _expect = _Expect::error;
+        }
+
+        return *this;
+    }
+
+    inline Encoder & Encoder::operator<<(const std::nullptr_t)
+    {
+        if (_expect == _Expect::any)
+        {
+            _val(nullptr);
         }
         else
         {
@@ -882,13 +882,6 @@ namespace qcon
         return true;
     }
 
-    inline bool Encoder::_encode(std::nullptr_t)
-    {
-        _str += "null"sv;
-
-        return true;
-    }
-
     inline bool Encoder::_encode(const Date & v)
     {
         static thread_local char buffer[]{"DYYYY-MM-DD"};
@@ -1047,5 +1040,12 @@ namespace qcon
     inline bool Encoder::_encode(const Datetime & v)
     {
         return _encode(v.date) && _encode(v.time);
+    }
+
+    inline bool Encoder::_encode(std::nullptr_t)
+    {
+        _str += "null"sv;
+
+        return true;
     }
 }

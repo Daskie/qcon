@@ -32,10 +32,10 @@ std::ostream & operator<<(std::ostream & os, const DecodeState state)
         case DecodeState::integer: os << "integer"; break;
         case DecodeState::floater: os << "floater"; break;
         case DecodeState::boolean: os << "boolean"; break;
-        case DecodeState::null: os << "null"; break;
         case DecodeState::date: os << "date"; break;
         case DecodeState::time: os << "time"; break;
         case DecodeState::datetime: os << "datetime"; break;
+        case DecodeState::null: os << "null"; break;
         case DecodeState::done: os << "done"; break;
     }
 
@@ -1087,13 +1087,6 @@ TEST(Decode, boolean)
     }
 }
 
-TEST(Decode, null)
-{
-    Decoder decoder{"null"};
-    ASSERT_EQ(decoder.step(), DecodeState::null);
-    ASSERT_EQ(decoder.step(), DecodeState::done);
-}
-
 TEST(Decode, date)
 {
     { // General
@@ -1598,6 +1591,13 @@ TEST(Decode, datetime)
         ASSERT_TRUE(fails("D1970-01-0100:00:00Z"));
         ASSERT_TRUE(fails("D19700101T000000Z"));
     }
+}
+
+TEST(Decode, null)
+{
+    Decoder decoder{"null"};
+    ASSERT_EQ(decoder.step(), DecodeState::null);
+    ASSERT_EQ(decoder.step(), DecodeState::done);
 }
 
 TEST(Decode, noSpace)

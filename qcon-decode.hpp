@@ -33,10 +33,10 @@ namespace qcon
         integer,
         floater,
         boolean,
-        null,
         date,
         time,
         datetime,
+        null,
         done
     };
 
@@ -48,8 +48,8 @@ namespace qcon
         std::string string{};
         s64 integer{};
         double floater{};
-        bool boolean{};
         bool positive{};
+        bool boolean{};
         Datetime datetime{};
         Date & date{datetime.date};
         Time & time{datetime.time};

@@ -556,9 +556,6 @@ TEST(Dom, valueConstruction)
     // Boolean
     ASSERT_EQ(Value{false}.type(), Type::boolean);
 
-    // Null
-    ASSERT_EQ(Value{nullptr}.type(), Type::null);
-
     // Date
     ASSERT_EQ(Value{Date{}}.type(), Type::date);
 
@@ -567,6 +564,9 @@ TEST(Dom, valueConstruction)
 
     // Datetime
     ASSERT_EQ(Value{Datetime{}}.type(), Type::datetime);
+
+    // Null
+    ASSERT_EQ(Value{nullptr}.type(), Type::null);
 }
 
 TEST(Dom, valueMove)
@@ -712,12 +712,6 @@ TEST(Dom, valueAssignAndEquality)
         ASSERT_TRUE(v == true);
         ASSERT_FALSE(v != true);
     }
-    { // Null
-        v = nullptr;
-        ASSERT_EQ(v.type(), Type::null);
-        ASSERT_TRUE(v == nullptr);
-        ASSERT_FALSE(v != nullptr);
-    }
     { // Date
         v = Date{};
         ASSERT_EQ(v.type(), Type::date);
@@ -735,6 +729,12 @@ TEST(Dom, valueAssignAndEquality)
         ASSERT_EQ(v.type(), Type::datetime);
         ASSERT_TRUE(v == Datetime{});
         ASSERT_FALSE(v != Datetime{});
+    }
+    { // Null
+        v = nullptr;
+        ASSERT_EQ(v.type(), Type::null);
+        ASSERT_TRUE(v == nullptr);
+        ASSERT_FALSE(v != nullptr);
     }
 }
 
@@ -800,11 +800,6 @@ TEST(Dom, valueTypes)
         ASSERT_EQ(v.type(), Type::boolean);
         ASSERT_TRUE(v.boolean());
     }
-    { // Null
-        Value v{nullptr};
-        ASSERT_EQ(v.type(), Type::null);
-        ASSERT_TRUE(v.null());
-    }
     { // Date
         Value v{Date{}};
         ASSERT_EQ(v.type(), Type::date);
@@ -821,6 +816,11 @@ TEST(Dom, valueTypes)
         ASSERT_TRUE(v.datetime());
         ASSERT_TRUE(v.date());
         ASSERT_TRUE(v.time());
+    }
+    { // Null
+        Value v{nullptr};
+        ASSERT_EQ(v.type(), Type::null);
+        ASSERT_TRUE(v.null());
     }
 }
 
