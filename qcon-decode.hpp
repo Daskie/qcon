@@ -812,7 +812,17 @@ namespace qcon
             if (c == '"')
             {
                 ++_pos;
-                return true;
+
+                _skipSpaceAndComments();
+
+                if (*_pos == '"')
+                {
+                    ++_pos;
+                }
+                else
+                {
+                    return true;
+                }
             }
             else if (c == '\\')
             {

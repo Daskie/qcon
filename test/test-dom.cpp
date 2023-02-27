@@ -1072,7 +1072,14 @@ TEST(Dom, general)
         }
     ],
     "Founded": D1964-03-17,
-    "Green Eggs and Ham": "I do not like them in a box\nI do not like them with a fox\nI do not like them in a house\nI do not like them with a mouse\nI do not like them here or there\nI do not like them anywhere\nI do not like green eggs and ham\nI do not like them Sam I am\n",
+    "Green Eggs and Ham": "I do not like them in a box\n"
+                          "I do not like them with a fox\n"
+                          "I do not like them in a house\n"
+                          "I do not like them with a mouse\n"
+                          "I do not like them here or there\n"
+                          "I do not like them anywhere\n"
+                          "I do not like green eggs and ham\n"
+                          "I do not like them Sam I am\n",
     "Ha\x03r Name": "M\0\0n",
     "Last Updated": D2003-06-28T13:59:11.067Z,
     "Magic Numbers": [

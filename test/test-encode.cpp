@@ -193,7 +193,7 @@ TEST(Encode, string)
         ASSERT_EQ(encoder.finish(), R"("hello")");
     }
     { // All ASCII characters
-        Encoder encoder{};
+        Encoder encoder{nospace};
         const std::string actual{"\0\x01\x02\x03\x04\x05\x06\a\b\t\n\v\f\r\x0E\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\x7F"sv};
         const std::string expected{"\"\\0\\x01\\x02\\x03\\x04\\x05\\x06\\a\\b\\t\\n\\v\\f\\r\\x0E\\x0F\\x10\\x11\\x12\\x13\\x14\\x15\\x16\\x17\\x18\\x19\\x1A\\x1B\\x1C\\x1D\\x1E\\x1F !\\\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\x7F\""sv};
         encoder << actual;
@@ -232,6 +232,76 @@ TEST(Encode, string)
         Encoder encoder{};
         encoder << "\x41 \xD7\x90 \xEA\xB0\x80 \xF0\x9F\x98\x82";
         ASSERT_EQ(encoder.finish(), "\"\x41 \xD7\x90 \xEA\xB0\x80 \xF0\x9F\x98\x82\"");
+    }
+    { // Multi line string
+        Encoder encoder{multiline};
+
+        encoder << "a\nb\r\nc";
+        ASSERT_EQ(encoder.finish(),
+            R"("a\n"
+"b\r\n"
+"c")");
+
+        encoder << "a\nb\r\nc\n";
+        ASSERT_EQ(encoder.finish(),
+            R"("a\n"
+"b\r\n"
+"c\n")");
+
+        encoder << object << "A\nrather\nlong\nkey" << "A\nrather\nlong\nvalue" << end;
+        ASSERT_EQ(encoder.finish(),
+            R"({
+    "A\n"
+    "rather\n"
+    "long\n"
+    "key": "A\n"
+           "rather\n"
+           "long\n"
+           "value"
+})");
+
+        encoder << "a\n";
+        ASSERT_EQ(encoder.finish(), R"("a\n")");
+
+        encoder << object << "k\n" << "a\n" << end;
+        ASSERT_EQ(encoder.finish(),
+            R"({
+    "k\n": "a\n"
+})");
+
+        encoder << "\n";
+        ASSERT_EQ(encoder.finish(), R"("\n")");
+
+        encoder << object << "\n" << "\n" << end;
+        ASSERT_EQ(encoder.finish(),
+            R"({
+    "\n": "\n"
+})");
+
+        encoder << object << "\n\na\n\nb\n\n" << "\n\nc\n\nd\n\n" << end;
+        ASSERT_EQ(encoder.finish(),
+            R"({
+    "\n"
+    "\n"
+    "a\n"
+    "\n"
+    "b\n"
+    "\n": "\n"
+          "\n"
+          "c\n"
+          "\n"
+          "d\n"
+          "\n"
+})");
+    }
+    { // Multi string higher density
+        Encoder encoder{uniline};
+
+        encoder << "a\nb";
+        ASSERT_EQ(encoder.finish(), R"("a\nb")");
+
+        encoder << object << "a\nb" << "c\nd" << end;
+        ASSERT_EQ(encoder.finish(), R"({ "a\nb": "c\nd" })");
     }
 }
 
@@ -882,9 +952,23 @@ TEST(Encode, finish)
 
 TEST(Encode, density)
 {
+    { // Default density
+        Encoder encoder{};
+        ASSERT_EQ(encoder.density(), multiline);
+    }
     { // Top level multiline
         Encoder encoder{multiline};
-        encoder << object << "k1" << array << "v1" << "v2" << end << "k2" << "v3" << end;
+        ASSERT_EQ(encoder.density(), multiline);
+        encoder << object;
+            ASSERT_EQ(encoder.density(), multiline);
+            encoder << "k1" << array;
+                ASSERT_EQ(encoder.density(), multiline);
+                encoder << "v1" << "v2";
+            encoder << end;
+            ASSERT_EQ(encoder.density(), multiline);
+            encoder << "k2" << "v3";
+        encoder << end;
+        ASSERT_EQ(encoder.density(), multiline);
         ASSERT_EQ(encoder.finish(), R"({
     "k1": [
         "v1",
@@ -895,20 +979,58 @@ TEST(Encode, density)
     }
     { // Top level uniline
         Encoder encoder{uniline};
-        encoder << object << "k1" << array << "v1" << "v2" << end << "k2" << "v3" << end;
+        ASSERT_EQ(encoder.density(), uniline);
+        encoder << object;
+            ASSERT_EQ(encoder.density(), uniline);
+            encoder << "k1" << array;
+                ASSERT_EQ(encoder.density(), uniline);
+                encoder << "v1" << "v2";
+            encoder << end;
+            ASSERT_EQ(encoder.density(), uniline);
+            encoder << "k2" << "v3";
+        encoder << end;
+        ASSERT_EQ(encoder.density(), uniline);
         ASSERT_EQ(encoder.finish(), R"({ "k1": [ "v1", "v2" ], "k2": "v3" })");
     }
     { // Top level nospace
         Encoder encoder{nospace};
-        encoder << object << "k1" << array << "v1" << "v2" << end << "k2" << "v3" << end;
+        ASSERT_EQ(encoder.density(), nospace);
+        encoder << object;
+            ASSERT_EQ(encoder.density(), nospace);
+            encoder << "k1" << array;
+                ASSERT_EQ(encoder.density(), nospace);
+                encoder << "v1" << "v2";
+            encoder << end;
+            ASSERT_EQ(encoder.density(), nospace);
+            encoder << "k2" << "v3";
+        encoder << end;
+        ASSERT_EQ(encoder.density(), nospace);
         ASSERT_EQ(encoder.finish(), R"({"k1":["v1","v2"],"k2":"v3"})");
     }
     { // Inner density
         Encoder encoder{};
         encoder << object;
-            encoder << "k1" << uniline << array << "v1" << nospace << array << "v2" << "v3" << end << end;
-            encoder << "k2" << uniline << object << "k3" << "v4" << "k4" << nospace << object << "k5" << "v5" << "k6" << "v6" << end << end;
+            ASSERT_EQ(encoder.density(), multiline);
+            encoder << "k1" << uniline << array;
+                ASSERT_EQ(encoder.density(), uniline);
+                encoder << "v1" << nospace << array;
+                    ASSERT_EQ(encoder.density(), nospace);
+                    encoder << "v2" << "v3";
+                encoder << end;
+                ASSERT_EQ(encoder.density(), uniline);
+            encoder << end;
+            ASSERT_EQ(encoder.density(), multiline);
+            encoder << "k2" << uniline << object;
+                ASSERT_EQ(encoder.density(), uniline);
+                encoder << "k3" << "v4" << "k4" << nospace << object;
+                    ASSERT_EQ(encoder.density(), nospace);
+                    encoder << "k5" << "v5" << "k6" << "v6";
+                encoder << end;
+                ASSERT_EQ(encoder.density(), uniline);
+            encoder << end;
+            ASSERT_EQ(encoder.density(), multiline);
         encoder << end;
+        ASSERT_EQ(encoder.density(), multiline);
         ASSERT_EQ(encoder.finish(), R"({
     "k1": [ "v1", ["v2","v3"] ],
     "k2": { "k3": "v4", "k4": {"k5":"v5","k6":"v6"} }
@@ -916,13 +1038,52 @@ TEST(Encode, density)
     }
     { // Density priority
         Encoder encoder{};
-        encoder << uniline << object << "k" << multiline << array << "v" << end << end;
+        ASSERT_EQ(encoder.density(), multiline);
+        encoder << uniline << object;
+            ASSERT_EQ(encoder.density(), uniline);
+            encoder << "k" << multiline << array;
+                ASSERT_EQ(encoder.density(), uniline);
+                encoder << "v";
+            encoder << end;
+            ASSERT_EQ(encoder.density(), uniline);
+        encoder << end;
+        ASSERT_EQ(encoder.density(), multiline);
         ASSERT_EQ(encoder.finish(), R"({ "k": [ "v" ] })");
-        encoder << uniline << array << multiline << object << "k" << "v" << end << end;
+
+        ASSERT_EQ(encoder.density(), multiline);
+        encoder << uniline << array;
+            ASSERT_EQ(encoder.density(), uniline);
+            encoder << multiline << object;
+                ASSERT_EQ(encoder.density(), uniline);
+                encoder << "k" << "v";
+            encoder << end;
+            ASSERT_EQ(encoder.density(), uniline);
+        encoder << end;
+        ASSERT_EQ(encoder.density(), multiline);
         ASSERT_EQ(encoder.finish(), R"([ { "k": "v" } ])");
-        encoder << nospace << object << "k" << uniline << array << "v" << end << end;
+
+        ASSERT_EQ(encoder.density(), multiline);
+        encoder << nospace << object;
+            ASSERT_EQ(encoder.density(), nospace);
+            encoder << "k" << uniline << array;
+                ASSERT_EQ(encoder.density(), nospace);
+                encoder << "v";
+            encoder << end;
+            ASSERT_EQ(encoder.density(), nospace);
+        encoder << end;
+        ASSERT_EQ(encoder.density(), multiline);
         ASSERT_EQ(encoder.finish(), R"({"k":["v"]})");
-        encoder << nospace << array << uniline << object << "k" << "v" << end << end;
+
+        ASSERT_EQ(encoder.density(), multiline);
+        encoder << nospace << array;
+            ASSERT_EQ(encoder.density(), nospace);
+            encoder << uniline << object;
+                ASSERT_EQ(encoder.density(), nospace);
+                encoder << "k" << "v";
+            encoder << end;
+            ASSERT_EQ(encoder.density(), nospace);
+        encoder << end;
+        ASSERT_EQ(encoder.density(), multiline);
         ASSERT_EQ(encoder.finish(), R"([{"k":"v"}])");
     }
 }
@@ -1183,6 +1344,22 @@ TEST(Encode, misc)
         encoder << "b";
         ASSERT_FALSE(encoder.status());
     }
+    { // Container accessor
+        Encoder encoder{};
+        ASSERT_EQ(encoder.container(), end);
+        encoder << object;
+            ASSERT_EQ(encoder.container(), object);
+            encoder << "k" << array;
+                ASSERT_EQ(encoder.container(), array);
+                encoder << object;
+                    ASSERT_EQ(encoder.container(), object);
+                encoder << end;
+                ASSERT_EQ(encoder.container(), array);
+            encoder << end;
+            ASSERT_EQ(encoder.container(), object);
+        encoder << end;
+        ASSERT_EQ(encoder.container(), end);
+    }
 }
 
 TEST(Encode, general)
@@ -1264,7 +1441,14 @@ I do not like them Sam I am
     ],
     "Profit Margin": null,
     "Ha\x03r Name": "M\0\0n",
-    "Green Eggs and Ham": "I do not like them in a box\nI do not like them with a fox\nI do not like them in a house\nI do not like them with a mouse\nI do not like them here or there\nI do not like them anywhere\nI do not like green eggs and ham\nI do not like them Sam I am\n",
+    "Green Eggs and Ham": "I do not like them in a box\n"
+                          "I do not like them with a fox\n"
+                          "I do not like them in a house\n"
+                          "I do not like them with a mouse\n"
+                          "I do not like them here or there\n"
+                          "I do not like them anywhere\n"
+                          "I do not like green eggs and ham\n"
+                          "I do not like them Sam I am\n",
     "Magic Numbers": [0x309,0o1411,0b1100001001],
     "Last Updated": D2003-06-28T13:59:11.067Z
 })");

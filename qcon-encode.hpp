@@ -159,6 +159,10 @@ namespace qcon
         ///
         [[nodiscard]] std::optional<std::string> finish();
 
+        [[nodiscard]] Container container() const { return _container; }
+
+        [[nodiscard]] Density density() const { return _density; }
+
       private:
 
         enum class _Expect
@@ -186,6 +190,7 @@ namespace qcon
         Container _container;
         Density _density;
         unat _indentation;
+        unat _lineStartI;
         Density _nextDensity;
         Base _nextBase;
         TimezoneFormat _nextTimezoneFormat;
@@ -253,6 +258,7 @@ namespace qcon
         _container{other._container},
         _density{other._density},
         _indentation{other._indentation},
+        _lineStartI{other._lineStartI},
         _nextDensity{other._nextDensity},
         _nextBase{other._nextBase},
         _nextTimezoneFormat{other._nextTimezoneFormat},
@@ -271,6 +277,7 @@ namespace qcon
         _container = other._container;
         _density = other._density;
         _indentation = other._indentation;
+        _lineStartI = other._lineStartI;
         _nextDensity = other._nextDensity;
         _nextBase = other._nextBase;
         _nextTimezoneFormat = other._nextTimezoneFormat;
@@ -552,6 +559,7 @@ namespace qcon
         _container = end;
         _density = _baseDensity;
         _indentation = 0u;
+        _lineStartI = 0u;
         _nextDensity = _density;
         _nextBase = decimal;
         _nextTimezoneFormat = utcOffset;
@@ -677,9 +685,22 @@ namespace qcon
     {
         switch (_density)
         {
-            case multiline: _str += '\n'; _str.append(_indentation, ' '); break;
-            case uniline: _str += ' '; break;
-            case nospace: break;
+            case multiline:
+            {
+                _str += '\n';
+                _lineStartI = _str.size();
+                _str.append(_indentation, ' ');
+                break;
+            }
+            case uniline:
+            {
+                _str += ' ';
+                break;
+            }
+            case nospace:
+            {
+                break;
+            }
         }
     }
 
@@ -715,14 +736,29 @@ namespace qcon
             'a', 'b', 't', 'n', 'v', 'f', 'r',
             14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 
+        const unat extraIndentation{_str.size() - _lineStartI - _indentation};
+
         _str += '"';
 
-        for (const char c : v)
+        for (unat i{0u}, n{v.size()}; i < n; ++i)
         {
+            const char c{v[i]};
+
             if (_isControl(c))
             {
-                const ControlString controlStr{controlStrings[c]};
-                _str.append(controlStr.chars, controlStr.length());
+                // Split strings on newlines in multiline density
+                if (c == '\n' && _density <= multiline && i < n - 1u)
+                {
+                    _str += "\\n\""sv;
+                    _putSpace();
+                    _str.append(extraIndentation, ' ');
+                    _str += '"';
+                }
+                else
+                {
+                    const ControlString controlStr{controlStrings[c]};
+                    _str.append(controlStr.chars, controlStr.length());
+                }
             }
             else
             {

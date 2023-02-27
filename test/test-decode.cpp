@@ -457,6 +457,21 @@ TEST(Decode, string)
         ASSERT_EQ(decoder.string, str);
         ASSERT_EQ(decoder.step(), DecodeState::done);
     }
+    { // Multi string
+        Decoder decoder{"\"a\"\"b\" \"c\"\n\"d\""};
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "abcd");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+    }
+    { // Multi string key
+        Decoder decoder{"{ \"A\"\" somewhat\"      \" rather\"\n\n\r\n\n\" long\"\t  \t\" key\": \"a\"\"b\" \"c\"\n\"d\" }"};
+        ASSERT_EQ(decoder.step(), DecodeState::object);
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.key, "A somewhat rather long key");
+        ASSERT_EQ(decoder.string, "abcd");
+        ASSERT_EQ(decoder.step(), DecodeState::end);
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+    }
 }
 
 TEST(Decode, decimal)
@@ -1903,7 +1918,14 @@ R"(
     ],
     "Profit Margin": null, # Pay no heed
     "Ha\x03r Name": "M\u0000\0n",
-    "Green Eggs and Ham": "I do not like them in a box\nI do not like them with a fox\nI do not like them in a house\nI do not like them with a mouse\nI do not like them here or there\nI do not like them anywhere\nI do not like green eggs and ham\nI do not like them Sam I am\n",
+    "Green Eggs and Ham": "I do not like them in a box\n"
+                          "I do not like them with a fox\n"
+                          "I do not like them in a house\n"
+                          "I do not like them with a mouse\n"
+                          "I do not like them here or there\n"
+                          "I do not like them anywhere\n"
+                          "I do not like green eggs and ham\n"
+                          "I do not like them Sam I am\n",
     "Magic Numbers": [0x309,0o1411,0b1100001001], # What could they mean?!
     "Last Updated": D2003-06-28T13:59:11.067Z
 })"};
