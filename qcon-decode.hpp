@@ -775,8 +775,6 @@ namespace qcon
 
         switch (c)
         {
-            case '\n': return true;
-            case '\r': if (*_pos == '\n') ++_pos; return true;
             case '0': c = '\0'; break;
             case 'a': c = '\a'; break;
             case 'b': c = '\b'; break;

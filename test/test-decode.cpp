@@ -385,37 +385,16 @@ TEST(Decode, string)
         ASSERT_TRUE(fails(R"("abc)"));
         ASSERT_TRUE(fails(R"([ "abc ])"));
     }
-    { // Escaped newlines
+    { // Newlines
         Decoder decoder{};
 
-        decoder.load("\"a\\\nb\\\nc\"");
-        ASSERT_EQ(decoder.step(), DecodeState::string);
-        ASSERT_EQ(decoder.string, "abc");
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load("\"a\\\r\nb\\\r\nc\"");
-        ASSERT_EQ(decoder.step(), DecodeState::string);
-        ASSERT_EQ(decoder.string, "abc");
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load("\"\\\n\\\n\\\n\"");
-        ASSERT_EQ(decoder.step(), DecodeState::string);
-        ASSERT_EQ(decoder.string, "");
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load("\"\\\r\n\\\n\\\r\n\"");
-        ASSERT_EQ(decoder.step(), DecodeState::string);
-        ASSERT_EQ(decoder.string, "");
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        decoder.load("\"a\\\rb\\\r\\\nc\"");
-        ASSERT_EQ(decoder.step(), DecodeState::string);
-        ASSERT_EQ(decoder.string, "abc");
-        ASSERT_EQ(decoder.step(), DecodeState::done);
-
-        ASSERT_TRUE(fails("\"a\rb\""));
         ASSERT_TRUE(fails("\"a\nb\""));
+        ASSERT_TRUE(fails("\"a\rb\""));
         ASSERT_TRUE(fails("\"a\r\nb\""));
+
+        ASSERT_TRUE(fails("\"a\\\nb\""));
+        ASSERT_TRUE(fails("\"a\\\rb\""));
+        ASSERT_TRUE(fails("\"a\\\r\nb\""));
     }
     { // Single quotes
         ASSERT_TRUE(fails("'abc'"));
@@ -1924,17 +1903,7 @@ R"(
     ],
     "Profit Margin": null, # Pay no heed
     "Ha\x03r Name": "M\u0000\0n",
-    "Green Eggs and Ham":
-"\
-I do not like them in a box\n\
-I do not like them with a fox\n\
-I do not like them in a house\n\
-I do not like them with a mouse\n\
-I do not like them here or there\n\
-I do not like them anywhere\n\
-I do not like green eggs and ham\n\
-I do not like them Sam I am\n\
-",
+    "Green Eggs and Ham": "I do not like them in a box\nI do not like them with a fox\nI do not like them in a house\nI do not like them with a mouse\nI do not like them here or there\nI do not like them anywhere\nI do not like green eggs and ham\nI do not like them Sam I am\n",
     "Magic Numbers": [0x309,0o1411,0b1100001001], # What could they mean?!
     "Last Updated": D2003-06-28T13:59:11.067Z
 })"};
