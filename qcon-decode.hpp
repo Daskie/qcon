@@ -787,6 +787,7 @@ namespace qcon
             case 'u': return _consumeCodePoint(dst, 4u);
             case 'U': return _consumeCodePoint(dst, 8u);
             case '"': break;
+            case '/': break;
             case '\\': break;
             default:
             {

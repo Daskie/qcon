@@ -254,6 +254,12 @@ TEST(Decode, string)
     { // Unknown escape sequence
         ASSERT_TRUE(fails("\"\\\0\""));
     }
+    { // Escaped forward slash
+        Decoder decoder{"\"\\/\""};
+        ASSERT_EQ(decoder.step(), DecodeState::string);
+        ASSERT_EQ(decoder.string, "/");
+        ASSERT_EQ(decoder.step(), DecodeState::done);
+    }
     { // 'x' code point
         Decoder decoder{};
 
