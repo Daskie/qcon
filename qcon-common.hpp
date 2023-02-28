@@ -35,9 +35,22 @@ namespace qcon
 
     struct Date
     {
+        /// Convenience wrapper for `fromYmd`
+        [[nodiscard]] static Date from(const std::chrono::year_month_day & ymd);
+
         u16 year{1970u}; /// Must be in range [0, 9999]
         u8 month{1u};    /// Must be in range [1, 12]
         u8 day{1u};      /// Must be in range [1, 31]
+
+        ///
+        /// @param ymd `std::chrono::year_month_day` to convert from; all fields must satisfy range requirements above
+        ///
+        void fromYmd(const std::chrono::year_month_day & ymd);
+
+        ///
+        /// @return date converted to a `std::chrono::year_month_day`
+        ///
+        [[nodiscard]] std::chrono::year_month_day toYmd() const;
 
         ///
         /// Compare dates chronologically
@@ -47,10 +60,25 @@ namespace qcon
 
     struct Time
     {
+        /// Convenience wrapper for `fromDuration`
+        [[nodiscard]] static Time from(std::chrono::nanoseconds ns);
+
         u8 hour{};       /// Must be in range [0, 23]
         u8 minute{};     /// Must be in range [0, 59]
         u8 second{};     /// Must be in range [0, 59]
         u32 subsecond{}; /// Nanoseconds; must be in range [0, 999,999,999]
+
+        ///
+        /// Convert from a `std::chrono` duration
+        /// @param ns nanoseconds since midnight; must be positive and less than the number of nanoseconds in a day
+        ///
+        void fromDuration(std::chrono::nanoseconds ns);
+
+        ///
+        /// Convert to a `std::chrono` duration
+        /// @return nanoseconds since midnight
+        ///
+        [[nodiscard]] std::chrono::nanoseconds toDuration() const;
 
         ///
         /// Compare times chronologically
@@ -69,6 +97,9 @@ namespace qcon
 
     struct Datetime
     {
+        /// Convenience wrapper for `fromTimepoint`
+        [[nodiscard]] static std::pair<Datetime, bool> from(Timepoint timepoint, TimezoneFormat timezoneFormat);
+
         Date date{};
         Time time{};
         Timezone zone{};
@@ -107,62 +138,109 @@ namespace qcon
         return u8(c) < 32u;
     }
 
+    inline Date Date::from(const std::chrono::year_month_day & ymd)
+    {
+        Date date;
+        date.fromYmd(ymd);
+        return date;
+    }
+
+    inline void Date::fromYmd(const std::chrono::year_month_day & ymd)
+    {
+        year = u16(static_cast<int>(ymd.year()));
+        month = u8(static_cast<unsigned int>(ymd.month()));
+        day = u8(static_cast<unsigned int>(ymd.day()));
+    }
+
+    inline std::chrono::year_month_day Date::toYmd() const
+    {
+        return std::chrono::year_month_day{std::chrono::year{year}, std::chrono::month{month}, std::chrono::day{day}};
+    }
+
+    inline Time Time::from(const std::chrono::nanoseconds ns)
+    {
+        Time time;
+        time.fromDuration(ns);
+        return time;
+    }
+
+    inline void Time::fromDuration(const std::chrono::nanoseconds ns)
+    {
+        static constexpr u64 nsPerSecond{1'000'000'000u};
+        static constexpr u64 nsPerMinute{nsPerSecond * 60u};
+        static constexpr u64 nsPerHour{nsPerMinute * 60u};
+        static constexpr u64 nsPerDay{nsPerHour * 24u};
+
+        u64 nanoseconds{u64(ns.count())};
+        hour   = u8(nanoseconds /   nsPerHour); nanoseconds %=   nsPerHour;
+        minute = u8(nanoseconds / nsPerMinute); nanoseconds %= nsPerMinute;
+        second = u8(nanoseconds / nsPerSecond); nanoseconds %= nsPerSecond;
+        subsecond = u32(nanoseconds);
+    }
+
+    inline std::chrono::nanoseconds Time::toDuration() const
+    {
+        // Order is important to avoid uneccessary intermediate multiplications
+        return std::chrono::nanoseconds{subsecond} + std::chrono::seconds{second} + std::chrono::minutes{minute} + std::chrono::hours{hour};
+    }
+
+    inline std::pair<Datetime, bool> Datetime::from(const Timepoint timepoint, const TimezoneFormat timezoneFormat)
+    {
+        std::pair<Datetime, bool> res;
+        res.second = res.first.fromTimepoint(timepoint, timezoneFormat);
+        return res;
+    }
+
     inline bool Datetime::fromTimepoint(const Timepoint timepoint, const TimezoneFormat timezoneFormat)
     {
         std::chrono::system_clock::duration duration{timepoint.time_since_epoch()};
         std::chrono::minutes timezoneOffset{};
 
-        // Determine timezone offset
-        if (timezoneFormat != utc)
+        // Timezone
         {
-            const std::chrono::time_zone * const timeZone{std::chrono::current_zone()};
-            timezoneOffset = std::chrono::round<std::chrono::minutes>(timeZone->get_info(timepoint).offset);
+            if (timezoneFormat != utc)
+            {
+                const std::chrono::time_zone * const timeZone{std::chrono::current_zone()};
+                timezoneOffset = std::chrono::round<std::chrono::minutes>(timeZone->get_info(timepoint).offset);
 
-            // Verify offset is no more than two hour and two minute digits worth
-            if (std::chrono::abs(timezoneOffset) >= std::chrono::minutes{100 * 60})
+                // Verify offset is no more than two hour and two minute digits worth
+                if (std::chrono::abs(timezoneOffset) >= std::chrono::minutes{100 * 60})
+                {
+                    return false;
+                }
+
+                duration += timezoneOffset;
+            }
+
+            zone.format = timezoneFormat;
+            zone.offset = s16(timezoneOffset.count());
+        }
+
+        // Date
+        const std::chrono::days days{std::chrono::floor<std::chrono::days>(duration)};
+        {
+            const std::chrono::year_month_day ymd{std::chrono::sys_days{days}};
+
+            if (ymd.year() < std::chrono::year{0} || ymd.year() > std::chrono::year{9999})
             {
                 return false;
             }
 
-            duration += timezoneOffset;
+            date.fromYmd(ymd);
         }
 
-        // Determine YMD
-        const std::chrono::days days{std::chrono::floor<std::chrono::days>(duration)};
-        const std::chrono::year_month_day ymd{std::chrono::sys_days{days}};
-
-        // Verify year is four digits
-        if (ymd.year() < std::chrono::year{0} || ymd.year() > std::chrono::year{9999})
-        {
-            return false;
-        }
-
+        // Time
         // Decompose remaining duration into nanoseconds, seconds, minutes, and hours
-        u64 nanoseconds{u64(std::chrono::nanoseconds(duration - days).count())};
-        u64 seconds{nanoseconds / 1'000'000'000u}; nanoseconds %= 1'000'000'000u;
-        u64 minutes{seconds / 60u}; seconds %= 60u;
-        u64 hours{minutes / 60u}; minutes %= 60u;
+        time.fromDuration(duration - days);
 
-        date.year = u16(static_cast<int>(ymd.year()));
-        date.month = u8(static_cast<unsigned int>(ymd.month()));
-        date.day = u8(static_cast<unsigned int>(ymd.day()));
-        time.hour = u8(hours);
-        time.minute = u8(minutes);
-        time.second = u8(seconds);
-        time.subsecond = u32(nanoseconds);
-        zone.format = timezoneFormat;
-        zone.offset = s16(timezoneOffset.count());
         return true;
     }
 
     inline Timepoint Datetime::toTimepoint() const
     {
-        const std::chrono::year_month_day ymd{std::chrono::year{date.year}, std::chrono::month{date.month}, std::chrono::day{date.day}};
+        const std::chrono::year_month_day ymd{date.toYmd()};
         std::chrono::system_clock::duration duration{std::chrono::sys_days{ymd}.time_since_epoch()};
-        duration += std::chrono::hours{time.hour};
-        duration += std::chrono::minutes{time.minute};
-        duration += std::chrono::seconds{time.second};
-        duration += std::chrono::round<std::chrono::system_clock::duration>(std::chrono::nanoseconds{time.subsecond});
+        duration += std::chrono::round<std::chrono::system_clock::duration>(time.toDuration());
 
         if (zone.format == localTime)
         {

@@ -273,10 +273,10 @@ namespace qcon
     /// Encodes the QCON value into a QCON string
     /// @param v QCON value to encode
     /// @param density density of the encoded QCON string
-    /// @param indentSpaces number of spaces to insert per level of indentation
+    /// @param indentStr string to use for indent; must be whitespace
     /// @return encoded QCON string, or empty if there was an issue encoding the QCON
     ///
-    [[nodiscard]] std::optional<std::string> encode(const Value & v, Density density = Encoder::defaultDensity, unat indentSpaces = Encoder::defaultIndentSpaces);
+    [[nodiscard]] std::optional<std::string> encode(const Value & v, Density density = Encoder::defaultDensity, std::string_view indentStr = Encoder::defaultIndentString);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1221,9 +1221,9 @@ namespace qcon
         }
     }
 
-    inline std::optional<std::string> encode(const Value & v, const Density density, unat indentSpaces)
+    inline std::optional<std::string> encode(const Value & v, const Density density, const std::string_view indentStr)
     {
-        Encoder encoder{density, indentSpaces};
+        Encoder encoder{density, indentStr};
         encoder << v;
         return encoder.finish();
     }
