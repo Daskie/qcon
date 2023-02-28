@@ -1223,8 +1223,6 @@ TEST(Decode, time)
         ASSERT_EQ(decoder.time.minute, 36u);
         ASSERT_EQ(decoder.time.second, 9u);
         ASSERT_EQ(decoder.time.subsecond, 0u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::localTime);
-        ASSERT_EQ(decoder.time.zone.offset, 0);
     }
     { // Subseconds
         Decoder decoder{"T18:36:09.123456789"};
@@ -1233,68 +1231,6 @@ TEST(Decode, time)
         ASSERT_EQ(decoder.time.minute, 36u);
         ASSERT_EQ(decoder.time.second, 9u);
         ASSERT_EQ(decoder.time.subsecond, 123456789u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::localTime);
-        ASSERT_EQ(decoder.time.zone.offset, 0);
-    }
-    { // Timezone
-        Decoder decoder{};
-
-        decoder.load("T18:36:09Z");
-        ASSERT_EQ(decoder.step(), DecodeState::time);
-        ASSERT_EQ(decoder.time.hour, 18u);
-        ASSERT_EQ(decoder.time.minute, 36u);
-        ASSERT_EQ(decoder.time.second, 9u);
-        ASSERT_EQ(decoder.time.subsecond, 0u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utc);
-        ASSERT_EQ(decoder.time.zone.offset, 0);
-
-        decoder.load("T18:36:09+12:34");
-        ASSERT_EQ(decoder.step(), DecodeState::time);
-        ASSERT_EQ(decoder.time.hour, 18u);
-        ASSERT_EQ(decoder.time.minute, 36u);
-        ASSERT_EQ(decoder.time.second, 9u);
-        ASSERT_EQ(decoder.time.subsecond, 0u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
-        ASSERT_EQ(decoder.time.zone.offset, 12 * 60 + 34);
-
-        decoder.load("T18:36:09-12:34");
-        ASSERT_EQ(decoder.step(), DecodeState::time);
-        ASSERT_EQ(decoder.time.hour, 18u);
-        ASSERT_EQ(decoder.time.minute, 36u);
-        ASSERT_EQ(decoder.time.second, 9u);
-        ASSERT_EQ(decoder.time.subsecond, 0u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
-        ASSERT_EQ(decoder.time.zone.offset, -(12 * 60 + 34));
-    }
-    { // Timezone and subseconds
-        Decoder decoder{};
-
-        decoder.load("T18:36:09.123456789Z");
-        ASSERT_EQ(decoder.step(), DecodeState::time);
-        ASSERT_EQ(decoder.time.hour, 18u);
-        ASSERT_EQ(decoder.time.minute, 36u);
-        ASSERT_EQ(decoder.time.second, 9u);
-        ASSERT_EQ(decoder.time.subsecond, 123456789u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utc);
-        ASSERT_EQ(decoder.time.zone.offset, 0);
-
-        decoder.load("T18:36:09.123456789+12:34");
-        ASSERT_EQ(decoder.step(), DecodeState::time);
-        ASSERT_EQ(decoder.time.hour, 18u);
-        ASSERT_EQ(decoder.time.minute, 36u);
-        ASSERT_EQ(decoder.time.second, 9u);
-        ASSERT_EQ(decoder.time.subsecond, 123456789u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
-        ASSERT_EQ(decoder.time.zone.offset, 12 * 60 + 34);
-
-        decoder.load("T18:36:09.123456789-12:34");
-        ASSERT_EQ(decoder.step(), DecodeState::time);
-        ASSERT_EQ(decoder.time.hour, 18u);
-        ASSERT_EQ(decoder.time.minute, 36u);
-        ASSERT_EQ(decoder.time.second, 9u);
-        ASSERT_EQ(decoder.time.subsecond, 123456789u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
-        ASSERT_EQ(decoder.time.zone.offset, -(12 * 60 + 34));
     }
     { // Min
         Decoder decoder{"T00:00:00-99:59"};
@@ -1303,18 +1239,14 @@ TEST(Decode, time)
         ASSERT_EQ(decoder.time.minute, 0u);
         ASSERT_EQ(decoder.time.second, 0u);
         ASSERT_EQ(decoder.time.subsecond, 0u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
-        ASSERT_EQ(decoder.time.zone.offset, -(99 * 60 + 59));
     }
     { // Max
-        Decoder decoder{"T23:59:59.999999999+99:59"};
+        Decoder decoder{"T23:59:59.999999999"};
         ASSERT_EQ(decoder.step(), DecodeState::time);
         ASSERT_EQ(decoder.time.hour, 23u);
         ASSERT_EQ(decoder.time.minute, 59u);
         ASSERT_EQ(decoder.time.second, 59u);
         ASSERT_EQ(decoder.time.subsecond, 999999999u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
-        ASSERT_EQ(decoder.time.zone.offset, 99 * 60 + 59);
     }
     { // Subsecond digits
         Decoder decoder{};
@@ -1363,19 +1295,6 @@ TEST(Decode, time)
         ASSERT_EQ(decoder.step(), DecodeState::time);
         ASSERT_EQ(decoder.time.subsecond, 0u);
     }
-    { // Zero timezone
-        Decoder decoder{};
-
-        decoder.load("T00:00:00+00:00");
-        ASSERT_EQ(decoder.step(), DecodeState::time);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
-        ASSERT_EQ(decoder.time.zone.offset, 0);
-
-        decoder.load("T00:00:00-00:00");
-        ASSERT_EQ(decoder.step(), DecodeState::time);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
-        ASSERT_EQ(decoder.time.zone.offset, 0);
-    }
     { // Subsecond clear
         Decoder decoder{};
 
@@ -1387,52 +1306,36 @@ TEST(Decode, time)
         ASSERT_EQ(decoder.time.subsecond, 0u);
     }
     { // Invalid hour
-        ASSERT_TRUE(fails("T60:00:00Z"));
-        ASSERT_TRUE(fails("T0X:00:00Z"));
-        ASSERT_TRUE(fails("T0:00:00Z"));
-        ASSERT_TRUE(fails("T000:00:00Z"));
+        ASSERT_TRUE(fails("T60:00:00"));
+        ASSERT_TRUE(fails("T0X:00:00"));
+        ASSERT_TRUE(fails("T0:00:00"));
+        ASSERT_TRUE(fails("T000:00:00"));
     }
     { // Invalid minute
-        ASSERT_TRUE(fails("T00:60:00Z"));
-        ASSERT_TRUE(fails("T00:0X:00Z"));
-        ASSERT_TRUE(fails("T00:0:00Z"));
-        ASSERT_TRUE(fails("T00:000:00Z"));
+        ASSERT_TRUE(fails("T00:60:00"));
+        ASSERT_TRUE(fails("T00:0X:00"));
+        ASSERT_TRUE(fails("T00:0:00"));
+        ASSERT_TRUE(fails("T00:000:00"));
     }
     { // Invalid second
-        ASSERT_TRUE(fails("T00:00:60Z"));
-        ASSERT_TRUE(fails("T00:00:0XZ"));
-        ASSERT_TRUE(fails("T00:00:0Z"));
-        ASSERT_TRUE(fails("T00:00:000Z"));
+        ASSERT_TRUE(fails("T00:00:60"));
+        ASSERT_TRUE(fails("T00:00:0X"));
+        ASSERT_TRUE(fails("T00:00:0"));
+        ASSERT_TRUE(fails("T00:00:000"));
     }
     { // Invalid subseconds
-        ASSERT_TRUE(fails("T00:00:00.Z"));
-        ASSERT_TRUE(fails("T00:00:00..Z"));
-        ASSERT_TRUE(fails("T00:00:00.00XZ"));
-        ASSERT_TRUE(fails("T00:00:00,0Z"));
-    }
-    { // Invalid timezone
-        ASSERT_TRUE(fails("T00:00:00Y"));
-        ASSERT_TRUE(fails("T00:00:00z"));
-        ASSERT_TRUE(fails("T00:00:0000"));
-        ASSERT_TRUE(fails("T00:00:00+1"));
-        ASSERT_TRUE(fails("T00:00:00+11"));
-        ASSERT_TRUE(fails("T00:00:00+111"));
-        ASSERT_TRUE(fails("T00:00:00+11111"));
-        ASSERT_TRUE(fails("T00:00:00+0X:00"));
-        ASSERT_TRUE(fails("T00:00:00+00:0X"));
-        ASSERT_TRUE(fails("T00:00:00+0:00"));
-        ASSERT_TRUE(fails("T00:00:00+00:0"));
-        ASSERT_TRUE(fails("T00:00:00+000:00"));
-        ASSERT_TRUE(fails("T00:00:00+00:000"));
-        ASSERT_TRUE(fails("T00:00:00+00-00"));
+        ASSERT_TRUE(fails("T00:00:00."));
+        ASSERT_TRUE(fails("T00:00:00.."));
+        ASSERT_TRUE(fails("T00:00:00.00X"));
+        ASSERT_TRUE(fails("T00:00:00,0"));
     }
     { // Invalid misc
-        ASSERT_TRUE(fails("00:00:00Z"));
-        ASSERT_TRUE(fails("t00:00:00Z"));
-        ASSERT_TRUE(fails("T00-00-00Z"));
-        ASSERT_TRUE(fails("T0000:00Z"));
-        ASSERT_TRUE(fails("T00:0000Z"));
-        ASSERT_TRUE(fails("T000000Z"));
+        ASSERT_TRUE(fails("00:00:00"));
+        ASSERT_TRUE(fails("t00:00:00"));
+        ASSERT_TRUE(fails("T00-00-00"));
+        ASSERT_TRUE(fails("T0000:00"));
+        ASSERT_TRUE(fails("T00:0000"));
+        ASSERT_TRUE(fails("T000000"));
     }
 }
 
@@ -1453,47 +1356,73 @@ TEST(Decode, datetime)
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
         ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{});
     }
+    { // Min
+        Decoder decoder{"D0000-01-01T00:00:00-23:59"};
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.date.year, 0u);
+        ASSERT_EQ(decoder.datetime.date.month, 1u);
+        ASSERT_EQ(decoder.datetime.date.day, 1u);
+        ASSERT_EQ(decoder.datetime.time.hour, 0u);
+        ASSERT_EQ(decoder.datetime.time.minute, 0u);
+        ASSERT_EQ(decoder.datetime.time.second, 0u);
+        ASSERT_EQ(decoder.datetime.time.subsecond, 0u);
+        ASSERT_EQ(decoder.datetime.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.datetime.zone.offset, -(23 * 60 + 59));
+    }
+    { // Max
+        Decoder decoder{"D9999-12-31T23:59:59.999999999+23:59"};
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.date.year, 9999u);
+        ASSERT_EQ(decoder.datetime.date.month, 12u);
+        ASSERT_EQ(decoder.datetime.date.day, 31u);
+        ASSERT_EQ(decoder.datetime.time.hour, 23u);
+        ASSERT_EQ(decoder.datetime.time.minute, 59u);
+        ASSERT_EQ(decoder.datetime.time.second, 59u);
+        ASSERT_EQ(decoder.datetime.time.subsecond, 999999999u);
+        ASSERT_EQ(decoder.datetime.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.datetime.zone.offset, 23 * 60 + 59);
+    }
     { // Positive timestamp
         const Timepoint tp{std::chrono::seconds{1676337198} + std::chrono::microseconds{123456}};
         Decoder decoder{};
 
         decoder.load("D2023-02-13T17:13:18.123456-08:00");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.date.year, 2023u);
-        ASSERT_EQ(decoder.date.month, 2u);
-        ASSERT_EQ(decoder.date.day, 13u);
-        ASSERT_EQ(decoder.time.hour, 17u);
-        ASSERT_EQ(decoder.time.minute, 13u);
-        ASSERT_EQ(decoder.time.second, 18u);
-        ASSERT_EQ(decoder.time.subsecond, 123456000u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utcOffset);
-        ASSERT_EQ(decoder.time.zone.offset, -480);
+        ASSERT_EQ(decoder.datetime.date.year, 2023u);
+        ASSERT_EQ(decoder.datetime.date.month, 2u);
+        ASSERT_EQ(decoder.datetime.date.day, 13u);
+        ASSERT_EQ(decoder.datetime.time.hour, 17u);
+        ASSERT_EQ(decoder.datetime.time.minute, 13u);
+        ASSERT_EQ(decoder.datetime.time.second, 18u);
+        ASSERT_EQ(decoder.datetime.time.subsecond, 123456000u);
+        ASSERT_EQ(decoder.datetime.zone.format, qcon::utcOffset);
+        ASSERT_EQ(decoder.datetime.zone.offset, -480);
         ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
 
         decoder.load("D2023-02-14T01:13:18.123456Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.date.year, 2023u);
-        ASSERT_EQ(decoder.date.month, 2u);
-        ASSERT_EQ(decoder.date.day, 14u);
-        ASSERT_EQ(decoder.time.hour, 1u);
-        ASSERT_EQ(decoder.time.minute, 13u);
-        ASSERT_EQ(decoder.time.second, 18u);
-        ASSERT_EQ(decoder.time.subsecond, 123456000u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::utc);
-        ASSERT_EQ(decoder.time.zone.offset, 0);
+        ASSERT_EQ(decoder.datetime.date.year, 2023u);
+        ASSERT_EQ(decoder.datetime.date.month, 2u);
+        ASSERT_EQ(decoder.datetime.date.day, 14u);
+        ASSERT_EQ(decoder.datetime.time.hour, 1u);
+        ASSERT_EQ(decoder.datetime.time.minute, 13u);
+        ASSERT_EQ(decoder.datetime.time.second, 18u);
+        ASSERT_EQ(decoder.datetime.time.subsecond, 123456000u);
+        ASSERT_EQ(decoder.datetime.zone.format, qcon::utc);
+        ASSERT_EQ(decoder.datetime.zone.offset, 0);
         ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
 
         decoder.load("D2023-02-13T17:13:18.123456");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
-        ASSERT_EQ(decoder.date.year, 2023u);
-        ASSERT_EQ(decoder.date.month, 2u);
-        ASSERT_EQ(decoder.date.day, 13u);
-        ASSERT_EQ(decoder.time.hour, 17u);
-        ASSERT_EQ(decoder.time.minute, 13u);
-        ASSERT_EQ(decoder.time.second, 18u);
-        ASSERT_EQ(decoder.time.subsecond, 123456000u);
-        ASSERT_EQ(decoder.time.zone.format, qcon::localTime);
-        ASSERT_EQ(decoder.time.zone.offset, 0);
+        ASSERT_EQ(decoder.datetime.date.year, 2023u);
+        ASSERT_EQ(decoder.datetime.date.month, 2u);
+        ASSERT_EQ(decoder.datetime.date.day, 13u);
+        ASSERT_EQ(decoder.datetime.time.hour, 17u);
+        ASSERT_EQ(decoder.datetime.time.minute, 13u);
+        ASSERT_EQ(decoder.datetime.time.second, 18u);
+        ASSERT_EQ(decoder.datetime.time.subsecond, 123456000u);
+        ASSERT_EQ(decoder.datetime.zone.format, qcon::localTime);
+        ASSERT_EQ(decoder.datetime.zone.offset, 0);
         ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
     }
     { // Negative timestamp
@@ -1586,6 +1515,31 @@ TEST(Decode, datetime)
         decoder.load("D1970-01-01T00:00:00-12:34");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
         ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::hours{12} + std::chrono::minutes{34}});
+    }
+    { // Timezone without time
+        ASSERT_TRUE(fails("D2023-02-13Z"));
+        ASSERT_TRUE(fails("D2023-02-13+00:00"));
+        ASSERT_TRUE(fails("D2023-02-13-00:00"));
+    }
+    { // Invalid timezone
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00Y"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00z"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:0000"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+1"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+11"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+111"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+11111"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+0X:00"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+00:0X"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+0:00"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+00:0"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+000:00"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+00:000"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+00-00"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+24:00"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00+00:60"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00-24:00"));
+        ASSERT_TRUE(fails("D1970-01-01T00:00:00-00:60"));
     }
     { // Invalid combo
         ASSERT_TRUE(fails("D1970-01-0100:00:00Z"));

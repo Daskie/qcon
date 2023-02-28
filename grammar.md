@@ -152,9 +152,7 @@
 
 **Time:**  
     `T` HourMinuteSecond  
-    `T` HourMinuteSecond Fraction  
-    `T` HourMinuteSecond TimeZone  
-    `T` HourMinuteSecond Fraction TimeZone
+    `T` HourMinuteSecond Fraction
 
 **HourMinuteSecond:**  
     Hour `:` Minute `:` Second
@@ -168,12 +166,13 @@
 **Second:**  
     `00` . `59`
 
-**TimeZone:**  
+**Datetime:**  
+    Date Time  
+    Date Time Timezone
+
+**Timezone:**  
     `Z`  
     Sign Hour `:` Minute
-
-**Datetime:**  
-    Date Time
 
 **X:**  
     *nothing*  

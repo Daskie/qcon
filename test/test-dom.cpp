@@ -50,19 +50,19 @@ std::ostream & operator<<(std::ostream & os, const qcon::Date & date)
 
 std::ostream & operator<<(std::ostream & os, const qcon::Time & time)
 {
-    os << u32(time.hour) << ':' << u32(time.minute) << ':' << u32(time.second) << '.' << time.subsecond;
-    switch (time.zone.format)
-    {
-        case qcon::localTime: break;
-        case qcon::utc: os << 'Z'; break;
-        case qcon::utcOffset: os << (time.zone.offset >= 0 ? '+' : '-') << std::abs(time.zone.offset); break;
-    }
-    return os;
+    return os << u32(time.hour) << ':' << u32(time.minute) << ':' << u32(time.second) << '.' << time.subsecond;
 }
 
 std::ostream & operator<<(std::ostream & os, const qcon::Datetime & datetime)
 {
-    return os << datetime.date << ' ' << datetime.time;
+    os << datetime.date << ' ' << datetime.time;
+    switch (datetime.zone.format)
+    {
+        case qcon::localTime: break;
+        case qcon::utc: os << 'Z'; break;
+        case qcon::utcOffset: os << (datetime.zone.offset >= 0 ? '+' : '-') << std::abs(datetime.zone.offset); break;
+    }
+    return os;
 }
 
 TEST(Dom, encodeDecodeString)
@@ -424,26 +424,8 @@ TEST(Dom, encodeDecodeDate)
 
 TEST(Dom, encodeDecodeTime)
 {
-    { // Local time
-        const Time time{.hour = 12u, .minute = 34u, .second = 56u, .subsecond = 123456789u, .zone = {.format = qcon::localTime, .offset = 12 * 60 + 34}};
-        const std::optional<std::string> encoded{encode(time)};
-        ASSERT_TRUE(encoded);
-        const std::optional<Value> decoded{decode(*encoded)};
-        ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->time());
-        ASSERT_EQ(*decoded->time(), time);
-    }
-    { // UTC
-        const Time time{.hour = 12u, .minute = 34u, .second = 56u, .subsecond = 123456789u, .zone = {.format = qcon::utc, .offset = 12 * 60 + 34}};
-        const std::optional<std::string> encoded{encode(time)};
-        ASSERT_TRUE(encoded);
-        const std::optional<Value> decoded{decode(*encoded)};
-        ASSERT_TRUE(decoded);
-        ASSERT_TRUE(decoded->time());
-        ASSERT_EQ(*decoded->time(), time);
-    }
-    { // UTC offset
-        const Time time{.hour = 12u, .minute = 34u, .second = 56u, .subsecond = 123456789u, .zone = {.format = qcon::utcOffset, .offset = 12 * 60 + 34}};
+    { // General
+        const Time time{.hour = 12u, .minute = 34u, .second = 56u, .subsecond = 123456789u};
         const std::optional<std::string> encoded{encode(time)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -462,7 +444,10 @@ TEST(Dom, encodeDecodeDatetime)
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
         ASSERT_TRUE(decoded->datetime());
-        ASSERT_EQ(*decoded->datetime(), dt);
+        ASSERT_EQ(decoded->datetime()->date, dt.date);
+        ASSERT_EQ(decoded->datetime()->time, dt.time);
+        ASSERT_EQ(decoded->datetime()->zone.format, dt.zone.format);
+        ASSERT_EQ(decoded->datetime()->zone.offset, dt.zone.offset);
     }
     { // Current time local
         Datetime dt;
@@ -472,7 +457,9 @@ TEST(Dom, encodeDecodeDatetime)
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
         ASSERT_TRUE(decoded->datetime());
-        ASSERT_EQ(*decoded->datetime(), dt);
+        ASSERT_EQ(decoded->datetime()->date, dt.date);
+        ASSERT_EQ(decoded->datetime()->time, dt.time);
+        ASSERT_EQ(decoded->datetime()->zone.format, dt.zone.format);
     }
     { // Current time UTC
         Datetime dt;
@@ -482,7 +469,10 @@ TEST(Dom, encodeDecodeDatetime)
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
         ASSERT_TRUE(decoded->datetime());
-        ASSERT_EQ(*decoded->datetime(), dt);
+        ASSERT_EQ(decoded->datetime()->date, dt.date);
+        ASSERT_EQ(decoded->datetime()->time, dt.time);
+        ASSERT_EQ(decoded->datetime()->zone.format, dt.zone.format);
+        ASSERT_EQ(decoded->datetime()->zone.offset, dt.zone.offset);
     }
     { // Current time UTC offset
         Datetime dt;
@@ -492,7 +482,10 @@ TEST(Dom, encodeDecodeDatetime)
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
         ASSERT_TRUE(decoded->datetime());
-        ASSERT_EQ(*decoded->datetime(), dt);
+        ASSERT_EQ(decoded->datetime()->date, dt.date);
+        ASSERT_EQ(decoded->datetime()->time, dt.time);
+        ASSERT_EQ(decoded->datetime()->zone.format, dt.zone.format);
+        ASSERT_EQ(decoded->datetime()->zone.offset, dt.zone.offset);
     }
 }
 

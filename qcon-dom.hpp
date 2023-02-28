@@ -3,12 +3,11 @@
 ///
 /// QCON 0.0.0
 /// https://github.com/daskie/qcon
-/// This header provides a DOM encoder and decoder
+/// This header provides a DOM QCON encoder and decoder
 /// Uses `qcon-encode.hpp` to do the encoding and `qcon-decode.hpp` to do the decoding
-/// See the README for more info and examples!
+/// See the README for more info
 ///
 
-#include <concepts>
 #include <map>
 #include <optional>
 #include <string>
@@ -38,90 +37,81 @@ namespace qcon
         datetime
     };
 
-    // Forward declarations
     class Value;
 
-    ///
-    /// Convenience type alias
-    /// The internal representation for objects is `std::map<std::string, qcon::value>`
-    ///
+    // TODO: Use something more efficient
     using Object = std::map<std::string, Value>;
 
-    ///
-    /// Convenience type alias
-    /// The internal representation for arrays is `std::vector<qcon::Value>`
-    ///
     using Array = std::vector<Value>;
 
     ///
-    /// Represents one QCON value, which can be an object, array, string, number, boolean, or null
+    /// Represents a QCON value
     ///
     class Value
     {
       public:
 
         ///
-        /// Specialization of the encoder's `operator<<` for `Value`
-        /// @param encoder the encoder
-        /// @param val the QCON value to encode
-        /// @return `encoder`
+        /// Specialization of `Encoder`'s `operator<<` for `Value`
+        /// All default formatting is used. Containers are the base density, number are base 10, etc.
         ///
-        friend Encoder & operator<<(Encoder & encoder, const Value & val);
+        friend Encoder & operator<<(Encoder & encoder, const Value & v);
 
         ///
-        /// @param val the value whith which to be constructed
+        /// Construct a QCON value from the given underlying value
+        /// @param v value with which to be constructed
         ///
         Value(std::nullptr_t = nullptr);
-        Value(Object && val);
-        Value(Array && val);
-        Value(std::string && val);
-        Value(std::string_view val);
-        Value(const char * val);
-        Value(char * val);
-        Value(char val);
-        Value(s64 val);
-        Value(s32 val);
-        Value(s16 val);
-        Value(s8 val);
-        Value(u64 val);
-        Value(u32 val);
-        Value(u16 val);
-        Value(u8 val);
-        Value(double val);
-        Value(float val);
-        Value(bool val);
-        Value(const Date & val);
-        Value(const Time & val);
-        Value(const Datetime & val);
+        Value(Object && v);
+        Value(Array && v);
+        Value(std::string && v);
+        Value(std::string_view v);
+        Value(const char * v);
+        Value(char * v);
+        Value(char v);
+        Value(s64 v);
+        Value(s32 v);
+        Value(s16 v);
+        Value(s8 v);
+        Value(u64 v);
+        Value(u32 v);
+        Value(u16 v);
+        Value(u8 v);
+        Value(double v);
+        Value(float v);
+        Value(bool v);
+        Value(const Date & v);
+        Value(const Time & v);
+        Value(const Datetime & v);
 
         Value(const Value &) = delete;
         Value(Value && other);
 
         ///
-        /// Assigns a new value to the qcon value
-        /// @param val
+        /// Assigns the QCON value witha new underlying value
+        /// @param v new value
         /// @return this
         ///
-        Value & operator=(Object && val);
-        Value & operator=(Array && val);
-        Value & operator=(std::string && val);
-        Value & operator=(std::string_view val);
-        Value & operator=(const char * val);
-        Value & operator=(char val);
-        Value & operator=(s64 val);
-        Value & operator=(s32 val);
-        Value & operator=(s16 val);
-        Value & operator=(s8 val);
-        Value & operator=(u64 val);
-        Value & operator=(u32 val);
-        Value & operator=(u16 val);
-        Value & operator=(u8 val);
-        Value & operator=(double val);
-        Value & operator=(float val);
-        Value & operator=(bool val);
-        Value & operator=(const Date & val);
-        Value & operator=(const Time & val);
-        Value & operator=(const Datetime & val);
+        Value & operator=(Object && v);
+        Value & operator=(Array && v);
+        Value & operator=(std::string && v);
+        Value & operator=(std::string_view v);
+        Value & operator=(const char * v);
+        Value & operator=(char v);
+        Value & operator=(s64 v);
+        Value & operator=(s32 v);
+        Value & operator=(s16 v);
+        Value & operator=(s8 v);
+        Value & operator=(u64 v);
+        Value & operator=(u32 v);
+        Value & operator=(u16 v);
+        Value & operator=(u8 v);
+        Value & operator=(double v);
+        Value & operator=(float v);
+        Value & operator=(bool v);
+        Value & operator=(const Date & v);
+        Value & operator=(const Time & v);
+        Value & operator=(const Datetime & v);
         Value & operator=(nullptr_t);
 
         Value & operator=(const Value &) = delete;
@@ -130,7 +120,7 @@ namespace qcon
         ~Value();
 
         ///
-        /// @return the type of the value
+        /// @return type of the value
         ///
         [[nodiscard]] Type type() const { return _type; }
 
@@ -200,35 +190,33 @@ namespace qcon
         [[nodiscard]] bool positive() const { return _positive; }
 
         ///
-        /// Compares if two values are equivalent, that is they have the same type and value
-        /// @param other the value to compare with
-        /// @return whether this is equivalent to the other value
+        /// @return whether this has the same type and value as `other`
         ///
         [[nodiscard]] bool operator==(const Value & other) const;
 
         ///
-        /// Directly compares if this value is equivalent to that provided
+        /// Directly compares if this is the same type and has the same value as that provided
         ///
-        [[nodiscard]] bool operator==(const Object & val) const;
-        [[nodiscard]] bool operator==(const Array & val) const;
-        [[nodiscard]] bool operator==(const std::string & val) const;
-        [[nodiscard]] bool operator==(std::string_view val) const;
-        [[nodiscard]] bool operator==(const char * val) const;
-        [[nodiscard]] bool operator==(char val) const;
-        [[nodiscard]] bool operator==(s64 val) const;
-        [[nodiscard]] bool operator==(s32 val) const;
-        [[nodiscard]] bool operator==(s16 val) const;
-        [[nodiscard]] bool operator==(s8 val) const;
-        [[nodiscard]] bool operator==(u64 val) const;
-        [[nodiscard]] bool operator==(u32 val) const;
-        [[nodiscard]] bool operator==(u16 val) const;
-        [[nodiscard]] bool operator==(u8 val) const;
-        [[nodiscard]] bool operator==(double val) const;
-        [[nodiscard]] bool operator==(float val) const;
-        [[nodiscard]] bool operator==(bool val) const;
-        [[nodiscard]] bool operator==(const Date & val) const;
-        [[nodiscard]] bool operator==(const Time & val) const;
-        [[nodiscard]] bool operator==(const Datetime & val) const;
+        [[nodiscard]] bool operator==(const Object & v) const;
+        [[nodiscard]] bool operator==(const Array & v) const;
+        [[nodiscard]] bool operator==(const std::string & v) const;
+        [[nodiscard]] bool operator==(std::string_view v) const;
+        [[nodiscard]] bool operator==(const char * v) const;
+        [[nodiscard]] bool operator==(char v) const;
+        [[nodiscard]] bool operator==(s64 v) const;
+        [[nodiscard]] bool operator==(s32 v) const;
+        [[nodiscard]] bool operator==(s16 v) const;
+        [[nodiscard]] bool operator==(s8 v) const;
+        [[nodiscard]] bool operator==(u64 v) const;
+        [[nodiscard]] bool operator==(u32 v) const;
+        [[nodiscard]] bool operator==(u16 v) const;
+        [[nodiscard]] bool operator==(u8 v) const;
+        [[nodiscard]] bool operator==(double v) const;
+        [[nodiscard]] bool operator==(float v) const;
+        [[nodiscard]] bool operator==(bool v) const;
+        [[nodiscard]] bool operator==(const Date & v) const;
+        [[nodiscard]] bool operator==(const Time & v) const;
+        [[nodiscard]] bool operator==(const Datetime & v) const;
         [[nodiscard]] bool operator==(nullptr_t) const;
 
       private:
@@ -250,52 +238,54 @@ namespace qcon
         void _deleteValue();
     };
 
+    /// `Value` is small, allowing for efficient container storage
     static_assert(sizeof(Value) == 16u);
 
     ///
-    /// Efficiently creates an object from the given key and value arguments
-    /// @param key the first key, forwarded to `std::string` constructor
-    /// @param val the first value, forwarded to `qcon::Value` constructor
-    /// @param more any number of additional key and value arguments
-    /// @return the created object
+    /// Creates an object by forward-constructing from the given key value pairs
+    /// @param k first key
+    /// @param v first value
+    /// @param more any number of additional key and value pairs
+    /// @return created object
     ///
-    template <typename K, typename V, typename... MoreKVs> [[nodiscard]] Object makeObject(K && key, V && val, MoreKVs &&... moreKVs);
+    template <typename K, typename V, typename... MoreKVs> [[nodiscard]] Object makeObject(K && k, V && v, MoreKVs &&... moreKVs);
     [[nodiscard]] Object makeObject();
 
     ///
-    /// Efficiently creates an array from the given value arguments
-    /// @param vals the values, each forwarded to `qcon::Value` constructor
-    /// @return the created array
+    /// Creates an array by forward-constructing from the given values
+    /// @param vals any number of values to create into an array
+    /// @return created array
     ///
     template <typename... Vs> [[nodiscard]] Array makeArray(Vs &&... vals);
 
     ///
-    /// @param qcon the QCON string to decode
-    /// @return the decoded value of the QCON, or empty if the string is invalid or could otherwise not be parsed
+    /// Decodes the given QCON string
+    /// The QSON string *must* be null terminated (optimization allowing most range checks to be eliminated)
+    /// @param qcon QCON string to decode
+    /// @return decoded value of the QCON, or empty if the string is invalid or could otherwise not be decoded
     ///
     [[nodiscard]] std::optional<Value> decode(const char * qcon);
     [[nodiscard]] std::optional<Value> decode(const std::string & qcon) { return decode(qcon.c_str()); }
-    [[nodiscard]] std::optional<Value> decode(std::string &&) = delete; // Prevent binding to temporary
-    [[nodiscard]] std::optional<Value> decode(std::string_view) = delete; // QCON string must be null terminated
+    [[nodiscard]] std::optional<Value> decode(std::string &&) = delete; /// Prevent binding to temporary
+    [[nodiscard]] std::optional<Value> decode(std::string_view) = delete; /// QCON string must be null terminated, pass c-string instead
 
     ///
-    /// @param val the QCON value to encode
-    /// @param density the density of the encoded QCON string
-    /// @param indentSpaces the number of spaces to insert per level of indentation
-    /// @param singleQuotes whether to use `'` instead of `"` for strings
-    /// @param identifiers whether to encode all eligible keys as identifiers instead of strings
-    /// @return an encoded QCON string, or empty if there was an issue encoding the QCON
+    /// Encodes the QCON value into a QCON string
+    /// @param v QCON value to encode
+    /// @param density density of the encoded QCON string
+    /// @param indentSpaces number of spaces to insert per level of indentation
+    /// @return encoded QCON string, or empty if there was an issue encoding the QCON
     ///
-    [[nodiscard]] std::optional<std::string> encode(const Value & val, Density density = multiline, unat indentSpaces = 4u);
+    [[nodiscard]] std::optional<std::string> encode(const Value & v, Density density = Encoder::defaultDensity, unat indentSpaces = Encoder::defaultIndentSpaces);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 namespace qcon
 {
-    inline Encoder & operator<<(Encoder & encoder, const Value & val)
+    inline Encoder & operator<<(Encoder & encoder, const Value & v)
     {
-        switch (val.type())
+        switch (v.type())
         {
             case Type::null:
             {
@@ -305,9 +295,9 @@ namespace qcon
             case Type::object:
             {
                 encoder << object;
-                for (const auto & [key, v] : *val._object)
+                for (const auto & [key, value] : *v._object)
                 {
-                    encoder << key << v;
+                    encoder << key << value;
                 }
                 encoder << end;
                 break;
@@ -315,53 +305,53 @@ namespace qcon
             case Type::array:
             {
                 encoder << array;
-                for (const auto & v : *val._array)
+                for (const auto & value : *v._array)
                 {
-                    encoder << v;
+                    encoder << value;
                 }
                 encoder << end;
                 break;
             }
             case Type::string:
             {
-                encoder << *val._string;
+                encoder << *v._string;
                 break;
             }
             case Type::integer:
             {
-                if (val._positive)
+                if (v._positive)
                 {
-                    encoder << u64(val._integer);
+                    encoder << u64(v._integer);
                 }
                 else
                 {
-                    encoder << val._integer;
+                    encoder << v._integer;
                 }
                 break;
             }
             case Type::floater:
             {
-                encoder << val._floater;
+                encoder << v._floater;
                 break;
             }
             case Type::boolean:
             {
-                encoder << val._boolean;
+                encoder << v._boolean;
                 break;
             }
             case Type::date:
             {
-                encoder << val._datetime->date;
+                encoder << v._datetime->date;
                 break;
             }
             case Type::time:
             {
-                encoder << val._datetime->time;
+                encoder << v._datetime->time;
                 break;
             }
             case Type::datetime:
             {
-                encoder << *val._datetime;
+                encoder << *v._datetime;
                 break;
             }
         }
@@ -369,101 +359,101 @@ namespace qcon
         return encoder;
     }
 
-    inline Value::Value(Object && val) :
-        _object{new Object{std::move(val)}},
+    inline Value::Value(Object && v) :
+        _object{new Object{std::move(v)}},
         _type{Type::object}
     {}
 
-    inline Value::Value(Array && val) :
-        _array{new Array{std::move(val)}},
+    inline Value::Value(Array && v) :
+        _array{new Array{std::move(v)}},
         _type{Type::array}
     {}
 
-    inline Value::Value(std::string && val) :
-        _string{new std::string{std::move(val)}},
+    inline Value::Value(std::string && v) :
+        _string{new std::string{std::move(v)}},
         _type{Type::string}
     {}
 
-    inline Value::Value(const std::string_view val) :
-        _string{new std::string{val}},
+    inline Value::Value(const std::string_view v) :
+        _string{new std::string{v}},
         _type{Type::string}
     {}
 
-    inline Value::Value(const char * const val) :
-        Value(std::string_view{val})
+    inline Value::Value(const char * const v) :
+        Value(std::string_view{v})
     {}
 
-    inline Value::Value(char * const val) :
-        Value(std::string_view{val})
+    inline Value::Value(char * const v) :
+        Value(std::string_view{v})
     {}
 
-    inline Value::Value(const char val) :
-        Value{std::string_view{&val, 1u}}
+    inline Value::Value(const char v) :
+        Value{std::string_view{&v, 1u}}
     {}
 
-    inline Value::Value(const s64 val) :
-        _integer{val},
+    inline Value::Value(const s64 v) :
+        _integer{v},
         _type{Type::integer},
         _positive{_integer >= 0}
     {}
 
-    inline Value::Value(const s32 val) :
-        Value{s64{val}}
+    inline Value::Value(const s32 v) :
+        Value{s64{v}}
     {}
 
-    inline Value::Value(const s16 val) :
-        Value{s64{val}}
+    inline Value::Value(const s16 v) :
+        Value{s64{v}}
     {}
 
-    inline Value::Value(const s8 val) :
-        Value{s64{val}}
+    inline Value::Value(const s8 v) :
+        Value{s64{v}}
     {}
 
-    inline Value::Value(const u64 val) :
-        _integer{s64(val)},
+    inline Value::Value(const u64 v) :
+        _integer{s64(v)},
         _type{Type::integer},
         _positive{true}
     {}
 
-    inline Value::Value(const u32 val) :
-        Value{u64{val}}
+    inline Value::Value(const u32 v) :
+        Value{u64{v}}
     {}
 
-    inline Value::Value(const u16 val) :
-        Value{u64{val}}
+    inline Value::Value(const u16 v) :
+        Value{u64{v}}
     {}
 
-    inline Value::Value(const u8 val) :
-        Value{u64{val}}
+    inline Value::Value(const u8 v) :
+        Value{u64{v}}
     {}
 
-    inline Value::Value(const double val) :
-        _floater{val},
+    inline Value::Value(const double v) :
+        _floater{v},
         _type{Type::floater},
         _positive{_floater >= 0.0}
     {}
 
-    inline Value::Value(const float val) :
-        Value{double{val}}
+    inline Value::Value(const float v) :
+        Value{double{v}}
     {}
 
-    inline Value::Value(const bool val) :
-        _boolean{val},
+    inline Value::Value(const bool v) :
+        _boolean{v},
         _type{Type::boolean}
     {}
 
-    inline Value::Value(const Date & val) :
-        _datetime{new Datetime{.date = val}},
+    inline Value::Value(const Date & v) :
+        _datetime{new Datetime{.date = v}},
         _type{Type::date}
     {}
 
-    inline Value::Value(const Time & val) :
-        _datetime{new Datetime{.time = val}},
+    inline Value::Value(const Time & v) :
+        _datetime{new Datetime{.time = v}},
         _type{Type::time}
     {}
 
-    inline Value::Value(const Datetime & val) :
-        _datetime{new Datetime{val}},
+    inline Value::Value(const Datetime & v) :
+        _datetime{new Datetime{v}},
         _type{Type::datetime}
     {}
 
@@ -480,198 +470,198 @@ namespace qcon
         other._type = Type::null;
     }
 
-    inline Value & Value::operator=(Object && val)
+    inline Value & Value::operator=(Object && v)
     {
         if (_type == Type::object)
         {
-            *_object = std::move(val);
+            *_object = std::move(v);
         }
         else
         {
             _deleteValue();
             _type = Type::object;
-            _object = new Object{std::move(val)};
+            _object = new Object{std::move(v)};
         }
         return *this;
     }
 
-    inline Value & Value::operator=(Array && val)
+    inline Value & Value::operator=(Array && v)
     {
         if (_type == Type::array)
         {
-            *_array = std::move(val);
+            *_array = std::move(v);
         }
         else
         {
             _deleteValue();
             _type = Type::array;
-            _array = new Array{std::move(val)};
+            _array = new Array{std::move(v)};
         }
         return *this;
     }
 
-    inline Value & Value::operator=(std::string && val)
+    inline Value & Value::operator=(std::string && v)
     {
         if (_type == Type::string)
         {
-            *_string = std::move(val);
+            *_string = std::move(v);
         }
         else
         {
             _deleteValue();
             _type = Type::string;
-            _string = new std::string{std::move(val)};
+            _string = new std::string{std::move(v)};
         }
         return *this;
     }
 
-    inline Value & Value::operator=(const std::string_view val)
+    inline Value & Value::operator=(const std::string_view v)
     {
         if (_type == Type::string)
         {
-            *_string = val;
+            *_string = v;
         }
         else
         {
             _deleteValue();
             _type = Type::string;
-            _string = new std::string{val};
+            _string = new std::string{v};
         }
         return *this;
     }
 
-    inline Value & Value::operator=(const char * const val)
+    inline Value & Value::operator=(const char * const v)
     {
-        return *this = std::string_view{val};
+        return *this = std::string_view{v};
     }
 
-    inline Value & Value::operator=(const char val)
+    inline Value & Value::operator=(const char v)
     {
-        return *this = std::string_view{&val, 1u};
+        return *this = std::string_view{&v, 1u};
     }
 
-    inline Value & Value::operator=(const s64 val)
+    inline Value & Value::operator=(const s64 v)
     {
         if (_type != Type::integer)
         {
             _deleteValue();
             _type = Type::integer;
         }
-        _integer = val;
+        _integer = v;
         _positive = _integer >= 0;
         return *this;
     }
 
-    inline Value & Value::operator=(const s32 val)
+    inline Value & Value::operator=(const s32 v)
     {
-        return *this = s64{val};
+        return *this = s64{v};
     }
 
-    inline Value & Value::operator=(const s16 val)
+    inline Value & Value::operator=(const s16 v)
     {
-        return *this = s64{val};
+        return *this = s64{v};
     }
 
-    inline Value & Value::operator=(const s8 val)
+    inline Value & Value::operator=(const s8 v)
     {
-        return *this = s64{val};
+        return *this = s64{v};
     }
 
-    inline Value & Value::operator=(const u64 val)
+    inline Value & Value::operator=(const u64 v)
     {
         if (_type != Type::integer)
         {
             _deleteValue();
             _type = Type::integer;
         }
-        _integer = s64(val);
+        _integer = s64(v);
         _positive = true;
         return *this;
     }
 
-    inline Value & Value::operator=(const u32 val)
+    inline Value & Value::operator=(const u32 v)
     {
-        return *this = u64{val};
+        return *this = u64{v};
     }
 
-    inline Value & Value::operator=(const u16 val)
+    inline Value & Value::operator=(const u16 v)
     {
-        return *this = u64{val};
+        return *this = u64{v};
     }
 
-    inline Value & Value::operator=(const u8 val)
+    inline Value & Value::operator=(const u8 v)
     {
-        return *this = u64{val};
+        return *this = u64{v};
     }
 
-    inline Value & Value::operator=(const double val)
+    inline Value & Value::operator=(const double v)
     {
         if (_type != Type::floater)
         {
             _deleteValue();
             _type = Type::floater;
         }
-        _floater = val;
+        _floater = v;
         _positive = _floater >= 0.0;
         return *this;
     }
 
-    inline Value & Value::operator=(const float val)
+    inline Value & Value::operator=(const float v)
     {
-        return *this = double{val};
+        return *this = double{v};
     }
 
-    inline Value & Value::operator=(const bool val)
+    inline Value & Value::operator=(const bool v)
     {
         if (_type != Type::boolean)
         {
             _deleteValue();
             _type = Type::boolean;
         }
-        _boolean = val;
+        _boolean = v;
         return *this;
     }
 
-    inline Value & Value::operator=(const Date & val)
+    inline Value & Value::operator=(const Date & v)
     {
         if (_type == Type::date || _type == Type::time || _type == Type::datetime)
         {
-            _datetime->date = val;
+            _datetime->date = v;
         }
         else
         {
             _deleteValue();
-            _datetime = new Datetime{.date = val};
+            _datetime = new Datetime{.date = v};
         }
         _type = Type::date;
         return *this;
     }
 
-    inline Value & Value::operator=(const Time & val)
+    inline Value & Value::operator=(const Time & v)
     {
         if (_type == Type::date || _type == Type::time || _type == Type::datetime)
         {
-            _datetime->time = val;
+            _datetime->time = v;
         }
         else
         {
             _deleteValue();
-            _datetime = new Datetime{.time = val};
+            _datetime = new Datetime{.time = v};
         }
         _type = Type::time;
         return *this;
     }
 
-    inline Value & Value::operator=(const Datetime & val)
+    inline Value & Value::operator=(const Datetime & v)
     {
         if (_type == Type::date || _type == Type::time || _type == Type::datetime)
         {
-            *_datetime = val;
+            *_datetime = v;
         }
         else
         {
             _deleteValue();
-            _datetime = new Datetime{val};
+            _datetime = new Datetime{v};
         }
         _type = Type::datetime;
         return *this;
@@ -821,104 +811,104 @@ namespace qcon
         }
     }
 
-    inline bool Value::operator==(const Object & val) const
+    inline bool Value::operator==(const Object & v) const
     {
-        return _type == Type::object && *_object == val;
+        return _type == Type::object && *_object == v;
     }
 
-    inline bool Value::operator==(const Array & val) const
+    inline bool Value::operator==(const Array & v) const
     {
-        return _type == Type::array && *_array == val;
+        return _type == Type::array && *_array == v;
     }
 
-    inline bool Value::operator==(const std::string & val) const
+    inline bool Value::operator==(const std::string & v) const
     {
-        return *this == std::string_view{val};
+        return *this == std::string_view{v};
     }
 
-    inline bool Value::operator==(const std::string_view val) const
+    inline bool Value::operator==(const std::string_view v) const
     {
-        return _type == Type::string && *_string == val;
+        return _type == Type::string && *_string == v;
     }
 
-    inline bool Value::operator==(const char * const val) const
+    inline bool Value::operator==(const char * const v) const
     {
-        return *this == std::string_view{val};
+        return *this == std::string_view{v};
     }
 
-    inline bool Value::operator==(const char val) const
+    inline bool Value::operator==(const char v) const
     {
-        return *this == std::string_view{&val, 1u};
+        return *this == std::string_view{&v, 1u};
     }
 
-    inline bool Value::operator==(const s64 val) const
+    inline bool Value::operator==(const s64 v) const
     {
-        return _type == Type::integer && _integer == val;
+        return _type == Type::integer && _integer == v;
     }
 
-    inline bool Value::operator==(const s32 val) const
+    inline bool Value::operator==(const s32 v) const
     {
-        return *this == s64{val};
+        return *this == s64{v};
     }
 
-    inline bool Value::operator==(const s16 val) const
+    inline bool Value::operator==(const s16 v) const
     {
-        return *this == s64{val};
+        return *this == s64{v};
     }
 
-    inline bool Value::operator==(const s8 val) const
+    inline bool Value::operator==(const s8 v) const
     {
-        return *this == s64{val};
+        return *this == s64{v};
     }
 
-    inline bool Value::operator==(const u64 val) const
+    inline bool Value::operator==(const u64 v) const
     {
-        return *this == s64(val);
+        return *this == s64(v);
     }
 
-    inline bool Value::operator==(const u32 val) const
+    inline bool Value::operator==(const u32 v) const
     {
-        return *this == u64{val};
+        return *this == u64{v};
     }
 
-    inline bool Value::operator==(const u16 val) const
+    inline bool Value::operator==(const u16 v) const
     {
-        return *this == u64{val};
+        return *this == u64{v};
     }
 
-    inline bool Value::operator==(const u8 val) const
+    inline bool Value::operator==(const u8 v) const
     {
-        return *this == u64{val};
+        return *this == u64{v};
     }
 
-    inline bool Value::operator==(const double val) const
+    inline bool Value::operator==(const double v) const
     {
-        return _type == Type::floater && _floater == val;
+        return _type == Type::floater && _floater == v;
     }
 
-    inline bool Value::operator==(const float val) const
+    inline bool Value::operator==(const float v) const
     {
-        return *this == double{val};
+        return *this == double{v};
     }
 
-    inline bool Value::operator==(const bool val) const
+    inline bool Value::operator==(const bool v) const
     {
-        return _type == Type::boolean && _boolean == val;
+        return _type == Type::boolean && _boolean == v;
     }
 
-    inline bool Value::operator==(const Date & val) const
+    inline bool Value::operator==(const Date & v) const
     {
-        return _type == Type::date && _datetime->date == val;
+        return _type == Type::date && _datetime->date == v;
     }
 
-    inline bool Value::operator==(const Time & val) const
+    inline bool Value::operator==(const Time & v) const
     {
-        return _type == Type::time && _datetime->time == val;
+        return _type == Type::time && _datetime->time == v;
     }
 
-    inline bool Value::operator==(const Datetime & val) const
+    inline bool Value::operator==(const Datetime & v) const
     {
-        return _type == Type::datetime && *_datetime == val;
+        return _type == Type::datetime && _datetime->date == v.date && _datetime->time == v.time && _datetime->zone.format == v.zone.format && _datetime->zone.offset == v.zone.offset;
     }
 
     inline bool Value::operator==(const nullptr_t) const
@@ -941,9 +931,9 @@ namespace qcon
     }
 
     template <typename K, typename V, typename... MoreKVs>
-    inline void _makeObjectHelper(Object & obj, K && key, V && val, MoreKVs &&... moreKVs)
+    inline void _makeObjectHelper(Object & obj, K && k, V && v, MoreKVs &&... moreKVs)
     {
-        obj.emplace(std::forward<K>(key), std::forward<V>(val));
+        obj.emplace(std::forward<K>(k), std::forward<V>(v));
         if constexpr (sizeof...(moreKVs) > 0u)
         {
             _makeObjectHelper(obj, std::forward<MoreKVs>(moreKVs)...);
@@ -951,11 +941,12 @@ namespace qcon
     }
 
     template <typename K, typename V, typename... MoreKVs>
-    inline Object makeObject(K && key, V && val, MoreKVs &&... moreKVs)
+    inline Object makeObject(K && k, V && v, MoreKVs &&... moreKVs)
     {
         static_assert(sizeof...(moreKVs) % 2u == 0u, "Must provide an even number of arguments alternating between key and value");
+
         Object obj{};
-        _makeObjectHelper(obj, std::forward<K>(key), std::forward<V>(val), std::forward<MoreKVs>(moreKVs)...);
+        _makeObjectHelper(obj, std::forward<K>(k), std::forward<V>(v), std::forward<MoreKVs>(moreKVs)...);
         return obj;
     }
 
@@ -965,11 +956,11 @@ namespace qcon
     }
 
     template <typename... Vs>
-    inline Array makeArray(Vs &&... vals)
+    inline Array makeArray(Vs &&... vs)
     {
         Array arr{};
-        arr.reserve(sizeof...(vals));
-        (arr.emplace_back(std::forward<Vs>(vals)), ...);
+        arr.reserve(sizeof...(vs));
+        (arr.emplace_back(std::forward<Vs>(vs)), ...);
         return arr;
     }
 
@@ -983,8 +974,8 @@ namespace qcon
             {
                 case DecodeState::object:
                 {
-                    Value & val{object.emplace(std::move(decoder.key), Object{}).first->second};
-                    if (!_decodeObject(decoder, *val.object()))
+                    Value & v{object.emplace(std::move(decoder.key), Object{}).first->second};
+                    if (!_decodeObject(decoder, *v.object()))
                     {
                         return false;
                     }
@@ -992,8 +983,8 @@ namespace qcon
                 }
                 case DecodeState::array:
                 {
-                    Value & val{object.emplace(std::move(decoder.key), Array{}).first->second};
-                    if (!_decodeArray(decoder, *val.array()))
+                    Value & v{object.emplace(std::move(decoder.key), Array{}).first->second};
+                    if (!_decodeArray(decoder, *v.array()))
                     {
                         return false;
                     }
@@ -1066,8 +1057,8 @@ namespace qcon
             {
                 case DecodeState::object:
                 {
-                    Value & val{array.emplace_back(Object{})};
-                    if (!_decodeObject(decoder, *val.object()))
+                    Value & v{array.emplace_back(Object{})};
+                    if (!_decodeObject(decoder, *v.object()))
                     {
                         return false;
                     }
@@ -1075,8 +1066,8 @@ namespace qcon
                 }
                 case DecodeState::array:
                 {
-                    Value & val{array.emplace_back(Array{})};
-                    if (!_decodeArray(decoder, *val.array()))
+                    Value & v{array.emplace_back(Array{})};
+                    if (!_decodeArray(decoder, *v.array()))
                     {
                         return false;
                     }
@@ -1230,10 +1221,10 @@ namespace qcon
         }
     }
 
-    inline std::optional<std::string> encode(const Value & val, const Density density, unat indentSpaces)
+    inline std::optional<std::string> encode(const Value & v, const Density density, unat indentSpaces)
     {
         Encoder encoder{density, indentSpaces};
-        encoder << val;
+        encoder << v;
         return encoder.finish();
     }
 }

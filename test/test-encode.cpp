@@ -23,6 +23,7 @@ using qcon::Timepoint;
 using qcon::Date;
 using qcon::Time;
 using qcon::Datetime;
+using qcon::Timezone;
 using enum qcon::Container;
 using enum qcon::Density;
 using enum qcon::Base;
@@ -740,53 +741,19 @@ TEST(Encode, time)
         encoder << Time{.subsecond = 100000000u};
         ASSERT_EQ(encoder.finish(), "T00:00:00.1");
     }
-    { // UTC timezone format
-        Encoder encoder{};
-        encoder << Time{.zone = {.format = utc}};
-        ASSERT_EQ(encoder.finish(), "T00:00:00Z");
-    }
-    { // UTC offset timezone format
-        Encoder encoder{};
-        encoder << Time{.zone = {.format = utcOffset}};
-        ASSERT_EQ(encoder.finish(), "T00:00:00+00:00");
-
-        encoder.reset();
-        encoder << Time{.zone = {.format = utcOffset, .offset = 12 * 60 + 34}};
-        ASSERT_EQ(encoder.finish(), "T00:00:00+12:34");
-
-        encoder.reset();
-        encoder << Time{.zone = {.format = utcOffset, .offset = -(12 * 60 + 34)}};
-        ASSERT_EQ(encoder.finish(), "T00:00:00-12:34");
-
-        encoder.reset();
-        encoder << Time{.zone = {.format = utcOffset, .offset = 100 * 60 - 1}};
-        ASSERT_EQ(encoder.finish(), "T00:00:00+99:59");
-
-        encoder.reset();
-        encoder << Time{.zone = {.format = utcOffset, .offset = 100 * 60}};
-        ASSERT_FALSE(encoder.status());
-
-        encoder.reset();
-        encoder << Time{.zone = {.format = utcOffset, .offset = -(100 * 60 - 1)}};
-        ASSERT_EQ(encoder.finish(), "T00:00:00-99:59");
-
-        encoder.reset();
-        encoder << Time{.zone = {.format = utcOffset, .offset = -(100 * 60)}};
-        ASSERT_FALSE(encoder.status());
-    }
 }
 
 TEST(Encode, datetime)
 {
     { // General
         Encoder encoder{};
-        Datetime datetime{.date = {.year = 2023, .month = 2, .day = 17}, .time = {.hour = 12, .minute = 34, .second = 56, .subsecond = 123456789, .zone = {.format = localTime, .offset = 12 * 60 + 34}}};
+        Datetime datetime{.date = {.year = 2023, .month = 2, .day = 17}, .time = {.hour = 12, .minute = 34, .second = 56, .subsecond = 123456789}, .zone = {.format = localTime, .offset = 12 * 60 + 34}};
         encoder << datetime;
         ASSERT_EQ(encoder.finish(), "D2023-02-17T12:34:56.123456789");
-        datetime.time.zone.format = utc;
+        datetime.zone.format = utc;
         encoder << datetime;
         ASSERT_EQ(encoder.finish(), "D2023-02-17T12:34:56.123456789Z");
-        datetime.time.zone.format = utcOffset;
+        datetime.zone.format = utcOffset;
         encoder << datetime;
         ASSERT_EQ(encoder.finish(), "D2023-02-17T12:34:56.123456789+12:34");
     }
@@ -803,6 +770,40 @@ TEST(Encode, datetime)
 
         encoder.reset();
         encoder << Datetime{.time = {.hour = 24}};
+        ASSERT_FALSE(encoder.status());
+    }
+    { // UTC timezone format
+        Encoder encoder{};
+        encoder << Datetime{.zone = {.format = utc}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00Z");
+    }
+    { // UTC offset timezone format
+        Encoder encoder{};
+        encoder << Datetime{.zone = {.format = utcOffset}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00+00:00");
+
+        encoder.reset();
+        encoder << Datetime{.zone = {.format = utcOffset, .offset = 12 * 60 + 34}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00+12:34");
+
+        encoder.reset();
+        encoder << Datetime{.zone = {.format = utcOffset, .offset = -(12 * 60 + 34)}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00-12:34");
+
+        encoder.reset();
+        encoder << Datetime{.zone = {.format = utcOffset, .offset = 100 * 60 - 1}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00+99:59");
+
+        encoder.reset();
+        encoder << Datetime{.zone = {.format = utcOffset, .offset = 100 * 60}};
+        ASSERT_FALSE(encoder.status());
+
+        encoder.reset();
+        encoder << Datetime{.zone = {.format = utcOffset, .offset = -(100 * 60 - 1)}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00-99:59");
+
+        encoder.reset();
+        encoder << Datetime{.zone = {.format = utcOffset, .offset = -(100 * 60)}};
         ASSERT_FALSE(encoder.status());
     }
 }
@@ -1332,6 +1333,77 @@ TEST(Encode, flagTokens)
         encoder << utc << hex;
         ASSERT_FALSE(encoder.status());
         encoder.reset();
+    }
+}
+
+TEST(Encode, dateOrdering)
+{
+    { // Year
+        const Date d1{1900, 02, 02};
+        const Date d2{1901, 01, 01};
+        ASSERT_LT(d1, d2);
+        ASSERT_LE(d1, d2);
+        ASSERT_EQ(d1, d1);
+        ASSERT_GE(d2, d1);
+        ASSERT_GT(d2, d1);
+    }
+    { // Month
+        const Date d1{1900, 01, 02};
+        const Date d2{1900, 02, 01};
+        ASSERT_LT(d1, d2);
+        ASSERT_LE(d1, d2);
+        ASSERT_EQ(d1, d1);
+        ASSERT_GE(d2, d1);
+        ASSERT_GT(d2, d1);
+    }
+    { // Day
+        const Date d1{1900, 01, 01};
+        const Date d2{1900, 01, 02};
+        ASSERT_LT(d1, d2);
+        ASSERT_LE(d1, d2);
+        ASSERT_EQ(d1, d1);
+        ASSERT_GE(d2, d1);
+        ASSERT_GT(d2, d1);
+    }
+}
+
+TEST(Encode, timeOrdering)
+{
+    { // Hour
+        const Time t1{0, 1, 1, 1};
+        const Time t2{1, 0, 0, 0};
+        ASSERT_LT(t1, t2);
+        ASSERT_LE(t1, t2);
+        ASSERT_EQ(t1, t1);
+        ASSERT_GE(t2, t1);
+        ASSERT_GT(t2, t1);
+    }
+    { // Minute
+        const Time t1{0, 0, 1, 1};
+        const Time t2{0, 1, 0, 0};
+        ASSERT_LT(t1, t2);
+        ASSERT_LE(t1, t2);
+        ASSERT_EQ(t1, t1);
+        ASSERT_GE(t2, t1);
+        ASSERT_GT(t2, t1);
+    }
+    { // Second
+        const Time t1{0, 0, 0, 1};
+        const Time t2{0, 0, 1, 0};
+        ASSERT_LT(t1, t2);
+        ASSERT_LE(t1, t2);
+        ASSERT_EQ(t1, t1);
+        ASSERT_GE(t2, t1);
+        ASSERT_GT(t2, t1);
+    }
+    { // Subsecond
+        const Time t1{0, 0, 0, 0};
+        const Time t2{0, 0, 0, 1};
+        ASSERT_LT(t1, t2);
+        ASSERT_LE(t1, t2);
+        ASSERT_EQ(t1, t1);
+        ASSERT_GE(t2, t1);
+        ASSERT_GT(t2, t1);
     }
 }
 

@@ -3,17 +3,15 @@
 ///
 /// QCON 0.0.0
 /// https://github.com/daskie/qcon
-/// This standalone header provides a SAX decoder
-/// See the README for more info and examples!
+/// This standalone header provides a SAX QCON decoder
+/// See the README for more info
 ///
 
 #include <array>
-#include <bit>
 #include <charconv>
 #include <chrono>
 #include <format>
 #include <limits>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -23,53 +21,84 @@
 
 namespace qcon
 {
+    ///
+    /// Represents the current state of the decoder
+    ///
     enum class DecodeState
     {
-        error,
-        object,
-        array,
-        end,
-        string,
-        integer,
-        floater,
-        boolean,
-        date,
-        time,
-        datetime,
-        null,
-        done
+        error,    /// An error has occurred
+        object,   /// An object was started
+        array,    /// An array was started
+        end,      /// An object or array was ended
+        string,   /// A string value was decoded
+        integer,  /// An integer value was decoded
+        floater,  /// A floater value was decoded
+        boolean,  /// A boolean value was decoded
+        date,     /// A date value was decoded
+        time,     /// A time value was decoded
+        datetime, /// A datetime value was decoded
+        null,     /// A null value was decoded
+        done      /// The end of the QCON was reached
     };
 
+    ///
+    /// Class to facilitate QCON SAX decoding
+    /// A QCON string is loaded and decoded values may be extracted in sequence
+    ///
     class Decoder
     {
       public:
 
-        std::string key{};
-        std::string string{};
-        s64 integer{};
-        double floater{};
-        bool positive{};
-        bool boolean{};
-        Datetime datetime{};
-        Date & date{datetime.date};
-        Time & time{datetime.time};
-        std::string errorMessage{};
+        std::string key{};    /// If an object element was just decoded, holds its key; unspecified otherwise; may be moved from
+        std::string string{}; /// If a string was just decoded, holds its value; unspecified otherwise; may be moved from
+        s64 integer{};        /// If an integer was just decoded, holds its value; unspecified otherwise
+        double floater{};     /// If a floater was just decoded, holds its value; unspecified otherwise
+        bool positive{};      /// If a number was just decoded, indicates whether it was positive; unspecified otherwise
+        bool boolean{};       /// If a boolean was just decoded, holds its value; unspecified otherwise
+        Datetime datetime{};  /// If a datetime was just decoded, holds its value; unspecified otherwise
+        Date & date{datetime.date}; /// If a date was just decoded, holds its value; unspecified otherwise; alias for `datetime.date`
+        Time & time{datetime.time}; /// If a time was just decoded, holds its value; unspecified otherwise; alias for `datetime.time`
+        std::string errorMessage{}; /// Holds a brief description of the most recent error; may be moved from
 
         Decoder() = default;
+
+        ///
+        /// Constructs a decoder and loads the given QSON string
+        /// The QSON string *must* be null terminated (optimization allowing most range checks to be eliminated)
+        /// Equivalent to `Decoder d{}; d.load(qcon)`
+        /// @param qson encoded QSON to load
+        ///
         Decoder(const char * qson);
         Decoder(const std::string & qson) : Decoder{qson.c_str()} {}
         Decoder(std::string &&) = delete; // Prevent binding to temporary
-        Decoder(std::string_view) = delete; // QCON string must be null terminated
+        Decoder(std::string_view) = delete; /// QCON string must be null terminated; pass c-string instead
 
+        ///
+        /// Loads the given QSON string, overriding any existing state
+        /// The QSON string *must* be null terminated (optimization allowing most range checks to be eliminated)
+        /// @param qson encoded QSON to load
+        ///
         void load(const char * qson);
         void load(const std::string & qson) { load(qson.c_str()); }
-        void load(std::string &&) = delete; // Prevent binding to temporary
-        void load(std::string_view) = delete; // QCON string must be null terminated
+        void load(std::string &&) = delete; /// Prevent binding to temporary
+        void load(std::string_view) = delete; /// QCON string must be null terminated; pass c-string instead
 
+        ///
+        /// Decode the next QCON unit, which could be a value, key-value pair, container start, or container end
+        /// Calling this after the state has reached `done` will yield an error
+        /// Once in the `error` state, will stay in the `error` state until a new QCON string is loaded
+        /// @return current state; `done` if the end of QCON was reached; `error` if there was an error
+        ///
         DecodeState step();
 
-        DecodeState state() const { return _state; }
+        ///
+        /// @return current state
+        ///
+        [[nodiscard]] DecodeState state() const { return _state; }
 
+        ///
+        /// @return current position within the QCON string
+        ///
         const char * position() const { return _pos; }
 
       private:
@@ -459,7 +488,7 @@ namespace qcon
                 if (*_pos == 'T')
                 {
                     ++_pos;
-                    return _state = _consumeTime() ? DecodeState::datetime : DecodeState::error;
+                    return _state = _consumeTime() && _consumeTimezone() ? DecodeState::datetime : DecodeState::error;
                 }
                 else
                 {
@@ -1233,7 +1262,7 @@ namespace qcon
             time.subsecond = 0u;
         }
 
-        return _consumeTimezone();
+        return true;
     }
 
     inline bool Decoder::_consumeTimezone()
@@ -1241,8 +1270,8 @@ namespace qcon
         // GMT time
         if (_tryConsumeChar('Z'))
         {
-            time.zone.format = utc;
-            time.zone.offset = 0u;
+            datetime.zone.format = utc;
+            datetime.zone.offset = 0u;
         }
         // Has timezone offset
         else if (int sign{_tryConsumeSign()}; sign)
@@ -1250,6 +1279,12 @@ namespace qcon
             u64 hour;
             if (!_consumeDecimalDigits(hour, 2u))
             {
+                return false;
+            }
+            if (hour > 23u)
+            {
+                _pos -= 2;
+                errorMessage = "Invalid hour"sv;
                 return false;
             }
 
@@ -1270,15 +1305,15 @@ namespace qcon
                 return false;
             }
 
-            time.zone.format = utcOffset;
-            time.zone.offset = s16(hour * 60u + minute);
-            if (sign < 0) time.zone.offset = -time.zone.offset;
+            datetime.zone.format = utcOffset;
+            datetime.zone.offset = s16(hour * 60u + minute);
+            if (sign < 0) datetime.zone.offset = -datetime.zone.offset;
         }
         // No timezone, local time
         else
         {
-            time.zone.format = localTime;
-            time.zone.offset = 0u;
+            datetime.zone.format = localTime;
+            datetime.zone.offset = 0u;
         }
 
         return true;

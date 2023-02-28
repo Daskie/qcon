@@ -3,18 +3,15 @@
 ///
 /// QCON 0.0.0
 /// https://github.com/daskie/qcon
-/// This standalone header provides a SAX encoder
-/// See the README for more info and examples!
+/// This standalone header provides a SAX QCON encoder
+/// See the README for more info
 ///
 
 #include <bit>
 #include <charconv>
-#include <chrono>
-#include <concepts>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -22,14 +19,6 @@
 
 namespace qcon
 {
-    enum class Density
-    {
-        multiline, /// Elements are put on new lines
-        uniline,   /// Elements are put on one line separated by spaces
-        nospace    /// No space is used whatsoever
-    };
-    using enum Density;
-
     enum class Container
     {
         end,
@@ -37,6 +26,14 @@ namespace qcon
         array
     };
     using enum Container;
+
+    enum class Density
+    {
+        multiline, /// Elements are put on new lines
+        uniline,   /// Elements are put on one line separated by spaces
+        nospace    /// No space is used whatsoever
+    };
+    using enum Density;
 
     enum class Base
     {
@@ -48,25 +45,29 @@ namespace qcon
     using enum Base;
 
     ///
-    /// Instantiate this class to do the encoding
+    /// Class to facilitate QCON SAX encoding
+    /// Encodes values "streamed" via the `<<` operator
+    /// Certain flags may be streamed to customize output
     ///
     class Encoder
     {
       public:
 
+        static constexpr Density defaultDensity{multiline};
+        static constexpr unat defaultIndentSpaces{4u};
+        static constexpr TimezoneFormat defaultTimezoneFormat{utcOffset};
+
         ///
         /// Construct a new `Encoder` with the given options
+        /// @param density starting density for the QCON
+        /// @param indentSpaces number of spaces to insert per level of indentation
         ///
-        /// @param density the starting density for the QCON
-        /// @param indentSpaces the number of spaces to insert per level of indentation
-        ///
-        Encoder(Density density = multiline, unat indentSpaces = 4u);
+        Encoder(Density density = defaultDensity, unat indentSpaces = defaultIndentSpaces);
 
         Encoder(const Encoder &) = delete;
 
         ///
         /// Move constructor
-        ///
         /// @param other is left in a valid but unspecified state
         /// @return this
         ///
@@ -76,7 +77,6 @@ namespace qcon
 
         ///
         /// Move assignment operator
-        ///
         /// @param other is left in a valid but unspecified state
         /// @return this
         ///
@@ -86,11 +86,9 @@ namespace qcon
 
         ///
         /// The next container streamed will have the given density
-        ///
         /// Density is always maximized, that is the encoded density of a given container will always be at least that
         ///   of its parent
-        ///
-        /// This flag is cleared afterwards
+        /// Once the container has ended, the density will be restored to its prior value
         ///
         Encoder & operator<<(Density v);
 
@@ -101,22 +99,19 @@ namespace qcon
 
         ///
         /// Set the numeric base of the next integer streamed
-        ///
         /// This flag is defaulted back to decimal afterwards
         ///
         Encoder & operator<<(Base base);
 
         ///
         /// Set the timezone format of the next datetime streamed
-        ///
         /// This flag is defaulted back to `offset` afterwards
         ///
         Encoder & operator<<(TimezoneFormat timezoneFormat);
 
         ///
-        /// Encode a value into the QCON
-        ///
-        /// @param v the value to encode
+        /// Encode a value
+        /// @param v value to encode
         /// @return this
         ///
         Encoder & operator<<(std::string_view v);
@@ -139,7 +134,7 @@ namespace qcon
         Encoder & operator<<(const Time & v);
         Encoder & operator<<(const Datetime & v);
         Encoder & operator<<(Timepoint v);
-        Encoder & operator<<(std::nullptr_t);
+        Encoder & operator<<(nullptr_t);
 
         ///
         /// @return whether the encoding has been thusfar successful
@@ -152,15 +147,19 @@ namespace qcon
         void reset();
 
         ///
-        /// Collapses the internal string stream into the encoded QCON string. This function resets the internal state
-        /// of the encoder to a "clean slate" such that it can be safely reused
-        ///
-        /// @return the encoded QCON string
+        /// Gets the encoded QCON and resets the internal state of the encoder such that it can be safely reused
+        /// @return encoded QCON string, or empty if there was an error
         ///
         [[nodiscard]] std::optional<std::string> finish();
 
+        ///
+        /// @return current container being encoded; `end` if at root level
+        ///
         [[nodiscard]] Container container() const { return _container; }
 
+        ///
+        /// @return density of the current container or root
+        ///
         [[nodiscard]] Density density() const { return _density; }
 
       private:
@@ -217,8 +216,9 @@ namespace qcon
         [[nodiscard]] bool _encode(bool v);
         [[nodiscard]] bool _encode(const Date & v);
         [[nodiscard]] bool _encode(const Time & v);
+        [[nodiscard]] bool _encode(const Timezone & v);
         [[nodiscard]] bool _encode(const Datetime & v);
-        [[nodiscard]] bool _encode(std::nullptr_t);
+        [[nodiscard]] bool _encode(nullptr_t);
     };
 }
 
@@ -491,7 +491,7 @@ namespace qcon
         if (_expect == _Expect::any)
         {
             _val(v);
-            _nextTimezoneFormat = utcOffset;
+            _nextTimezoneFormat = defaultTimezoneFormat;
         }
         else
         {
@@ -523,7 +523,7 @@ namespace qcon
             if (datetime.fromTimepoint(v, _nextTimezoneFormat))
             {
                 _val(datetime);
-                _nextTimezoneFormat = utcOffset;
+                _nextTimezoneFormat = defaultTimezoneFormat;
             }
             else
             {
@@ -538,7 +538,7 @@ namespace qcon
         return *this;
     }
 
-    inline Encoder & Encoder::operator<<(const std::nullptr_t)
+    inline Encoder & Encoder::operator<<(const nullptr_t)
     {
         if (_expect == _Expect::any)
         {
@@ -562,7 +562,7 @@ namespace qcon
         _lineStartI = 0u;
         _nextDensity = _density;
         _nextBase = decimal;
-        _nextTimezoneFormat = utcOffset;
+        _nextTimezoneFormat = defaultTimezoneFormat;
         _expect = _Expect::any;
     }
 
@@ -961,7 +961,7 @@ namespace qcon
 
     inline bool Encoder::_encode(const Time & v)
     {
-        static thread_local char buffer[]{"Thh:mm:ss.fffffffff+hh:mm"};
+        static thread_local char buffer[]{"Thh:mm:ss.fffffffff"};
 
         // `T` already in buffer
 
@@ -1025,21 +1025,29 @@ namespace qcon
             ++bufferEnd;
         }
 
+        _str.append(buffer, bufferEnd);
+        return true;
+    }
+
+    inline bool Encoder::_encode(const Timezone & v)
+    {
+        static thread_local char buffer[]{"+hh:mm"};
+
         // Encode timezone
-        switch (v.zone.format)
+        switch (v.format)
         {
             case utcOffset:
             {
                 unat offset;
-                if (v.zone.offset >= 0)
+                if (v.offset >= 0)
                 {
-                    bufferEnd[0] = '+';
-                    offset = unat(v.zone.offset);
+                    buffer[0] = '+';
+                    offset = unat(v.offset);
                 }
                 else
                 {
-                    bufferEnd[0] = '-';
-                    offset = unat(-v.zone.offset);
+                    buffer[0] = '-';
+                    offset = unat(-v.offset);
                 }
 
                 if (offset >= 100u * 60u)
@@ -1047,38 +1055,36 @@ namespace qcon
                     return false;
                 }
 
-                bufferEnd[5] = char('0' + offset % 10u); offset /= 10u;
-                bufferEnd[4] = char('0' + offset % 6u); offset /= 6u;
-                bufferEnd[3] = ':';
-                bufferEnd[2] = char('0' + offset % 10u); offset /= 10;
-                bufferEnd[1] = char('0' + offset);
+                buffer[5] = char('0' + offset % 10u); offset /= 10u;
+                buffer[4] = char('0' + offset % 6u); offset /= 6u;
+                // `:` already in buffer
+                buffer[2] = char('0' + offset % 10u); offset /= 10;
+                buffer[1] = char('0' + offset);
 
-                bufferEnd += 6;
-                break;
+                _str.append(buffer, 6u);
+                return true;
             }
             case utc:
             {
-                *bufferEnd = 'Z';
-                ++bufferEnd;
-                break;
+                _str += 'Z';
+                return true;
             }
             case localTime:
             {
-                break;
+                return true;
             }
         }
 
-        _str.append(buffer, bufferEnd);
-        return true;
+        return false;
     }
 
     // Utterly ignoring leap seconds with righteous conviction
     inline bool Encoder::_encode(const Datetime & v)
     {
-        return _encode(v.date) && _encode(v.time);
+        return _encode(v.date) && _encode(v.time) && _encode(v.zone);
     }
 
-    inline bool Encoder::_encode(std::nullptr_t)
+    inline bool Encoder::_encode(nullptr_t)
     {
         _str += "null"sv;
 
