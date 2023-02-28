@@ -54,15 +54,15 @@ namespace qcon
       public:
 
         static constexpr Density defaultDensity{multiline};
-        static constexpr unat defaultIndentSpaces{4u};
+        static constexpr std::string_view defaultIndentString{"    "sv}; /// Four spaces
         static constexpr TimezoneFormat defaultTimezoneFormat{utcOffset};
 
         ///
         /// Construct a new `Encoder` with the given options
         /// @param density starting density for the QCON
-        /// @param indentSpaces number of spaces to insert per level of indentation
+        /// @param indentStr string to use as indent; must be whitespace
         ///
-        Encoder(Density density = defaultDensity, unat indentSpaces = defaultIndentSpaces);
+        Encoder(Density density = defaultDensity, std::string_view indentStr = defaultIndentString);
 
         Encoder(const Encoder &) = delete;
 
@@ -182,7 +182,7 @@ namespace qcon
         };
 
         Density _baseDensity;
-        unat _indentSpaces;
+        std::string_view _indentStr;
 
         std::string _str;
         std::vector<_ScopeInfo> _scopeInfos;
@@ -242,16 +242,16 @@ namespace qcon
         '8', '9', 'A', 'B',
         'C', 'D', 'E', 'F'};
 
-    inline Encoder::Encoder(const Density density, const unat indentSpaces) :
+    inline Encoder::Encoder(const Density density, const std::string_view indentStr) :
         _baseDensity{density},
-        _indentSpaces{indentSpaces}
+        _indentStr{indentStr}
     {
         reset();
     }
 
     inline Encoder::Encoder(Encoder && other) :
         _baseDensity{other._baseDensity},
-        _indentSpaces{other._indentSpaces},
+        _indentStr{other._indentStr},
 
         _str{std::move(other._str)},
         _scopeInfos{std::move(other._scopeInfos)},
@@ -270,7 +270,7 @@ namespace qcon
     inline Encoder & Encoder::operator=(Encoder && other)
     {
         _baseDensity = other._baseDensity;
-        _indentSpaces = other._indentSpaces;
+        _indentStr = other._indentStr;
 
         _str = std::move(other._str);
         _scopeInfos = std::move(other._scopeInfos);
@@ -606,7 +606,7 @@ namespace qcon
         _container = container;
         _density = std::max(_density, _nextDensity);
         _nextDensity = _density;
-        _indentation += _indentSpaces;
+        ++_indentation;
         _expect = _container == object ? _Expect::key : _Expect::any;
     }
 
@@ -618,7 +618,7 @@ namespace qcon
             return;
         }
 
-        _indentation -= _indentSpaces;
+        --_indentation;
         const bool empty{_str.back() == (_container == object ? '{' : '[')};
         if (!empty)
         {
@@ -689,7 +689,10 @@ namespace qcon
             {
                 _str += '\n';
                 _lineStartI = _str.size();
-                _str.append(_indentation, ' ');
+                for (unat i{0u}; i < _indentation; ++i)
+                {
+                    _str += _indentStr;
+                }
                 break;
             }
             case uniline:
@@ -736,7 +739,7 @@ namespace qcon
             'a', 'b', 't', 'n', 'v', 'f', 'r',
             14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 
-        const unat extraIndentation{_str.size() - _lineStartI - _indentation};
+        const unat strStartOffset{_str.size() - _lineStartI};
 
         _str += '"';
 
@@ -749,9 +752,10 @@ namespace qcon
                 // Split strings on newlines in multiline density
                 if (c == '\n' && _density <= multiline && i < n - 1u)
                 {
+                    const unat extraSpaceCount{strStartOffset - _indentation * _indentStr.size()};
                     _str += "\\n\""sv;
                     _putSpace();
-                    _str.append(extraIndentation, ' ');
+                    _str.append(extraSpaceCount, ' ');
                     _str += '"';
                 }
                 else

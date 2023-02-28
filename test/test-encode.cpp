@@ -217,7 +217,7 @@ TEST(Encode, string)
         ASSERT_EQ(encoder.finish(), R"("a")");
     }
     { // Double quotes
-        Encoder encoder{uniline, 4u};
+        Encoder encoder{uniline};
         std::string expected{};
         encoder << R"(s"t'r)";
         expected = R"("s\"t'r")";
@@ -1089,10 +1089,10 @@ TEST(Encode, density)
     }
 }
 
-TEST(Encode, indentSpaces)
+TEST(Encode, customIndentation)
 {
-    { // 0
-        Encoder encoder{multiline, 0u};
+    { // Empty
+        Encoder encoder{multiline, ""};
         encoder << object;
             encoder << "k" << array;
                 encoder << "v";
@@ -1104,8 +1104,8 @@ TEST(Encode, indentSpaces)
 ]
 })");
     }
-    { // 1
-        Encoder encoder{multiline, 1u};
+    { // 1 space
+        Encoder encoder{multiline, " "};
         encoder << object;
             encoder << "k" << array;
                 encoder << "v";
@@ -1117,8 +1117,8 @@ TEST(Encode, indentSpaces)
  ]
 })");
     }
-    { // 7
-        Encoder encoder{multiline, 7u};
+    { // 7 spaces
+        Encoder encoder{multiline, "       "};
         encoder << object;
             encoder << "k" << array;
                 encoder << "v";
@@ -1129,6 +1129,15 @@ TEST(Encode, indentSpaces)
               "v"
        ]
 })");
+    }
+    { // Tab
+        Encoder encoder{multiline, "\t"};
+        encoder << object;
+            encoder << "k" << array;
+                encoder << "v";
+            encoder << end;
+        encoder << end;
+        ASSERT_EQ(encoder.finish(), "{\n\t\"k\": [\n\t\t\"v\"\n\t]\n}");
     }
 }
 
