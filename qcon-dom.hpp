@@ -1,7 +1,7 @@
 #pragma once
 
 ///
-/// QCON 0.0.0
+/// QCON 0.1.0
 /// https://github.com/daskie/qcon
 /// This header provides a DOM QCON encoder and decoder
 /// Uses `qcon-encode.hpp` to do the encoding and `qcon-decode.hpp` to do the decoding

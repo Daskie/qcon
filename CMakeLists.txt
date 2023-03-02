@@ -11,4 +11,6 @@ qc_setup_target(qcon INTERFACE_LIBRARY)
 
 add_subdirectory(test)
 
+add_subdirectory(examples)
+
 qc_setup_install(TARGETS qcon)

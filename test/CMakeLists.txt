@@ -1,7 +1,7 @@
 find_package(GTest CONFIG REQUIRED)
 
 qc_setup_target(
-    qcon-dom-test
+    qcon-test-dom
     EXECUTABLE
     SOURCE_FILES
         test-dom.cpp
@@ -10,7 +10,7 @@ qc_setup_target(
         GTest::gtest_main)
 
 qc_setup_target(
-    qcon-decode-test
+    qcon-test-decode
     EXECUTABLE
     SOURCE_FILES
         test-decode.cpp
@@ -19,7 +19,7 @@ qc_setup_target(
         GTest::gtest_main)
 
 qc_setup_target(
-    qcon-encode-test
+    qcon-test-encode
     EXECUTABLE
     SOURCE_FILES
         test-encode.cpp

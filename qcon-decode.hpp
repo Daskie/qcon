@@ -1,7 +1,7 @@
 #pragma once
 
 ///
-/// QCON 0.0.0
+/// QCON 0.1.0
 /// https://github.com/daskie/qcon
 /// This standalone header provides a SAX QCON decoder
 /// See the README for more info
@@ -81,7 +81,7 @@ namespace qcon
         Decoder(std::string_view) = delete; /// QCON string must be null terminated; pass c-string instead
 
         ///
-        /// @return whether the decoding has been thusfar successfull
+        /// @return whether the decoding has been thusfar successful
         ///
         explicit operator bool() const { return _state != DecodeState::error; }
 
@@ -120,8 +120,8 @@ namespace qcon
         ///
         /// Decode a value of the given type into the provided destination variable
         /// If the current state is `error`, does nothing
-        /// If the decode is successfull, progresses the internal state like `step()`
-        /// If the decode is unccessfull, sets the state to `error`
+        /// If the decode is successful, progresses the internal state like `step()`
+        /// If the decode is unsuccessful, sets the state to `error`
         /// May be used instead of, or in combination with, `step()`
         /// @return this
         ///
@@ -457,7 +457,6 @@ namespace qcon
         return _state == DecodeState::error || (_depth == 0u && *_pos == '\0');
     }
 
-    // TODO: Maybe move `end` to its own enum and add `root` or something?
     inline Decoder & Decoder::operator>>(const Container container)
     {
         // Stream container end
