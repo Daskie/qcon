@@ -195,7 +195,7 @@ NaN may be represented with `nan`.
      inf,  # Positive infinity
     +inf,  # Positive infinity
     -inf,  # Negative infinity
-     nan   # NaN must not have a sign
+     nan   # NaN
 ]
 ```
 

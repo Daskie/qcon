@@ -116,7 +116,11 @@
 **Floater:**  
     DecimalDigits Fraction  
     DecimalDigits Exponent  
-    DecimalDigits Fraction Exponent
+    DecimalDigits Fraction Exponent  
+    `inf`  
+    `nan`  
+    Sign `inf`  
+    Sign `nan`  
 
 **Fraction:**  
     `.` DecimalDigits

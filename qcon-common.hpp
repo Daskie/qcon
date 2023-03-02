@@ -25,6 +25,31 @@ namespace qcon
 
     using Timepoint = std::chrono::system_clock::time_point;
 
+    enum class Container
+    {
+        end,
+        object,
+        array
+    };
+    using enum Container;
+
+    enum class Density
+    {
+        multiline, /// Elements are put on new lines
+        uniline,   /// Elements are put on one line separated by spaces
+        nospace    /// No space is used whatsoever
+    };
+    using enum Density;
+
+    enum class Base
+    {
+        decimal,
+        binary,
+        octal,
+        hex
+    };
+    using enum Base;
+
     enum class TimezoneFormat : u8
     {
         localTime, /// The next datetime will be given no timezone specifier

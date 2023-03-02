@@ -19,31 +19,6 @@
 
 namespace qcon
 {
-    enum class Container
-    {
-        end,
-        object,
-        array
-    };
-    using enum Container;
-
-    enum class Density
-    {
-        multiline, /// Elements are put on new lines
-        uniline,   /// Elements are put on one line separated by spaces
-        nospace    /// No space is used whatsoever
-    };
-    using enum Density;
-
-    enum class Base
-    {
-        decimal,
-        binary,
-        octal,
-        hex
-    };
-    using enum Base;
-
     ///
     /// Class to facilitate QCON SAX encoding
     /// Encodes values "streamed" via the `<<` operator

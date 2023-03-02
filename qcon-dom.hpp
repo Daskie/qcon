@@ -994,6 +994,10 @@ namespace qcon
                 {
                     return true;
                 }
+                case DecodeState::key:
+                {
+                    break;
+                }
                 case DecodeState::string:
                 {
                     object.emplace(std::move(decoder.key), std::move(decoder.string));
@@ -1211,7 +1215,7 @@ namespace qcon
             }
         }
 
-        if (decoder.step() == DecodeState::done)
+        if (decoder)
         {
             return value;
         }

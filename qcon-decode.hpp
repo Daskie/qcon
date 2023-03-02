@@ -27,9 +27,11 @@ namespace qcon
     enum class DecodeState
     {
         error,    /// An error has occurred
+        ready,    /// The QSON was just loaded
         object,   /// An object was started
         array,    /// An array was started
         end,      /// An object or array was ended
+        key,      /// A key was just decoded
         string,   /// A string value was decoded
         integer,  /// An integer value was decoded
         floater,  /// A floater value was decoded
@@ -37,8 +39,7 @@ namespace qcon
         date,     /// A date value was decoded
         time,     /// A time value was decoded
         datetime, /// A datetime value was decoded
-        null,     /// A null value was decoded
-        done      /// The end of the QCON was reached
+        null     /// A null value was decoded
     };
 
     ///
@@ -62,6 +63,8 @@ namespace qcon
 
         Decoder() = default;
 
+        // TODO: Copy/move stuff
+
         ///
         /// Constructs a decoder and loads the given QSON string
         /// The QSON string *must* be null terminated (optimization allowing most range checks to be eliminated)
@@ -72,6 +75,11 @@ namespace qcon
         Decoder(const std::string & qson) : Decoder{qson.c_str()} {}
         Decoder(std::string &&) = delete; // Prevent binding to temporary
         Decoder(std::string_view) = delete; /// QCON string must be null terminated; pass c-string instead
+
+        ///
+        /// @return whether the decoding has been thusfar successfull
+        ///
+        explicit operator bool() const { return _state != DecodeState::error; }
 
         ///
         /// Loads the given QSON string, overriding any existing state
@@ -92,6 +100,51 @@ namespace qcon
         DecodeState step();
 
         ///
+        /// Attempts to end the current container
+        /// If in a container and there's a closing brace/bracket, consumes it, sets the state to `end` and returns true
+        /// If not in a container, not at the end of a container, or if the state is `error`, does nothing and returns
+        ///   false
+        /// @return whether a container was able to be ended
+        ///
+        bool tryEnd();
+
+        ///
+        /// @return true iff at end of QCON or if state is `error`
+        ///
+        [[nodiscard]] bool done() const;
+
+        ///
+        /// Decode a value of the given type into the provided destination variable
+        /// If the current state is `error`, does nothing
+        /// If the decode is successfull, progresses the internal state like `step()`
+        /// If the decode is unccessfull, sets the state to `error`
+        /// May be used instead of, or in combination with, `step()`
+        /// @return this
+        ///
+        Decoder & operator>>(Container container);
+        Decoder & operator>>(std::string & v);
+        Decoder & operator>>(std::string_view &) = delete;
+        Decoder & operator>>(char *) = delete;
+        Decoder & operator>>(const char *) = delete;
+        Decoder & operator>>(char &); /// Expects a single character string
+        Decoder & operator>>(s64 & v);
+        Decoder & operator>>(u64 & v);
+        Decoder & operator>>(s32 & v);
+        Decoder & operator>>(u32 & v);
+        Decoder & operator>>(s16 & v);
+        Decoder & operator>>(u16 & v);
+        Decoder & operator>>(s8 & v);
+        Decoder & operator>>(u8 & v);
+        Decoder & operator>>(double & v);
+        Decoder & operator>>(float & v);
+        Decoder & operator>>(bool & v);
+        Decoder & operator>>(Date & v);
+        Decoder & operator>>(Time & v);
+        Decoder & operator>>(Datetime & v);
+        Decoder & operator>>(Timepoint & v);
+        Decoder & operator>>(nullptr_t);
+
+        ///
         /// @return current state
         ///
         [[nodiscard]] DecodeState state() const { return _state; }
@@ -103,16 +156,24 @@ namespace qcon
 
       private:
 
-        DecodeState _state{DecodeState::done};
+        DecodeState _state{DecodeState::error};
         const char * _qcon{};
         const char * _pos{};
         u64 _stack{};
         unat _depth{};
         const char * _cachedEnd{}; // Only used for floating point `from_chars`
+        bool _hadComma{};
 
         void _skipSpace();
 
         void _skipSpaceAndComments();
+
+        [[nodiscard]] bool _preValueStreamCheck();
+
+        [[nodiscard]] bool _preKeyStreamCheck();
+
+        void _postValue(DecodeState newState);
+        void _postValue(bool condition, DecodeState newState);
 
         int _tryConsumeSign();
 
@@ -120,51 +181,63 @@ namespace qcon
 
         bool _tryConsumeChars(std::string_view str);
 
-        template <bool checkOverflow> bool _tryConsumeBinaryDigit(u64 & v);
+        template <bool checkOverflow> bool _tryConsumeBinaryDigit(u64 & dst);
 
-        template <bool checkOverflow> bool _tryConsumeOctalDigit(u64 & v);
+        template <bool checkOverflow> bool _tryConsumeOctalDigit(u64 & dst);
 
-        template <bool checkOverflow> bool _tryConsumeDecimalDigit(u64 & v);
+        template <bool checkOverflow> bool _tryConsumeDecimalDigit(u64 & dst);
 
-        template <bool checkOverflow> bool _tryConsumeHexDigit(u64 & v);
+        template <bool checkOverflow> bool _tryConsumeHexDigit(u64 & dst);
 
-        bool _tryConsumeDecimalDigits(u64 & v, unat digits);
+        bool _tryConsumeDecimalDigits(unat digits, u64 & dst);
 
-        bool _tryConsumeHexDigits(u64 & v, unat digits);
+        bool _tryConsumeHexDigits(unat digits, u64 & dst);
 
         [[nodiscard]] bool _consumeChar(char c);
 
-        [[nodiscard]] bool _consumeDecimalDigits(u64 & v, unat digits);
+        [[nodiscard]] bool _consumeChars(std::string_view str);
 
-        [[nodiscard]] bool _consumeHexDigits(u64 & v, unat digits);
+        [[nodiscard]] bool _consumeDecimalDigits(unat digits, u64 & dst);
 
-        [[nodiscard]] bool _consumeCodePoint(std::string & dst, unat digits);
+        [[nodiscard]] bool _consumeHexDigits(unat digits, u64 & dst);
+
+        [[nodiscard]] bool _consumeCodePoint(unat digits, std::string & dst);
 
         [[nodiscard]] bool _consumeEscaped(std::string & dst);
 
         [[nodiscard]] bool _consumeString(std::string & dst);
 
-        [[nodiscard]] bool _consumeKey();
+        [[nodiscard]] bool _consumeKey(std::string & dst);
 
-        [[nodiscard]] bool _consumeBinary(u64 & v);
+        [[nodiscard]] bool _consumeBinaryInteger(u64 & dst);
 
-        [[nodiscard]] bool _consumeOctal(u64 & v);
+        [[nodiscard]] bool _consumeOctalInteger(u64 & dst);
 
-        [[nodiscard]] bool _consumeDecimal(u64 & v);
+        [[nodiscard]] bool _consumeDecimalInteger(u64 & dst);
 
-        [[nodiscard]] bool _consumeHex(u64 & v);
+        [[nodiscard]] bool _consumeHexInteger(u64 & dst);
 
-        [[nodiscard]] bool _consumeFloater(int sign);
+        [[nodiscard]] bool _consumeInteger(s64 & dst);
 
-        template <int base> [[nodiscard]] bool _consumeInteger(int sign);
+        [[nodiscard]] bool _consumeFloater(double & dst);
 
-        void _ingestNumber(int sign);
+        [[nodiscard]] bool _consumeDate(Date & dst);
 
-        [[nodiscard]] bool _consumeDate();
+        [[nodiscard]] bool _consumeTime(Time & dst);
 
-        [[nodiscard]] bool _consumeTime();
+        [[nodiscard]] bool _consumeTimezone(Timezone & dst);
 
-        [[nodiscard]] bool _consumeTimezone();
+        void _ingestStart(Container container);
+
+        void _ingestEnd();
+
+        void _ingestNumber();
+
+        void _ingestValue();
+
+        template <typename T> void _streamSmallerSignedInteger(T & v);
+
+        template <typename T> void _streamSmallerUnsignedInteger(T & v);
     };
 }
 
@@ -212,6 +285,23 @@ namespace qcon
         }
     }
 
+    [[nodiscard]] inline bool _isFloater(const char * str)
+    {
+        while (_isDigit(*str)) ++str;
+        if (*str == '.')
+        {
+            return _isDigit(str[1]);
+        }
+        else if (*str == 'e' || *str == 'E')
+        {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
     inline Decoder::Decoder(const char * const qcon)
     {
         load(qcon);
@@ -219,291 +309,457 @@ namespace qcon
 
     inline void Decoder::load(const char * const qcon)
     {
-        _state = DecodeState::done;
+        _state = DecodeState::ready;
         _qcon = qcon;
         _pos = _qcon;
+        _stack = 0u;
+        _depth = 0u;
         _cachedEnd = nullptr;
+        _hadComma = false;
+
+        _skipSpaceAndComments();
+
+        // QCON missing value
+        if (!*_pos)
+        {
+            errorMessage = "Expected value"sv;
+            _state = DecodeState::error;
+        }
     }
 
     inline DecodeState Decoder::step()
     {
+        // Preserve error state
         if (_state == DecodeState::error)
         {
             return _state;
         }
 
-        const bool content{_pos != _qcon};
-
-        _skipSpaceAndComments();
-
-        // At end of QCON
-        if (!*_pos)
-        {
-            if (_depth == 0u && content)
-            {
-                return _state = DecodeState::done;
-            }
-            else
-            {
-                errorMessage = "Expected content"sv;
-                return _state = DecodeState::error;
-            }
-        }
-
         // In container
         if (_depth)
         {
-            // In object
-            if (_stack & 1u)
+            const bool inObject{bool(_stack & 1u)};
+            if (inObject)
             {
-                // Expect comma after value
-                bool missingComma{false};
-                if (_state != DecodeState::object)
+                if (_state != DecodeState::key)
                 {
-                    if (_tryConsumeChar(','))
+                    // Check for end
+                    if (*_pos == '}')
                     {
-                        _skipSpaceAndComments();
+                        _ingestEnd();
+                        return _state;
                     }
+                    // Otherwise ingest key
                     else
                     {
-                        missingComma = true;
+                        // Ensure there was a comma between elements
+                        if (_state != DecodeState::object && !_hadComma)
+                        {
+                            errorMessage = "Missing comma between object elements"sv;
+                            return _state = DecodeState::error;
+                        }
+
+                        if (_consumeKey(key))
+                        {
+                            _skipSpaceAndComments();
+                            return _state = DecodeState::key;
+                        }
+                        else
+                        {
+                            return _state = DecodeState::error;
+                        }
                     }
                 }
-
-                // Check for end
-                if (*_pos == '}')
-                {
-                    ++_pos;
-                    _stack >>= 1;
-                    --_depth;
-                    return _state = DecodeState::end;
-                }
-
-                if (missingComma)
-                {
-                    errorMessage = "Expected comma"sv;
-                    return _state = DecodeState::error;
-                }
-
-                // Consume key
-                if (!_consumeKey())
-                {
-                    return _state = DecodeState::error;
-                }
-                _skipSpaceAndComments();
             }
-            // In array
             else
             {
-                // Expect comma after value
-                bool missingComma{false};
-                if (_state != DecodeState::array)
-                {
-                    if (_tryConsumeChar(','))
-                    {
-                        _skipSpaceAndComments();
-                    }
-                    else
-                    {
-                        missingComma = true;
-                    }
-                }
-
                 // Check for end
                 if (*_pos == ']')
                 {
-                    ++_pos;
-                    _stack >>= 1;
-                    --_depth;
-                    return _state = DecodeState::end;
+                    _ingestEnd();
+                    return _state;
                 }
 
-                if (missingComma)
+                // Ensure there was a comma between elements
+                if (_state != DecodeState::array && !_hadComma)
                 {
-                    errorMessage = "Expected comma"sv;
+                    errorMessage = "Missing comma between array elements"sv;
                     return _state = DecodeState::error;
                 }
             }
         }
-        // Root
+
+        _ingestValue();
+        return _state;
+    }
+
+    inline bool Decoder::tryEnd()
+    {
+        // Ensure we're in a container and don't have a key
+        if (_depth && _state != DecodeState::key && _state != DecodeState::error)
+        {
+            // Ensure we have end brace/bracket
+            const bool inObject{bool(_stack & 1u)};
+            if (*_pos == (inObject ? '}' : ']'))
+            {
+                _ingestEnd();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    inline bool Decoder::done() const
+    {
+        return _state == DecodeState::error || (_depth == 0u && *_pos == '\0');
+    }
+
+    // TODO: Maybe move `end` to its own enum and add `root` or something?
+    inline Decoder & Decoder::operator>>(const Container container)
+    {
+        // Stream container end
+        if (container == end)
+        {
+            if (!tryEnd())
+            {
+                errorMessage = "Could not end container"sv;
+                _state = DecodeState::error;
+            }
+
+            return *this;
+        }
+        // Stream container start
         else
         {
-            // Can only be one value at root level
-            if (content)
+            if (!_preValueStreamCheck())
             {
-                errorMessage = "Extraneous content"sv;
-                return _state = DecodeState::error;
+                return *this;
             }
-        }
 
-        const char c{*_pos};
-        switch (c)
+            if (_consumeChar(container == Container::object ? '{' : '['))
+            {
+                _ingestStart(container);
+            }
+            else
+            {
+                _state = DecodeState::error;
+            }
+
+            return *this;
+        }
+    }
+
+    inline Decoder & Decoder::operator>>(std::string & v)
+    {
+        // Stream key
+        const bool inObject{bool(_stack & 1u)};
+        if (inObject && _state != DecodeState::key)
         {
-            case '{':
+            if (!_preKeyStreamCheck())
             {
-                if (_depth >= 64u)
-                {
-                    errorMessage = "Exceeded max depth of 64"sv;
-                    return _state = DecodeState::error;
-                }
+                return *this;
+            }
 
-                ++_pos;
-                _stack <<= 1;
-                _stack |= 1u;
-                ++_depth;
-                return _state = DecodeState::object;
-            }
-            case '[':
+            if (_consumeKey(v))
             {
-                if (_depth >= 64u)
-                {
-                    errorMessage = "Exceeded max depth of 64"sv;
-                    return _state = DecodeState::error;
-                }
+                _state = DecodeState::key;
+                _skipSpaceAndComments();
+            }
+            else
+            {
+                _state = DecodeState::error;
+            }
 
-                ++_pos;
-                _stack <<= 1;
-                ++_depth;
-                return _state = DecodeState::array;
-            }
-            case '"':
+            return *this;
+        }
+        // Stream value
+        else
+        {
+            if (!_preValueStreamCheck())
             {
-                return _state = _consumeString(string) ? DecodeState::string : DecodeState::error;
+                return *this;
             }
-            case '0': [[fallthrough]];
-            case '1': [[fallthrough]];
-            case '2': [[fallthrough]];
-            case '3': [[fallthrough]];
-            case '4': [[fallthrough]];
-            case '5': [[fallthrough]];
-            case '6': [[fallthrough]];
-            case '7': [[fallthrough]];
-            case '8': [[fallthrough]];
-            case '9':
-            {
-                _ingestNumber(0);
-                return _state;
-            }
-            case '+':
-            {
-                ++_pos;
-                if (_isDigit(*_pos))
-                {
-                    _ingestNumber(1);
-                    return _state;
-                }
-                else if (*_pos == 'i')
-                {
-                    ++_pos;
-                    if (_tryConsumeChars("nf"sv))
-                    {
-                        floater = std::numeric_limits<double>::infinity();
-                        positive = true;
-                        return _state = DecodeState::floater;
-                    }
-                    --_pos;
-                }
-                --_pos;
-                break;
-            }
-            case '-':
-            {
-                ++_pos;
-                if (_isDigit(*_pos))
-                {
-                    _ingestNumber(-1);
-                    return _state;
-                }
-                else if (*_pos == 'i')
-                {
-                    ++_pos;
-                    if (_tryConsumeChars("nf"sv))
-                    {
-                        floater = -std::numeric_limits<double>::infinity();
-                        positive = false;
-                        return _state = DecodeState::floater;
-                    }
-                    --_pos;
-                }
-                --_pos;
-                break;
-            }
-            case 'i':
-            {
-                ++_pos;
-                if (_tryConsumeChars("nf"sv))
-                {
-                    floater = std::numeric_limits<double>::infinity();
-                    positive = true;
-                    return _state = DecodeState::floater;
-                }
-                --_pos;
-                break;
-            }
-            case 't':
-            {
-                ++_pos;
-                if (_tryConsumeChars("rue"sv))
-                {
-                    boolean = true;
-                    return _state = DecodeState::boolean;
-                }
-                --_pos;
-                break;
-            }
-            case 'f':
-            {
-                ++_pos;
-                if (_tryConsumeChars("alse"sv))
-                {
-                    boolean = false;
-                    return _state = DecodeState::boolean;
-                }
-                --_pos;
-                break;
-            }
-            case 'n':
-            {
-                ++_pos;
-                if (_tryConsumeChars("ull"sv)) {
-                    return _state = DecodeState::null;
-                }
-                else if (_tryConsumeChars("an"sv))
-                {
-                    floater = std::numeric_limits<double>::quiet_NaN();
-                    positive = true;
-                    return _state = DecodeState::floater;
-                }
-                --_pos;
-                break;
-            }
-            case 'D':
-            {
-                ++_pos;
-                if (!_consumeDate())
-                {
-                    return _state = DecodeState::error;
-                }
 
-                if (*_pos == 'T')
-                {
-                    ++_pos;
-                    return _state = _consumeTime() && _consumeTimezone() ? DecodeState::datetime : DecodeState::error;
-                }
-                else
-                {
-                    return _state = DecodeState::date;
-                }
-            }
-            case 'T':
+            if (_consumeChar('"'))
             {
-                ++_pos;
-                return _state = _consumeTime() ? DecodeState::time : DecodeState::error;
+                _postValue(_consumeString(v), DecodeState::string);
+            }
+            else
+            {
+                _state = DecodeState::error;
+            }
+
+            return *this;
+        }
+    }
+
+    inline Decoder & Decoder::operator>>(char & v)
+    {
+        const bool inObject{bool(_stack & 1u)};
+        const bool isKey{inObject && _state != DecodeState::key};
+        std::string & dst{isKey ? key : string};
+
+        if (*this >> dst)
+        {
+            if (dst.size() == 1u)
+            {
+                v = dst.front();
+            }
+            else
+            {
+                errorMessage = "Expected single character string"sv;
+                _state = DecodeState::error;
             }
         }
 
-        errorMessage = "Unknown value"sv;
-        return _state = DecodeState::error;
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(s64 & v)
+    {
+        if (!_preValueStreamCheck())
+        {
+            return *this;
+        }
+
+        positive = _tryConsumeSign() >= 0;
+
+        if (_isDigit(*_pos) && !_isFloater(_pos + 1))
+        {
+            _postValue(_consumeInteger(v), DecodeState::integer);
+        }
+        else
+        {
+            errorMessage = "Expected integer"sv;
+            _state = DecodeState::error;
+        }
+
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(u64 & v)
+    {
+        s64 tmp;
+        if (!(*this >> tmp))
+        {
+            return *this;
+        }
+
+        // Ensure value is positive
+        if (positive)
+        {
+            v = u64(tmp);
+        }
+        else
+        {
+            errorMessage = "Cannot decode negative value into unsigned integer"sv;
+            _state = DecodeState::error;
+        }
+
+        return *this;
+    }
+
+    template <typename T>
+    inline void Decoder::_streamSmallerSignedInteger(T & v)
+    {
+        s64 v64;
+        if (!(*this >> v64))
+        {
+            return;
+        }
+
+        // Verify range
+        if (v64 >= std::numeric_limits<T>::min() && v64 <= std::numeric_limits<T>::max())
+        {
+            v = T(v64);
+        }
+        else
+        {
+            errorMessage = "Signed integer too large";
+            _state = DecodeState::error;
+        }
+    }
+
+    template <typename T>
+    inline void Decoder::_streamSmallerUnsignedInteger(T & v)
+    {
+        u64 v64;
+        *this >> v64;
+
+        // Verify range
+        if (v64 <= std::numeric_limits<T>::max())
+        {
+            v = T(v64);
+        }
+        else
+        {
+            errorMessage = "Unsigned integer too large";
+            _state = DecodeState::error;
+        }
+    }
+
+    inline Decoder & Decoder::operator>>(s32 & v)
+    {
+        _streamSmallerSignedInteger(v);
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(u32 & v)
+    {
+        _streamSmallerUnsignedInteger(v);
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(s16 & v)
+    {
+        _streamSmallerSignedInteger(v);
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(u16 & v)
+    {
+        _streamSmallerUnsignedInteger(v);
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(s8 & v)
+    {
+        _streamSmallerSignedInteger(v);
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(u8 & v)
+    {
+        _streamSmallerUnsignedInteger(v);
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(double & v)
+    {
+        if (!_preValueStreamCheck())
+        {
+            return *this;
+        }
+
+        positive = _tryConsumeSign() >= 0;
+
+        if (_isDigit(*_pos) && _isFloater(_pos + 1))
+        {
+            _postValue(_consumeFloater(v), DecodeState::floater);
+        }
+        else if (_tryConsumeChars("inf"sv))
+        {
+            v = positive ? std::numeric_limits<double>::infinity() : -std::numeric_limits<double>::infinity();
+            _postValue(DecodeState::floater);
+        }
+        else if (_tryConsumeChars("nan"sv))
+        {
+            v = std::numeric_limits<double>::quiet_NaN();
+            _postValue(DecodeState::floater);
+        }
+        else
+        {
+            errorMessage = "Expected floater"sv;
+            _state = DecodeState::error;
+        }
+
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(float & v)
+    {
+        double tmp;
+        if (*this >> tmp)
+        {
+            v = float(tmp);
+        }
+
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(bool & v)
+    {
+        if (!_preValueStreamCheck())
+        {
+            return *this;
+        }
+
+        if (_tryConsumeChars("true"))
+        {
+            v = true;
+            _postValue(DecodeState::boolean);
+        }
+        else if (_tryConsumeChars("false"))
+        {
+            v = false;
+            _postValue(DecodeState::boolean);
+        }
+        else
+        {
+            errorMessage = "Expected boolean"sv;
+            _state = DecodeState::error;
+        }
+
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(Date & v)
+    {
+        if (!_preValueStreamCheck())
+        {
+            return *this;
+        }
+
+        _postValue(_consumeChar('D') && _consumeDate(v), DecodeState::date);
+
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(Time & v)
+    {
+        if (!_preValueStreamCheck())
+        {
+            return *this;
+        }
+
+        _postValue(_consumeChar('T') && _consumeTime(v), DecodeState::time);
+
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(Datetime & v)
+    {
+        if (!_preValueStreamCheck())
+        {
+            return *this;
+        }
+
+        _postValue(_consumeChar('D') && _consumeDate(v.date) && _consumeChar('T') && _consumeTime(v.time) && _consumeTimezone(v.zone), DecodeState::datetime);
+
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(Timepoint & v)
+    {
+        if (*this >> datetime)
+        {
+            v = datetime.toTimepoint();
+        }
+
+        return *this;
+    }
+
+    inline Decoder & Decoder::operator>>(nullptr_t)
+    {
+        if (!_preValueStreamCheck())
+        {
+            return *this;
+        }
+
+        _postValue(_consumeChars("null"sv), DecodeState::null);
+
+        return *this;
     }
 
     inline void Decoder::_skipSpace()
@@ -525,6 +781,111 @@ namespace qcon
             while (*_pos && *_pos != '\n') ++_pos;
 
             _skipSpace();
+        }
+    }
+
+    inline bool Decoder::_preValueStreamCheck()
+    {
+        // Preserve error state
+        if (_state == DecodeState::error)
+        {
+            return false;
+        }
+
+        if (_depth)
+        {
+            const bool inObject{bool(_stack & 1u)};
+            if (inObject)
+            {
+                // Ensure we have key if in object
+                if (_state != DecodeState::key)
+                {
+                    errorMessage = "Expected key"sv;
+                    _state = DecodeState::error;
+                    return false;
+                }
+            }
+            else
+            {
+                // Ensure there is a comma between array elements
+                if (_state != DecodeState::array && !_hadComma)
+                {
+                    errorMessage = "Expected comma"sv;
+                    _state = DecodeState::error;
+                    return false;
+                }
+            }
+        }
+        else
+        {
+            // Ensure only one value at root level
+            if (_state != DecodeState::ready)
+            {
+                errorMessage = "Root may only have a single value"sv;
+                _state = DecodeState::error;
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    inline bool Decoder::_preKeyStreamCheck()
+    {
+        // Already know we're in object and don't already have key
+
+        // Preserve error state
+        if (_state == DecodeState::error)
+        {
+            return false;
+        }
+
+        // Ensure there is a comma between elements
+        if (_state != DecodeState::object && !_hadComma)
+        {
+            errorMessage = "Expected comma"sv;
+            _state = DecodeState::error;
+            return false;
+        }
+
+        return true;
+    }
+
+    inline void Decoder::_postValue(const DecodeState newState)
+    {
+        _state = newState;
+
+        _skipSpaceAndComments();
+
+        if (_depth)
+        {
+            // Ingest comma
+            _hadComma = _tryConsumeChar(',');
+            if (_hadComma)
+            {
+                _skipSpaceAndComments();
+            }
+        }
+        else
+        {
+            // Ensure there is nothing else at root level
+            if (*_pos)
+            {
+                errorMessage = "Extraneous root content"sv;
+                _state = DecodeState::error;
+            }
+        }
+    }
+
+    inline void Decoder::_postValue(const bool condition, const DecodeState newState)
+    {
+        if (condition)
+        {
+            _postValue(newState);
+        }
+        else
+        {
+            _state = DecodeState::error;
         }
     }
 
@@ -571,7 +932,7 @@ namespace qcon
         return true;
     }
 
-    template <bool checkOverflow> inline bool Decoder::_tryConsumeBinaryDigit(u64 & v)
+    template <bool checkOverflow> inline bool Decoder::_tryConsumeBinaryDigit(u64 & dst)
     {
         const u64 b{u64(*_pos - '0')};
 
@@ -583,19 +944,19 @@ namespace qcon
         // Check if would overflow
         if constexpr (checkOverflow)
         {
-            if (v & (u64(0b1u) << 63))
+            if (dst & (u64(0b1u) << 63))
             {
                 return false;
             }
         }
 
-        v = (v << 1) | b;
+        dst = (dst << 1) | b;
 
         ++_pos;
         return true;
     }
 
-    template <bool checkOverflow> inline bool Decoder::_tryConsumeOctalDigit(u64 & v)
+    template <bool checkOverflow> inline bool Decoder::_tryConsumeOctalDigit(u64 & dst)
     {
         const u64 o{u64(*_pos - '0')};
 
@@ -607,19 +968,19 @@ namespace qcon
         // Check if would overflow
         if constexpr (checkOverflow)
         {
-            if (v & (u64(0b111u) << 61))
+            if (dst & (u64(0b111u) << 61))
             {
                 return false;
             }
         }
 
-        v = (v << 3) | o;
+        dst = (dst << 3) | o;
 
         ++_pos;
         return true;
     }
 
-    template <bool checkOverflow> inline bool Decoder::_tryConsumeDecimalDigit(u64 & v)
+    template <bool checkOverflow> inline bool Decoder::_tryConsumeDecimalDigit(u64 & dst)
     {
         static constexpr u64 riskyVal{std::numeric_limits<u64>::max() / 10u};
         static constexpr u64 riskyDigit{std::numeric_limits<u64>::max() % 10u};
@@ -634,19 +995,19 @@ namespace qcon
         // Check if would overflow
         if constexpr (checkOverflow)
         {
-            if (v > riskyVal || v == riskyVal && d > riskyDigit)
+            if (dst > riskyVal || dst == riskyVal && d > riskyDigit)
             {
                 return false;
             }
         }
 
-        v = v * 10u + d;
+        dst = dst * 10u + d;
 
         ++_pos;
         return true;
     }
 
-    template <bool checkOverflow> inline bool Decoder::_tryConsumeHexDigit(u64 & v)
+    template <bool checkOverflow> inline bool Decoder::_tryConsumeHexDigit(u64 & dst)
     {
         static constexpr std::array<u8, 256u> hexTable{_createHexTable()};
 
@@ -660,28 +1021,28 @@ namespace qcon
         // Check if would overflow
         if constexpr (checkOverflow)
         {
-            if (v & (u64(0b1111u) << 60))
+            if (dst & (u64(0b1111u) << 60))
             {
                 return false;
             }
         }
 
-        v = (v << 4) | h;
+        dst = (dst << 4) | h;
 
         ++_pos;
         return true;
     }
 
     // Assumed to not overflow
-    inline bool Decoder::_tryConsumeDecimalDigits(u64 & v, unat digits)
+    inline bool Decoder::_tryConsumeDecimalDigits(unat digits, u64 & dst)
     {
         const char * const start{_pos};
 
-        v = 0u;
+        dst = 0u;
 
         for (; digits; --digits)
         {
-            if (!_tryConsumeDecimalDigit<false>(v))
+            if (!_tryConsumeDecimalDigit<false>(dst))
             {
                 _pos = start;
                 return false;
@@ -692,15 +1053,15 @@ namespace qcon
     }
 
     // Assumed to not overflow
-    inline bool Decoder::_tryConsumeHexDigits(u64 & v, unat digits)
+    inline bool Decoder::_tryConsumeHexDigits(unat digits, u64 & dst)
     {
         const char * const start{_pos};
 
-        v = 0u;
+        dst = 0u;
 
         for (; digits; --digits)
         {
-            if (!_tryConsumeHexDigit<false>(v))
+            if (!_tryConsumeHexDigit<false>(dst))
             {
                 _pos = start;
                 return false;
@@ -716,16 +1077,27 @@ namespace qcon
         {
             errorMessage.clear();
             std::format_to(std::back_inserter(errorMessage), "Expected `{}`"sv, c);
-            _state = DecodeState::error;
             return false;
         }
 
         return true;
     }
 
-    inline bool Decoder::_consumeDecimalDigits(u64 & v, const unat digits)
+    inline bool Decoder::_consumeChars(const std::string_view str)
     {
-        if (_tryConsumeDecimalDigits(v, digits))
+        if (!_tryConsumeChars(str))
+        {
+            errorMessage.clear();
+            std::format_to(std::back_inserter(errorMessage), "Expected `{}`"sv, str);
+            return false;
+        }
+
+        return true;
+    }
+
+    inline bool Decoder::_consumeDecimalDigits(const unat digits, u64 & dst)
+    {
+        if (_tryConsumeDecimalDigits(digits, dst))
         {
             return true;
         }
@@ -737,9 +1109,9 @@ namespace qcon
         }
     }
 
-    inline bool Decoder::_consumeHexDigits(u64 & v, const unat digits)
+    inline bool Decoder::_consumeHexDigits(const unat digits, u64 & dst)
     {
-        if (_tryConsumeHexDigits(v, digits))
+        if (_tryConsumeHexDigits(digits, dst))
         {
             return true;
         }
@@ -751,10 +1123,10 @@ namespace qcon
         }
     }
 
-    inline bool Decoder::_consumeCodePoint(std::string & dst, const unat digits)
+    inline bool Decoder::_consumeCodePoint(const unat digits, std::string & dst)
     {
         u64 v;
-        if (!_consumeHexDigits(v, digits))
+        if (!_consumeHexDigits(digits, v))
         {
             return false;
         }
@@ -812,9 +1184,9 @@ namespace qcon
             case 'v': c = '\v'; break;
             case 'f': c = '\f'; break;
             case 'r': c = '\r'; break;
-            case 'x': return _consumeCodePoint(dst, 2u);
-            case 'u': return _consumeCodePoint(dst, 4u);
-            case 'U': return _consumeCodePoint(dst, 8u);
+            case 'x': return _consumeCodePoint(2u, dst);
+            case 'u': return _consumeCodePoint(4u, dst);
+            case 'U': return _consumeCodePoint(8u, dst);
             case '"': break;
             case '/': break;
             case '\\': break;
@@ -832,9 +1204,9 @@ namespace qcon
 
     inline bool Decoder::_consumeString(std::string & dst)
     {
-        dst.clear();
+        // We already know we have `"`
 
-        ++_pos; // We already know we have `"`
+        dst.clear();
 
         while (true)
         {
@@ -876,15 +1248,14 @@ namespace qcon
         }
     }
 
-    inline bool Decoder::_consumeKey()
+    inline bool Decoder::_consumeKey(std::string & dst)
     {
-        if (*_pos != '"')
+        if (!_consumeChar('"'))
         {
-            errorMessage = "Expected key"sv;
             return false;
         }
 
-        if (!_consumeString(key))
+        if (!_consumeString(dst))
         {
             return false;
         }
@@ -899,13 +1270,13 @@ namespace qcon
         return true;
     }
 
-    inline bool Decoder::_consumeBinary(u64 & v)
+    inline bool Decoder::_consumeBinaryInteger(u64 & dst)
     {
         const char * start{_pos};
 
-        v = 0u;
+        dst = 0u;
 
-        while (_tryConsumeBinaryDigit<true>(v));
+        while (_tryConsumeBinaryDigit<true>(dst));
 
         if (_pos == start)
         {
@@ -916,13 +1287,13 @@ namespace qcon
         return true;
     }
 
-    inline bool Decoder::_consumeOctal(u64 & v)
+    inline bool Decoder::_consumeOctalInteger(u64 & dst)
     {
         const char * start{_pos};
 
-        v = 0u;
+        dst = 0u;
 
-        while (_tryConsumeOctalDigit<true>(v))
+        while (_tryConsumeOctalDigit<true>(dst))
 
         if (_pos == start)
         {
@@ -933,14 +1304,13 @@ namespace qcon
         return true;
     }
 
-    inline bool Decoder::_consumeDecimal(u64 & v)
+    inline bool Decoder::_consumeDecimalInteger(u64 & dst)
     {
-
         const char * start{_pos};
 
-        v = 0u;
+        dst = 0u;
 
-        while (_tryConsumeDecimalDigit<true>(v));
+        while (_tryConsumeDecimalDigit<true>(dst));
 
         if (_pos == start)
         {
@@ -951,13 +1321,13 @@ namespace qcon
         return true;
     }
 
-    inline bool Decoder::_consumeHex(u64 & v)
+    inline bool Decoder::_consumeHexInteger(u64 & dst)
     {
         const char * start{_pos};
 
-        v = 0u;
+        dst = 0u;
 
-        while (_tryConsumeHexDigit<true>(v));
+        while (_tryConsumeHexDigit<true>(dst));
 
         if (_pos == start)
         {
@@ -968,69 +1338,64 @@ namespace qcon
         return true;
     }
 
-    inline bool Decoder::_consumeFloater(const int sign)
+    inline bool Decoder::_consumeInteger(s64 & dst)
     {
-        // Determine end of QCON
-        if (!_cachedEnd) [[unlikely]]
-        {
-            _cachedEnd = _pos + std::strlen(_pos);
-        }
+        // Already know we have digit
 
-        const std::from_chars_result res{std::from_chars(_pos, _cachedEnd, floater)};
-
-        // There was an issue parsing
-        if (res.ec != std::errc{})
-        {
-            errorMessage = "Invalid floater"sv;
-            return false;
-        }
-
-        if (sign >= 0)
-        {
-            positive = true;
-        }
-        else
-        {
-            floater = -floater;
-            positive = false;
-        }
-
-        _pos = res.ptr;
-        return true;
-    }
-
-    template <int base>
-    inline bool Decoder::_consumeInteger(const int sign)
-    {
         u64 v;
 
-        bool res;
-        if constexpr (base == 2)
+        // Check if hex/octal/binary
+        if (*_pos == '0')
         {
-            res = _consumeBinary(v);
+            ++_pos;
+
+            switch (*_pos)
+            {
+                case 'b':
+                {
+                    ++_pos;
+                    if (!_consumeBinaryInteger(v))
+                    {
+                        return false;
+                    }
+                    break;
+                }
+                case 'o':
+                {
+                    ++_pos;
+                    if (!_consumeOctalInteger(v))
+                    {
+                        return false;
+                    }
+                    break;
+                }
+                case 'x':
+                {
+                    ++_pos;
+                    if (!_consumeHexInteger(v))
+                    {
+                        return false;
+                    }
+                    break;
+                }
+                default:
+                {
+                    --_pos;
+                    if (!_consumeDecimalInteger(v))
+                    {
+                        return false;
+                    }
+                }
+            }
         }
-        else if constexpr (base == 8)
+        else if (!_consumeDecimalInteger(v))
         {
-            res = _consumeOctal(v);
-        }
-        else if constexpr (base == 10)
-        {
-            res = _consumeDecimal(v);
-        }
-        else if constexpr (base == 16)
-        {
-            res = _consumeHex(v);
-        }
-        if (!res)
-        {
-            errorMessage = "Invalid integer"sv;
             return false;
         }
 
-        if (sign >= 0)
+        if (positive)
         {
-            integer = s64(v);
-            positive = true;
+            dst = s64(v);
         }
         else
         {
@@ -1041,93 +1406,60 @@ namespace qcon
                 return false;
             }
 
-            integer = -s64(v);
-            positive = false;
+            dst = -s64(v);
         }
 
         return true;
     }
 
-    inline void Decoder::_ingestNumber(const int sign)
+    inline bool Decoder::_consumeFloater(double & dst)
     {
-        // Check if hex/octal/binary
-        if (*_pos == '0')
+        // Determine end of QCON
+        if (!_cachedEnd) [[unlikely]]
         {
-            ++_pos;
-
-            if (*_pos == 'b')
-            {
-                ++_pos;
-                _state = _consumeInteger<2>(sign) ? DecodeState::integer : DecodeState::error;
-                return;
-            }
-            else if (*_pos == 'o')
-            {
-                ++_pos;
-                _state = _consumeInteger<8>(sign) ? DecodeState::integer : DecodeState::error;
-                return;
-            }
-            else if (*_pos == 'x')
-            {
-                ++_pos;
-                _state = _consumeInteger<16>(sign) ? DecodeState::integer : DecodeState::error;
-                return;
-            }
-
-            --_pos;
+            _cachedEnd = _pos + std::strlen(_pos);
         }
 
-        // Determine if integer or floater
-        const char * integerEnd{_pos + 1};
-        while (_isDigit(*integerEnd)) ++integerEnd;
-        if (*integerEnd == '.')
+        const std::from_chars_result res{std::from_chars(_pos, _cachedEnd, dst)};
+
+        // There was an issue parsing
+        if (res.ec != std::errc{})
         {
-            if (_isDigit(integerEnd[1]))
-            {
-                _state = _consumeFloater(sign) ? DecodeState::floater : DecodeState::error;
-            }
-            else
-            {
-                errorMessage = "Number must not have trailing decimal"sv;
-                _state = DecodeState::error;
-            }
+            errorMessage = "Invalid floater"sv;
+            return false;
         }
-        else if (*integerEnd == 'e' || *integerEnd == 'E')
-        {
-            _state = _consumeFloater(sign) ? DecodeState::floater : DecodeState::error;
-        }
-        else
-        {
-            _state = _consumeInteger<10>(sign) ? DecodeState::integer : DecodeState::error;
-        }
+
+        if (!positive) dst = -dst;
+        _pos = res.ptr;
+        return true;
     }
 
-    inline u8 _lastMonthDay(const u16 year, const u8 month)
+    // `month` must be in range [1, 12]
+    inline u8 _lastMonthDay(const u64 year, const u64 month)
     {
-        static constexpr u8 monthDayCounts[16u]{31u, 28u, 31u, 30u, 31u, 30u, 31u, 31u, 30u, 31u, 30u, 31u, 0u, 0u, 0u, 0u};
+        static constexpr u8 monthDayCounts[16u]{31u, 28u, 31u, 30u, 31u, 30u, 31u, 31u, 30u, 31u, 30u, 31u};
 
         if (month == 2u)
         {
-            return 28u + std::chrono::year{year}.is_leap();
+            return 28u + std::chrono::year(int(year)).is_leap();
         }
         else
         {
-            return monthDayCounts[(month - 1u) & 15u];
+            return monthDayCounts[month - 1u];
         }
     }
 
     // Utterly ignoring leap seconds with righteous conviction
-    inline bool Decoder::_consumeDate()
+    inline bool Decoder::_consumeDate(Date & dst)
     {
         // Already consumed `D`
 
         // Consume year
         u64 year;
-        if (!_consumeDecimalDigits(year, 4u))
+        if (!_consumeDecimalDigits(4u, year))
         {
             return false;
         }
-        date.year = u16(year);
 
         if (!_consumeChar('-'))
         {
@@ -1136,16 +1468,15 @@ namespace qcon
 
         // Consume month
         u64 month;
-        if (!_consumeDecimalDigits(month, 2u))
+        if (!_consumeDecimalDigits(2u, month))
         {
             return false;
         }
-        if (month == 0u || month > 12u)
+        if (month < 1u || month > 12u)
         {
             errorMessage = "Invalid month"sv;
             return false;
         }
-        date.month = u8(month);
 
         if (!_consumeChar('-'))
         {
@@ -1154,28 +1485,30 @@ namespace qcon
 
         // Consume day
         u64 day;
-        if (!_consumeDecimalDigits(day, 2u))
+        if (!_consumeDecimalDigits(2u, day))
         {
             return false;
         }
-        if (day == 0u || day > _lastMonthDay(date.year, date.month))
+        if (day < 1u || day > _lastMonthDay(year, month))
         {
             errorMessage = "Invalid day"sv;
             return false;
         }
-        date.day = u8(day);
 
+        dst.year = u16(year);
+        dst.month = u8(month);
+        dst.day = u8(day);
         return true;
     }
 
     // Utterly ignoring leap seconds with righteous conviction
-    inline bool Decoder::_consumeTime()
+    inline bool Decoder::_consumeTime(Time & dst)
     {
         // Already consumed `T`
 
         // Consume hour
         u64 hour;
-        if (!_consumeDecimalDigits(hour, 2u))
+        if (!_consumeDecimalDigits(2u, hour))
         {
             return false;
         }
@@ -1185,7 +1518,6 @@ namespace qcon
             errorMessage = "Invalid hour"sv;
             return false;
         }
-        time.hour = u8(hour);
 
         if (!_consumeChar(':'))
         {
@@ -1194,7 +1526,7 @@ namespace qcon
 
         // Consume minute
         u64 minute;
-        if (!_consumeDecimalDigits(minute, 2u))
+        if (!_consumeDecimalDigits(2u, minute))
         {
             return false;
         }
@@ -1204,7 +1536,6 @@ namespace qcon
             errorMessage = "Invalid minute"sv;
             return false;
         }
-        time.minute = u8(minute);
 
         if (!_consumeChar(':'))
         {
@@ -1213,7 +1544,7 @@ namespace qcon
 
         // Consume second
         u64 second;
-        if (!_consumeDecimalDigits(second, 2u))
+        if (!_consumeDecimalDigits(2u, second))
         {
             return false;
         }
@@ -1223,14 +1554,13 @@ namespace qcon
             errorMessage = "Invalid second"sv;
             return false;
         }
-        time.second = u8(second);
 
-        // Consume subseconds
+        // Consume subsecond
+        u64 subsecond{0u};
         if (_tryConsumeChar('.'))
         {
             const char * const start{_pos};
-            u64 subsecond;
-            if (!_consumeDecimal(subsecond))
+            if (!_consumeDecimalInteger(subsecond))
             {
                 return false;
             }
@@ -1244,40 +1574,36 @@ namespace qcon
             const unat digits{unat(_pos - start)};
             if (digits < 9u)
             {
-                time.subsecond = u32(subsecond * powersOf10[9u - digits]);
+                subsecond *= powersOf10[9u - digits];
             }
             else if (digits > 9u)
             {
                 // Appropriate rounding
                 const u64 divisor{powersOf10[digits - 9u]};
-                time.subsecond = u32((subsecond + divisor / 2u) / divisor);
+                subsecond = (subsecond + divisor / 2u) / divisor;
             }
-            else
-            {
-                time.subsecond = u32(subsecond);
-            }
-        }
-        else
-        {
-            time.subsecond = 0u;
         }
 
+        dst.hour = u8(hour);
+        dst.minute = u8(minute);
+        dst.second = u8(second);
+        dst.subsecond = u32(subsecond);
         return true;
     }
 
-    inline bool Decoder::_consumeTimezone()
+    inline bool Decoder::_consumeTimezone(Timezone & dst)
     {
         // GMT time
         if (_tryConsumeChar('Z'))
         {
-            datetime.zone.format = utc;
-            datetime.zone.offset = 0u;
+            dst.format = utc;
+            dst.offset = 0u;
         }
         // Has timezone offset
-        else if (int sign{_tryConsumeSign()}; sign)
+        else if (const int sign{_tryConsumeSign()}; sign)
         {
             u64 hour;
-            if (!_consumeDecimalDigits(hour, 2u))
+            if (!_consumeDecimalDigits(2u, hour))
             {
                 return false;
             }
@@ -1294,7 +1620,7 @@ namespace qcon
             }
 
             u64 minute;
-            if (!_consumeDecimalDigits(minute, 2u))
+            if (!_consumeDecimalDigits(2u, minute))
             {
                 return false;
             }
@@ -1305,17 +1631,230 @@ namespace qcon
                 return false;
             }
 
-            datetime.zone.format = utcOffset;
-            datetime.zone.offset = s16(hour * 60u + minute);
-            if (sign < 0) datetime.zone.offset = -datetime.zone.offset;
+            dst.format = utcOffset;
+            dst.offset = s16(hour * 60u + minute);
+            if (sign < 0) dst.offset = -dst.offset;
         }
         // No timezone, local time
         else
         {
-            datetime.zone.format = localTime;
-            datetime.zone.offset = 0u;
+            dst.format = localTime;
+            dst.offset = 0u;
         }
 
         return true;
+    }
+
+    inline void Decoder::_ingestStart(const Container container)
+    {
+        static constexpr u64 flags[2u]{0u, 1u};
+
+        // Open brace/bracket already consumed
+
+        if (_depth < 64u)
+        {
+            const bool isObject{container == object};
+            _stack <<= 1;
+            ++_depth;
+            _stack |= u64(isObject);
+            _state = isObject ? DecodeState::object : DecodeState::array;
+            _skipSpaceAndComments();
+        }
+        else
+        {
+            errorMessage = "Exceeded max depth of 64"sv;
+            _state = DecodeState::error;
+        }
+    }
+
+    inline void Decoder::_ingestEnd()
+    {
+        // Already know we have close brace/bracket
+        ++_pos;
+        _stack >>= 1;
+        --_depth;
+        _postValue(DecodeState::end);
+    }
+
+    inline void Decoder::_ingestNumber()
+    {
+        // Already know we have one digit
+
+        if (_isFloater(_pos + 1))
+        {
+            _postValue(_consumeFloater(floater), DecodeState::floater);
+        }
+        else
+        {
+            _postValue(_consumeInteger(integer), DecodeState::integer);
+        }
+    }
+
+    inline void Decoder::_ingestValue()
+    {
+        positive = true;
+
+        switch (*_pos)
+        {
+            case '\0':
+            {
+                errorMessage = "Hit end of QCON"sv;
+                _state = DecodeState::error;
+                return;
+            }
+            case '{':
+            {
+                ++_pos;
+                _ingestStart(object);
+                return;
+            }
+            case '[':
+            {
+                ++_pos;
+                _ingestStart(array);
+                return;
+            }
+            case '"':
+            {
+                ++_pos;
+                _postValue(_consumeString(string), DecodeState::string);
+                return;
+            }
+            case '0': [[fallthrough]];
+            case '1': [[fallthrough]];
+            case '2': [[fallthrough]];
+            case '3': [[fallthrough]];
+            case '4': [[fallthrough]];
+            case '5': [[fallthrough]];
+            case '6': [[fallthrough]];
+            case '7': [[fallthrough]];
+            case '8': [[fallthrough]];
+            case '9':
+            {
+                _ingestNumber();
+                return;
+            }
+            case '+':
+            {
+                ++_pos;
+                if (_isDigit(*_pos))
+                {
+                    _ingestNumber();
+                    return;
+                }
+                else if (_tryConsumeChars("inf"sv))
+                {
+                    floater = std::numeric_limits<double>::infinity();
+                    _postValue(DecodeState::floater);
+                    return;
+                }
+                else if (_tryConsumeChars("nan"sv))
+                {
+                    floater = std::numeric_limits<double>::quiet_NaN();
+                    _postValue(DecodeState::floater);
+                    return;
+                }
+                --_pos;
+                break;
+            }
+            case '-':
+            {
+                positive = false;
+                ++_pos;
+                if (_isDigit(*_pos))
+                {
+                    _ingestNumber();
+                    return;
+                }
+                else if (_tryConsumeChars("inf"sv))
+                {
+                    floater = -std::numeric_limits<double>::infinity();
+                    _postValue(DecodeState::floater);
+                    return;
+                }
+                else if (_tryConsumeChars("nan"sv))
+                {
+                    floater = std::numeric_limits<double>::quiet_NaN();
+                    _postValue(DecodeState::floater);
+                    return;
+                }
+                --_pos;
+                break;
+            }
+            case 'i':
+            {
+                ++_pos;
+                if (_tryConsumeChars("nf"sv))
+                {
+                    floater = std::numeric_limits<double>::infinity();
+                    _postValue(DecodeState::floater);
+                    return;
+                }
+                --_pos;
+                break;
+            }
+            case 't':
+            {
+                ++_pos;
+                if (_tryConsumeChars("rue"sv))
+                {
+                    boolean = true;
+                    _postValue(DecodeState::boolean);
+                    return;
+                }
+                --_pos;
+                break;
+            }
+            case 'f':
+            {
+                ++_pos;
+                if (_tryConsumeChars("alse"sv))
+                {
+                    boolean = false;
+                    _postValue(DecodeState::boolean);
+                    return;
+                }
+                --_pos;
+                break;
+            }
+            case 'n':
+            {
+                ++_pos;
+                if (_tryConsumeChars("ull"sv)) {
+                    _postValue(DecodeState::null);
+                    return;
+                }
+                else if (_tryConsumeChars("an"sv))
+                {
+                    floater = std::numeric_limits<double>::quiet_NaN();
+                    _postValue(DecodeState::floater);
+                    return;
+                }
+                --_pos;
+                break;
+            }
+            case 'D':
+            {
+                ++_pos;
+                _postValue(_consumeDate(date), DecodeState::date);
+
+                if (*_pos == 'T')
+                {
+                    ++_pos;
+                    _postValue(_consumeTime(time) && _consumeTimezone(datetime.zone), DecodeState::datetime);
+                }
+
+                return;
+            }
+            case 'T':
+            {
+                ++_pos;
+                _postValue(_consumeTime(time), DecodeState::time);
+                return;
+            }
+        }
+
+        errorMessage = "Unknown value"sv;
+        _state = DecodeState::error;
     }
 }
