@@ -50,7 +50,7 @@ QCON is a strict superset of JSON, meaning that every valid JSON document is a v
 
 JSON5 is great, but there are a few things I don't like that motivated the creation of QCON.
 Most notably, it lacks a datetime type, and some of its features (such as unquoted keys) add considerable parser
-complexity/cost without providing meaninful benefit, in my opinion.
+complexity/cost without providing meaningful benefit, in my opinion.
 
 *Some minor differences omitted*
 
@@ -87,7 +87,7 @@ A QCON array is the same as a JSON array, except that the last element may have 
 [
     [],  # Empty
     [ 123, true, null ],  # Typical
-    [ "val" ],  # Trailing comma
+    [ "val" ],  # Trailing commas
 ]
 ```
 
@@ -236,23 +236,24 @@ A time may have any number of subsecond fractional digits.
 }
 ```
 
-A time may specify a timezone, either with `Z` to indicate UTC time, of a `±hh:mm` offset.
-
-If no timezone is specified, the time is local.
-
-```QCON
-{
-    "Local": T12:05:33,
-    "UTC": T19:05:33Z,
-    "Pacific": T12:05:33-07:00,
-```
-
 ### Datetime
 
 A datetime combines a date and a time into a specific timepoint.
 
 ```QCON
-D2023-02-27T12:05:33.069-07:00
+D2023-02-27T12:05:33.069
+```
+
+A datetime may specify a timezone, either with `Z` to indicate UTC time, of a `±hh:mm` offset.
+
+If no timezone is specified, the datetime is in local time.
+
+```QCON
+{
+    "Local"   : D2023-02-27T12:05:33,
+    "UTC"     : D2023-02-27T19:05:33Z,
+    "Pacific" : D2023-02-27T12:05:33-07:00
+}
 ```
 
 ### Null
