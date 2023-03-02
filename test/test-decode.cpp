@@ -2950,6 +2950,10 @@ TEST(Decode, misc)
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::error);
     }
+    { // Initial state
+        Decoder decoder{};
+        ASSERT_EQ(decoder.state(), DecodeState::error);
+    }
 }
 
 TEST(Decoder, miscStream)

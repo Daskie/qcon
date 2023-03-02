@@ -61,9 +61,13 @@ namespace qcon
         Time & time{datetime.time}; /// If a time was just decoded, holds its value; unspecified otherwise; alias for `datetime.time`
         std::string errorMessage{}; /// Holds a brief description of the most recent error; may be moved from
 
-        Decoder() = default;
+        Decoder();
 
-        // TODO: Copy/move stuff
+        Decoder(const Decoder &) = delete;
+        Decoder(Decoder && other);
+
+        Decoder & operator=(const Decoder &) = delete;
+        Decoder & operator=(Decoder && other);
 
         ///
         /// Constructs a decoder and loads the given QSON string
@@ -156,13 +160,15 @@ namespace qcon
 
       private:
 
-        DecodeState _state{DecodeState::error};
-        const char * _qcon{};
-        const char * _pos{};
-        u64 _stack{};
-        unat _depth{};
-        const char * _cachedEnd{}; // Only used for floating point `from_chars`
-        bool _hadComma{};
+        DecodeState _state;
+        const char * _qcon;
+        const char * _pos;
+        u64 _stack;
+        unat _depth;
+        const char * _cachedEnd; // Only used for floating point `from_chars`
+        bool _hadComma;
+
+        void _reset();
 
         void _skipSpace();
 
@@ -302,6 +308,44 @@ namespace qcon
         }
     }
 
+    inline Decoder::Decoder()
+    {
+        _reset();
+    }
+
+    inline Decoder::Decoder(Decoder && other) :
+        key{std::move(other.key)},
+        string{std::move(other.string)},
+        errorMessage{std::move(other.errorMessage)},
+
+        _state{other._state},
+        _qcon{other._qcon},
+        _pos{other._pos},
+        _stack{other._stack},
+        _depth{other._depth},
+        _cachedEnd{other._cachedEnd},
+        _hadComma{other._hadComma}
+    {
+        other._reset();
+    }
+
+    inline Decoder & Decoder::operator=(Decoder && other)
+    {
+        key = std::move(other.key);
+        string = std::move(other.string);
+        errorMessage = std::move(other.errorMessage);
+
+        _state = other._state;
+        _qcon = other._qcon;
+        _pos = other._pos;
+        _stack = other._stack;
+        _depth = other._depth;
+        _cachedEnd = other._cachedEnd;
+        _hadComma = other._hadComma;
+
+        other._reset();
+    }
+
     inline Decoder::Decoder(const char * const qcon)
     {
         load(qcon);
@@ -309,13 +353,11 @@ namespace qcon
 
     inline void Decoder::load(const char * const qcon)
     {
+        _reset();
+
         _state = DecodeState::ready;
         _qcon = qcon;
         _pos = _qcon;
-        _stack = 0u;
-        _depth = 0u;
-        _cachedEnd = nullptr;
-        _hadComma = false;
 
         _skipSpaceAndComments();
 
@@ -760,6 +802,17 @@ namespace qcon
         _postValue(_consumeChars("null"sv), DecodeState::null);
 
         return *this;
+    }
+
+    inline void Decoder::_reset()
+    {
+        _state = DecodeState::error;
+        _qcon = nullptr;
+        _pos = nullptr;
+        _stack = 0u;
+        _depth = 0u;
+        _cachedEnd = nullptr;
+        _hadComma = false;
     }
 
     inline void Decoder::_skipSpace()
