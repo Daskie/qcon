@@ -81,7 +81,7 @@ Employee decodeEmployee(qcon::Decoder & decoder)
 
     abortIf(!(decoder >> qcon::object));
 
-    while (!decoder.tryEnd())
+    while (decoder.more())
     {
         abortIf(!(decoder >> decoder.key));
 
@@ -113,7 +113,7 @@ Business decodeBusiness(qcon::Decoder & decoder)
 
     abortIf(!(decoder >> qcon::object));
 
-    while (!decoder.tryEnd())
+    while (decoder.more())
     {
         abortIf(!(decoder >> decoder.key));
 
@@ -135,7 +135,7 @@ Business decodeBusiness(qcon::Decoder & decoder)
         {
             abortIf(!(decoder >> qcon::array));
 
-            while (!decoder.tryEnd())
+            while (decoder.more())
             {
                 business.employees.push_back(decodeEmployee(decoder));
             }
@@ -153,7 +153,9 @@ Business decodeBusiness(qcon::Decoder & decoder)
 Business decodeExample(const std::string & qconStr)
 {
     qcon::Decoder decoder{qconStr};
-    return decodeBusiness(decoder);
+    Business business{decodeBusiness(decoder)};
+    abortIf(!decoder.finished());
+    return business;
 }
 
 int main()

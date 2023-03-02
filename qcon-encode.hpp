@@ -1,9 +1,9 @@
 #pragma once
 
 ///
-/// QCON 0.1.0
+/// QCON 0.1.1
 /// https://github.com/daskie/qcon
-/// This standalone header provides a SAX QCON encoder
+/// This header provides a SAX QCON encoder
 /// See the README for more info
 ///
 

@@ -50,7 +50,7 @@ std::ostream & operator<<(std::ostream & os, const DecodeState state)
 bool fails(const char * str)
 {
     Decoder decoder{str};
-    while (!decoder.done())
+    while (decoder && !decoder.finished())
     {
         decoder.step();
     }
@@ -1846,117 +1846,117 @@ TEST(Decode, depth)
     }
 }
 
-TEST(Decode, done)
+TEST(Decode, finished)
 {
     {
         Decoder decoder{""};
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_FALSE(decoder);
     }
     {
         Decoder decoder{"1"};
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_TRUE(decoder.done());
+        ASSERT_TRUE(decoder.finished());
         ASSERT_TRUE(decoder);
     }
     {
         Decoder decoder{"["};
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::array);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::error);
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_FALSE(decoder);
     }
     {
         Decoder decoder{"[1"};
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::array);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::error);
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_FALSE(decoder);
     }
     {
         Decoder decoder{"[1]"};
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::array);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::end);
-        ASSERT_TRUE(decoder.done());
+        ASSERT_TRUE(decoder.finished());
         ASSERT_TRUE(decoder);
     }
     {
         Decoder decoder{"{"};
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::object);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::error);
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_FALSE(decoder);
     }
     {
         Decoder decoder{"{\"k\":"};
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::object);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::key);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::error);
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_FALSE(decoder);
     }
     {
         Decoder decoder{"{\"k\":1"};
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::object);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::key);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::error);
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_FALSE(decoder);
     }
     {
         Decoder decoder{"{\"k\":1}"};
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::object);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::key);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::integer);
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_TRUE(decoder);
         ASSERT_EQ(decoder.step(), DecodeState::end);
-        ASSERT_TRUE(decoder.done());
+        ASSERT_TRUE(decoder.finished());
         ASSERT_TRUE(decoder);
     }
 }
@@ -2813,48 +2813,48 @@ TEST(Decode, streamNull)
     ASSERT_FALSE(decoder >> nullptr);
 }
 
-TEST(Decode, tryEnd)
+TEST(Decode, more)
 {
     { // Array empty
         Decoder decoder{R"([])"};
         ASSERT_TRUE(decoder >> array);
-        ASSERT_TRUE(decoder.tryEnd());
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.more());
+        ASSERT_TRUE(decoder.finished());
         ASSERT_TRUE(decoder);
     }
     { // Array single
         s64 v;
         Decoder decoder{R"([ 0 ])"};
         ASSERT_TRUE(decoder >> array);
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> v);
         ASSERT_EQ(v, 0);
-        ASSERT_TRUE(decoder.tryEnd());
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.more());
+        ASSERT_TRUE(decoder.finished());
         ASSERT_TRUE(decoder);
     }
     { // Array multiple
         s64 v;
         Decoder decoder{R"([ 0, 1, 2 ])"};
         ASSERT_TRUE(decoder >> array);
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> v);
         ASSERT_EQ(v, 0);
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> v);
         ASSERT_EQ(v, 1);
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> v);
         ASSERT_EQ(v, 2);
-        ASSERT_TRUE(decoder.tryEnd());
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.more());
+        ASSERT_TRUE(decoder.finished());
         ASSERT_TRUE(decoder);
     }
     { // Object empty
         Decoder decoder{R"({})"};
         ASSERT_TRUE(decoder >> object);
-        ASSERT_TRUE(decoder.tryEnd());
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.more());
+        ASSERT_TRUE(decoder.finished());
         ASSERT_TRUE(decoder);
     }
     { // Object single
@@ -2862,13 +2862,14 @@ TEST(Decode, tryEnd)
         s64 v;
         Decoder decoder{R"({ "0": 0 })"};
         ASSERT_TRUE(decoder >> object);
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> k);
         ASSERT_EQ(k, "0");
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> v);
         ASSERT_EQ(v, 0);
-        ASSERT_TRUE(decoder.tryEnd());
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.more());
+        ASSERT_TRUE(decoder.finished());
         ASSERT_TRUE(decoder);
     }
     { // Object multiple
@@ -2876,45 +2877,57 @@ TEST(Decode, tryEnd)
         s64 v;
         Decoder decoder{R"({ "0": 0, "1": 1, "2": 2 })"};
         ASSERT_TRUE(decoder >> object);
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> k);
         ASSERT_EQ(k, "0");
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> v);
         ASSERT_EQ(v, 0);
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> k);
         ASSERT_EQ(k, "1");
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> v);
         ASSERT_EQ(v, 1);
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> k);
         ASSERT_EQ(k, "2");
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> v);
         ASSERT_EQ(v, 2);
-        ASSERT_TRUE(decoder.tryEnd());
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.more());
+        ASSERT_TRUE(decoder.finished());
         ASSERT_TRUE(decoder);
     }
     { // Value
         Decoder decoder{R"(1)"};
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
+        ASSERT_TRUE(decoder >> decoder.integer);
+        ASSERT_FALSE(decoder.more());
         ASSERT_TRUE(decoder);
     }
     { // Empty
         Decoder decoder{R"()"};
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_FALSE(decoder.more());
         ASSERT_FALSE(decoder);
     }
     { // Trailing comma
         Decoder decoder{R"([ 0, ])"};
         ASSERT_TRUE(decoder >> array >> decoder.integer);
-        ASSERT_TRUE(decoder.tryEnd());
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.more());
+        ASSERT_TRUE(decoder.finished());
         ASSERT_TRUE(decoder);
     }
     { // Lone brace
         Decoder decoder{R"(])"};
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
+    }
+    { // Error propagation
+        Decoder decoder{R"([^,1])"};
+        ASSERT_TRUE(decoder >> array);
+        ASSERT_TRUE(decoder.more());
+        ASSERT_EQ(decoder.step(), DecodeState::error);
+        ASSERT_FALSE(decoder.more());
     }
 }
 
@@ -2960,29 +2973,29 @@ TEST(Decoder, miscStream)
 {
     { // Mismatched containers
         Decoder decoder{R"({])"};
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
         ASSERT_TRUE(decoder >> object);
         ASSERT_FALSE(decoder >> end);
     }
     { // Mismatched containers
         Decoder decoder{R"([})"};
         ASSERT_TRUE(decoder >> array);
-        ASSERT_FALSE(decoder.tryEnd());
+        ASSERT_TRUE(decoder.more());
         ASSERT_FALSE(decoder >> end);
     }
     { // Empty
         Decoder decoder{""};
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_FALSE(decoder);
     }
     { // Space only
         Decoder decoder{"   "};
-        ASSERT_TRUE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_FALSE(decoder);
     }
     { // Unknown value
         Decoder decoder{"^"};
-        ASSERT_FALSE(decoder.done());
+        ASSERT_FALSE(decoder.finished());
         ASSERT_FALSE(decoder >> nullptr);
     }
     { // Multiple root values

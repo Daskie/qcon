@@ -1,9 +1,9 @@
 #pragma once
 
 ///
-/// QCON 0.1.0
+/// QCON 0.1.1
 /// https://github.com/daskie/qcon
-/// This standalone header provides a SAX QCON decoder
+/// This header provides a SAX QCON decoder
 /// See the README for more info
 ///
 
@@ -97,25 +97,25 @@ namespace qcon
 
         ///
         /// Decode the next QCON unit, which could be a value, key-value pair, container start, or container end
-        /// Calling this after the state has reached `done` will yield an error
+        /// Calling this after reaching the end of the QCON will yield an error
         /// Once in the `error` state, will stay in the `error` state until a new QCON string is loaded
-        /// @return current state; `done` if the end of QCON was reached; `error` if there was an error
+        /// @return current state; `error` if there was an error
         ///
         DecodeState step();
 
         ///
-        /// Attempts to end the current container
-        /// If in a container and there's a closing brace/bracket, consumes it, sets the state to `end` and returns true
-        /// If not in a container, not at the end of a container, or if the state is `error`, does nothing and returns
-        ///   false
-        /// @return whether a container was able to be ended
+        /// If at root, returns whether the value has yet to be consumed
+        /// If at the end of a container, consumes the end brace/bracket and returns false
+        /// If not at the end of a container, returns true
+        /// If state is `error`, returns false
+        /// @return whether there are more elements in the current container
         ///
-        bool tryEnd();
+        [[nodiscard]] bool more();
 
         ///
-        /// @return true iff at end of QCON or if state is `error`
+        /// @return whether the full QCON was successfully decoded
         ///
-        [[nodiscard]] bool done() const;
+        [[nodiscard]] bool finished() const;
 
         ///
         /// Decode a value of the given type into the provided destination variable
@@ -435,26 +435,42 @@ namespace qcon
         return _state;
     }
 
-    inline bool Decoder::tryEnd()
+    inline bool Decoder::more()
     {
-        // Ensure we're in a container and don't have a key
-        if (_depth && _state != DecodeState::key && _state != DecodeState::error)
+        // Preserve error state
+        if (_state == DecodeState::error)
         {
-            // Ensure we have end brace/bracket
+            return false;
+        }
+
+        if (_depth)
+        {
+            if (_state == DecodeState::key)
+            {
+                return true;
+            }
+
+            // Check if we have end brace/bracket
             const bool inObject{bool(_stack & 1u)};
             if (*_pos == (inObject ? '}' : ']'))
             {
                 _ingestEnd();
+                return false;
+            }
+            else
+            {
                 return true;
             }
         }
-
-        return false;
+        else
+        {
+            return _state == DecodeState::ready;
+        }
     }
 
-    inline bool Decoder::done() const
+    inline bool Decoder::finished() const
     {
-        return _state == DecodeState::error || (_depth == 0u && *_pos == '\0');
+        return _state != DecodeState::error && _state != DecodeState::ready && !_depth && !*_pos;
     }
 
     inline Decoder & Decoder::operator>>(const Container container)
@@ -462,9 +478,9 @@ namespace qcon
         // Stream container end
         if (container == end)
         {
-            if (!tryEnd())
+            if (more())
             {
-                errorMessage = "Could not end container"sv;
+                errorMessage = "There are more elements in the container"sv;
                 _state = DecodeState::error;
             }
 
