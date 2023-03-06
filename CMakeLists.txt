@@ -7,6 +7,8 @@ include(FetchContent)
 FetchContent_Declare(qc-cmake GIT_REPOSITORY https://github.com/Daskie/qc-cmake.git)
 FetchContent_MakeAvailable(qc-cmake)
 
+set(QC_CXX_STANDARD 20)
+
 qc_setup_target(qcon INTERFACE_LIBRARY)
 
 add_subdirectory(test)
