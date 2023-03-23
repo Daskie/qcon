@@ -1,7 +1,7 @@
 #pragma once
 
 ///
-/// QCON 0.1.1
+/// QCON 0.1.2
 /// https://github.com/daskie/qcon
 /// This header provides a SAX QCON decoder
 /// See the README for more info
@@ -181,7 +181,7 @@ namespace qcon
         void _postValue(DecodeState newState);
         void _postValue(bool condition, DecodeState newState);
 
-        int _tryConsumeSign();
+        s32 _tryConsumeSign();
 
         bool _tryConsumeChar(char c);
 
@@ -957,9 +957,9 @@ namespace qcon
         }
     }
 
-    inline int Decoder::_tryConsumeSign()
+    inline s32 Decoder::_tryConsumeSign()
     {
-        const int sign{(*_pos == '+') - (*_pos == '-')};
+        const s32 sign{(*_pos == '+') - (*_pos == '-')};
 
         if (sign)
         {
@@ -1668,7 +1668,7 @@ namespace qcon
             dst.offset = 0u;
         }
         // Has timezone offset
-        else if (const int sign{_tryConsumeSign()}; sign)
+        else if (const s32 sign{_tryConsumeSign()}; sign)
         {
             u64 hour;
             if (!_consumeDecimalDigits(2u, hour))

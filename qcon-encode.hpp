@@ -1,7 +1,7 @@
 #pragma once
 
 ///
-/// QCON 0.1.1
+/// QCON 0.1.2
 /// https://github.com/daskie/qcon
 /// This header provides a SAX QCON encoder
 /// See the README for more info
@@ -987,7 +987,7 @@ namespace qcon
             {
                 return false;
             }
-            for (int i{0}; i < 8; ++i)
+            for (u32 i{0u}; i < 8u; ++i)
             {
                 *bufferEnd = char('0' + nanoseconds % 10u);
                 nanoseconds /= 10u;

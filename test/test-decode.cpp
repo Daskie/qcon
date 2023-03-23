@@ -1818,7 +1818,7 @@ TEST(Decode, depth)
     { // 64 nested objects
         Decoder decoder{R"({"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"":{"v":true}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}})"};
         ASSERT_EQ(decoder.step(), DecodeState::object);
-        for (int i{1}; i < 64; ++i)
+        for (u32 i{1u}; i < 64u; ++i)
         {
             ASSERT_EQ(decoder.step(), DecodeState::key);
             ASSERT_EQ(decoder.step(), DecodeState::object);
@@ -1827,15 +1827,15 @@ TEST(Decode, depth)
         ASSERT_EQ(decoder.key, "v");
         ASSERT_EQ(decoder.step(), DecodeState::boolean);
         ASSERT_EQ(decoder.boolean, true);
-        for (int i{0}; i < 64; ++i) ASSERT_EQ(decoder.step(), DecodeState::end);
+        for (u32 i{0u}; i < 64u; ++i) ASSERT_EQ(decoder.step(), DecodeState::end);
         ASSERT_TRUE(decoder);
     }
     { // 64 nested arrays
         Decoder decoder{"[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[true]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]"};
-        for (int i{0}; i < 64; ++i) ASSERT_EQ(decoder.step(), DecodeState::array);
+        for (u32 i{0u}; i < 64u; ++i) ASSERT_EQ(decoder.step(), DecodeState::array);
         ASSERT_EQ(decoder.step(), DecodeState::boolean);
         ASSERT_EQ(decoder.boolean, true);
-        for (int i{0}; i < 64; ++i) ASSERT_EQ(decoder.step(), DecodeState::end);
+        for (u32 i{0u}; i < 64u; ++i) ASSERT_EQ(decoder.step(), DecodeState::end);
         ASSERT_TRUE(decoder);
     }
     { // 65 nested objects

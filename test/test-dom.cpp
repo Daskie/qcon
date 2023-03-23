@@ -117,7 +117,7 @@ TEST(Dom, encodeDecodeString)
 TEST(Dom, encodeDecodeSignedInteger)
 {
     { // Zero
-        int val{0};
+        s32 val{0};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -126,7 +126,7 @@ TEST(Dom, encodeDecodeSignedInteger)
         ASSERT_EQ(*decoded->integer(), val);
     }
     { // Typical
-        int val{123};
+        s32 val{123};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -211,7 +211,7 @@ TEST(Dom, encodeDecodeSignedInteger)
 TEST(Dom, encodeDecodeUnsignedInteger)
 {
     { // Zero
-        unsigned int val{0u};
+        u32 val{0u};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -220,7 +220,7 @@ TEST(Dom, encodeDecodeUnsignedInteger)
         ASSERT_EQ(u64(*decoded->integer()), val);
     }
     { // Typical
-        unsigned int val{123u};
+        u32 val{123u};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};

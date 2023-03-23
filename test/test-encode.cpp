@@ -29,7 +29,7 @@ using enum qcon::Density;
 using enum qcon::Base;
 using enum qcon::TimezoneFormat;
 
-struct CustomVal { int x, y; };
+struct CustomVal { s32 x, y; };
 
 Encoder & operator<<(Encoder & encoder, const CustomVal & v)
 {
