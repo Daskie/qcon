@@ -727,10 +727,10 @@ namespace qcon
                 // Split strings on newlines in multiline density
                 if (c == '\n' && _density <= multiline && i < n - 1u)
                 {
-                    const unat extraSpaceCount{strStartOffset - _indentation * _indentStr.size()};
+                    const unat extraSpaceN{strStartOffset - _indentation * _indentStr.size()};
                     _str += "\\n\""sv;
                     _putSpace();
-                    _str.append(extraSpaceCount, ' ');
+                    _str.append(extraSpaceN, ' ');
                     _str += '"';
                 }
                 else
@@ -787,7 +787,7 @@ namespace qcon
         static thread_local u32 chunkBuffer[16u];
         static thread_local char * const charBuffer{reinterpret_cast<char *>(chunkBuffer)};
 
-        const unat leadZeroCount{unat(std::countl_zero(v))};
+        const unat leadZeroN{unat(std::countl_zero(v))};
 
         // Process four bits at a time
         u32 * dst{chunkBuffer + 16};
@@ -798,7 +798,7 @@ namespace qcon
         } while (v);
 
         _str += "0b"sv;
-        _str.append(charBuffer + std::min(leadZeroCount, unat(63u)), charBuffer + 64);
+        _str.append(charBuffer + std::min(leadZeroN, unat(63u)), charBuffer + 64);
     }
 
     inline void Encoder::_encodeOctal(u64 v)

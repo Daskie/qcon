@@ -1505,7 +1505,7 @@ namespace qcon
     // `month` must be in range [1, 12]
     inline u8 _lastMonthDay(const u64 year, const u64 month)
     {
-        static constexpr u8 monthDayCounts[16u]{31u, 28u, 31u, 30u, 31u, 30u, 31u, 31u, 30u, 31u, 30u, 31u};
+        static constexpr u8 monthDayNs[16u]{31u, 28u, 31u, 30u, 31u, 30u, 31u, 31u, 30u, 31u, 30u, 31u};
 
         if (month == 2u)
         {
@@ -1513,7 +1513,7 @@ namespace qcon
         }
         else
         {
-            return monthDayCounts[month - 1u];
+            return monthDayNs[month - 1u];
         }
     }
 
