@@ -1,5 +1,7 @@
 #include <qcon-decode.hpp>
 
+#include <cmath>
+
 #include <gtest/gtest.h>
 
 using s8 = int8_t;
@@ -1479,9 +1481,9 @@ TEST(Decode, datetime)
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
         ASSERT_EQ(decoder.datetime.toTimepoint(), tp);
     }
-    { // Subseconds
-        static_assert(std::chrono::system_clock::duration::period::den == 10'000'000);
-
+    // Subseconds
+    if constexpr (std::chrono::system_clock::duration::period::den == 10'000'000)
+    {
         Decoder decoder{};
 
         decoder.load("D1970-01-01T00:00:00.1Z");
@@ -1519,6 +1521,58 @@ TEST(Decode, datetime)
         decoder.load("D1970-01-01T00:00:00.00000004Z");
         ASSERT_EQ(decoder.step(), DecodeState::datetime);
         ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{});
+    }
+    else if constexpr (std::chrono::system_clock::duration::period::den == 1'000'000'000)
+    {
+        Decoder decoder{};
+
+        decoder.load("D1970-01-01T00:00:00.1Z");
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{100'000'000}});
+
+        decoder.load("D1970-01-01T00:00:00.01Z");
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{10'000'000}});
+
+        decoder.load("D1970-01-01T00:00:00.001Z");
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{1'000'000}});
+
+        decoder.load("D1970-01-01T00:00:00.0001Z");
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{100'000}});
+
+        decoder.load("D1970-01-01T00:00:00.00001Z");
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{10'000}});
+
+        decoder.load("D1970-01-01T00:00:00.000001Z");
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{1'000}});
+
+        decoder.load("D1970-01-01T00:00:00.0000001Z");
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{100}});
+
+        decoder.load("D1970-01-01T00:00:00.00000001Z");
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{10}});
+
+        decoder.load("D1970-01-01T00:00:00.000000001Z");
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{1}});
+
+        decoder.load("D1970-01-01T00:00:00.0000000006Z");
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{std::chrono::system_clock::duration{1}});
+
+        decoder.load("D1970-01-01T00:00:00.0000000004Z");
+        ASSERT_EQ(decoder.step(), DecodeState::datetime);
+        ASSERT_EQ(decoder.datetime.toTimepoint(), Timepoint{});
+    }
+    else
+    {
+        FAIL();
     }
     { // Zero timezone
         Decoder decoder{};

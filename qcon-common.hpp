@@ -194,7 +194,6 @@ namespace qcon
         static constexpr u64 nsPerSecond{1'000'000'000u};
         static constexpr u64 nsPerMinute{nsPerSecond * 60u};
         static constexpr u64 nsPerHour{nsPerMinute * 60u};
-        static constexpr u64 nsPerDay{nsPerHour * 24u};
 
         u64 nanoseconds{u64(ns.count())};
         hour   = u8(nanoseconds /   nsPerHour); nanoseconds %=   nsPerHour;

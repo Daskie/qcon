@@ -538,50 +538,42 @@ TEST(Encode, floater)
     }
     { // Max integer 64
         Encoder encoder{};
-        u64 val{0b0'10000110011'1111111111111111111111111111111111111111111111111111u};
-        encoder << reinterpret_cast<const double &>(val);
+        encoder << std::bit_cast<double>(0b0'10000110011'1111111111111111111111111111111111111111111111111111u);
         ASSERT_EQ(encoder.finish(), "9007199254740991.0");
     }
     { // Max integer 32
         Encoder encoder{};
-        u32 val{0b0'10010110'11111111111111111111111u};
-        encoder << reinterpret_cast<const float &>(val);
+        encoder << std::bit_cast<float>(0b0'10010110'11111111111111111111111u);
         ASSERT_EQ(encoder.finish(), "16777215.0");
     }
     { // Max 64
         Encoder encoder{};
-        u64 val{0b0'11111111110'1111111111111111111111111111111111111111111111111111u};
-        encoder << reinterpret_cast<const double &>(val);
+        encoder << std::bit_cast<double>(0b0'11111111110'1111111111111111111111111111111111111111111111111111u);
         ASSERT_EQ(encoder.finish(), "1.7976931348623157e+308");
     }
     { // Max 32
         Encoder encoder{};
-        u32 val{0b0'11111110'11111111111111111111111u};
-        encoder << reinterpret_cast<const float &>(val);
+        encoder << std::bit_cast<float>(0b0'11111110'11111111111111111111111u);
         ASSERT_EQ(encoder.finish(), "3.4028234663852886e+38");
     }
     { // Min normal 64
         Encoder encoder{};
-        u64 val{0b0'00000000001'0000000000000000000000000000000000000000000000000000u};
-        encoder << reinterpret_cast<const double &>(val);
+        encoder << std::bit_cast<double>(0b0'00000000001'0000000000000000000000000000000000000000000000000000u);
         ASSERT_EQ(encoder.finish(), "2.2250738585072014e-308");
     }
     { // Min normal 32
         Encoder encoder{};
-        u32 val{0b0'00000001'00000000000000000000000u};
-        encoder << reinterpret_cast<const float &>(val);
+        encoder << std::bit_cast<float>(0b0'00000001'00000000000000000000000u);
         ASSERT_EQ(encoder.finish(), "1.1754943508222875e-38");
     }
     { // Min subnormal 64
         Encoder encoder{};
-        u64 val{0b0'00000000000'0000000000000000000000000000000000000000000000000001u};
-        encoder << reinterpret_cast<const double &>(val);
+        encoder << std::bit_cast<double>(u64(0b0'00000000000'0000000000000000000000000000000000000000000000000001u));
         ASSERT_EQ(encoder.finish(), "5e-324");
     }
     { // Min subnormal 32
         Encoder encoder{};
-        u64 val{0b0'00000000'00000000000000000000001u};
-        encoder << reinterpret_cast<const float &>(val);
+        encoder << std::bit_cast<float>(0b0'00000000'00000000000000000000001u);
         ASSERT_EQ(encoder.finish(), "1.401298464324817e-45");
     }
     { // Positive infinity
@@ -839,24 +831,54 @@ TEST(Encode, timepoint)
         encoder << localTime << tp;
         ASSERT_EQ(encoder.finish(), "D1945-05-09T15:37:03.142536");
     }
-    { // Future timestamp
+    // Future timestamp
+    if constexpr (std::chrono::system_clock::duration::period::den == 10'000'000)
+    {
         const Timepoint tp{std::chrono::seconds{253402300799}};
         Encoder encoder{};
         encoder << utc << tp;
         ASSERT_EQ(encoder.finish(), "D9999-12-31T23:59:59Z");
     }
-    { // Past timestamp
+    else if constexpr (std::chrono::system_clock::duration::period::den == 1'000'000'000)
+    {
+        const Timepoint tp{std::chrono::system_clock::duration::max()};
+        Encoder encoder{};
+        encoder << utc << tp;
+        ASSERT_EQ(encoder.finish(), "D2262-04-11T23:47:16.854775807Z");
+    }
+    else
+    {
+        FAIL();
+    }
+    // Past timestamp
+    if constexpr (std::chrono::system_clock::duration::period::den == 10'000'000)
+    {
         const Timepoint tp{std::chrono::seconds{-62167219200}};
         Encoder encoder{};
         encoder << utc << tp;
         ASSERT_EQ(encoder.finish(), "D0000-01-01T00:00:00Z");
     }
-    { // Too far in the future
+    else if constexpr (std::chrono::system_clock::duration::period::den == 1'000'000'000)
+    {
+        const Timepoint tp{std::chrono::system_clock::duration::min()};
+        Encoder encoder{};
+        encoder << utc << tp;
+        ASSERT_EQ(encoder.finish(), "D1677-09-21T00:12:43.145224192Z");
+    }
+    else
+    {
+        FAIL();
+    }
+    // Too far in the future
+    if constexpr (std::chrono::system_clock::duration::period::den == 10'000'000)
+    {
         Encoder encoder{};
         encoder << utc << Timepoint{std::chrono::seconds{253402300800}};
         ASSERT_FALSE(encoder.status());
     }
-    { // Too far in the past
+    // Too far in the past
+    if constexpr (std::chrono::system_clock::duration::period::den == 10'000'000)
+    {
         Encoder encoder{};
         encoder << utc << Timepoint{std::chrono::seconds{-62167219201}};
         ASSERT_FALSE(encoder.status());
@@ -869,8 +891,8 @@ TEST(Encode, timepoint)
         const std::string s2{*encoder.finish()};
         ASSERT_EQ(s1.substr(0u, 20u), s2.substr(0u, 20u));
     }
+    if constexpr (std::chrono::system_clock::duration::period::den == 10'000'000)
     { // Subseconds
-        static_assert(std::chrono::system_clock::duration::period::den == 10'000'000);
         Encoder encoder{};
         encoder << utc << Timepoint{std::chrono::system_clock::duration{1'000'000}};
         ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.1Z");
@@ -886,6 +908,32 @@ TEST(Encode, timepoint)
         ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.000001Z");
         encoder << utc << Timepoint{std::chrono::system_clock::duration{1}};
         ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.0000001Z");
+    }
+    else if constexpr (std::chrono::system_clock::duration::period::den == 1'000'000'000)
+    { // Subseconds
+        Encoder encoder{};
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{100'000'000}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.1Z");
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{10'000'000}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.01Z");
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{1'000'000}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.001Z");
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{100'000}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.0001Z");
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{10'000}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.00001Z");
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{1'000}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.000001Z");
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{100}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.0000001Z");
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{10}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.00000001Z");
+        encoder << utc << Timepoint{std::chrono::system_clock::duration{1}};
+        ASSERT_EQ(encoder.finish(), "D1970-01-01T00:00:00.000000001Z");
+    }
+    else
+    {
+        FAIL();
     }
 }
 

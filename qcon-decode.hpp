@@ -1,7 +1,7 @@
 #pragma once
 
 ///
-/// QCON 0.1.2
+/// QCON 0.1.3
 /// https://github.com/daskie/qcon
 /// This header provides a SAX QCON decoder
 /// See the README for more info
@@ -331,6 +331,11 @@ namespace qcon
 
     inline Decoder & Decoder::operator=(Decoder && other)
     {
+        if (&other == this)
+        {
+            return *this;
+        }
+
         key = std::move(other.key);
         string = std::move(other.string);
         errorMessage = std::move(other.errorMessage);
@@ -344,6 +349,8 @@ namespace qcon
         _hadComma = other._hadComma;
 
         other._reset();
+
+        return *this;
     }
 
     inline Decoder::Decoder(const char * const qcon)
@@ -1063,7 +1070,7 @@ namespace qcon
         // Check if would overflow
         if constexpr (checkOverflow)
         {
-            if (dst > riskyVal || dst == riskyVal && d > riskyDigit)
+            if (dst > riskyVal || (dst == riskyVal && d > riskyDigit))
             {
                 return false;
             }
@@ -1485,7 +1492,8 @@ namespace qcon
         // Determine end of QCON
         if (!_cachedEnd) [[unlikely]]
         {
-            _cachedEnd = _pos + std::strlen(_pos);
+            _cachedEnd = _pos;
+            while (*_cachedEnd) ++_cachedEnd;
         }
 
         const std::from_chars_result res{std::from_chars(_pos, _cachedEnd, dst)};
@@ -1715,8 +1723,6 @@ namespace qcon
 
     inline void Decoder::_ingestStart(const Container container)
     {
-        static constexpr u64 flags[2u]{0u, 1u};
-
         // Open brace/bracket already consumed
 
         if (_depth < 64u)

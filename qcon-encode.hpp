@@ -1,7 +1,7 @@
 #pragma once
 
 ///
-/// QCON 0.1.2
+/// QCON 0.1.3
 /// https://github.com/daskie/qcon
 /// This header provides a SAX QCON encoder
 /// See the README for more info
@@ -735,7 +735,7 @@ namespace qcon
                 }
                 else
                 {
-                    const ControlString controlStr{controlStrings[c]};
+                    const ControlString controlStr{controlStrings[u8(c)]};
                     _str.append(controlStr.chars, controlStr.length());
                 }
             }

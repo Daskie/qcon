@@ -1,5 +1,7 @@
 #include <qcon-dom.hpp>
 
+#include <cmath>
+
 #include <gtest/gtest.h>
 
 using s8 = int8_t;
@@ -268,9 +270,6 @@ TEST(Dom, encodeDecodeUnsignedInteger)
 
 TEST(Dom, encodeDecodeFloater)
 {
-    u64 val64;
-    u32 val32;
-
     { // Zero
         double val{0.0};
         const std::optional<std::string> encoded{encode(val)};
@@ -290,7 +289,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Max integer 64
-        double val{reinterpret_cast<const double &>(val64 = 0b0'10000110011'1111111111111111111111111111111111111111111111111111u)};
+        double val{std::bit_cast<double>(0b0'10000110011'1111111111111111111111111111111111111111111111111111u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -299,7 +298,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Max integer 32
-        double val{reinterpret_cast<const float &>(val32 = 0b0'10010110'11111111111111111111111u)};
+        double val{std::bit_cast<float>(0b0'10010110'11111111111111111111111u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -308,7 +307,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Max 64
-        double val{reinterpret_cast<const double &>(val64 = 0b0'11111111110'1111111111111111111111111111111111111111111111111111u)};
+        double val{std::bit_cast<double>(0b0'11111111110'1111111111111111111111111111111111111111111111111111u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -317,7 +316,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Max 32
-        double val{reinterpret_cast<const float &>(val32 = 0b0'11111110'11111111111111111111111u)};
+        double val{std::bit_cast<float>(0b0'11111110'11111111111111111111111u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -326,7 +325,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Min normal 64
-        double val{reinterpret_cast<const double &>(val64 = 0b0'00000000001'0000000000000000000000000000000000000000000000000000u)};
+        double val{std::bit_cast<double>(0b0'00000000001'0000000000000000000000000000000000000000000000000000u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -335,7 +334,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Min normal 32
-        double val{reinterpret_cast<const float &>(val32 = 0b0'00000001'00000000000000000000000u)};
+        double val{std::bit_cast<float>(0b0'00000001'00000000000000000000000u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -344,7 +343,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Min subnormal 64
-        double val{reinterpret_cast<const double &>(val64 = 0b0'00000000000'0000000000000000000000000000000000000000000000000001u)};
+        double val{std::bit_cast<double>(u64(0b0'00000000000'0000000000000000000000000000000000000000000000000001u))};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -353,7 +352,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Min subnormal 32
-        double val{reinterpret_cast<const float &>(val32 = 0b0'00000000'00000000000000000000001u)};
+        double val{std::bit_cast<float>(0b0'00000000'00000000000000000000001u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -517,25 +516,25 @@ TEST(Dom, valueConstruction)
     ASSERT_EQ(Value{'a'}.type(), Type::string);
 
     // Integer
-    ASSERT_EQ(Value{s64(0)}.type(), Type::integer);
+    ASSERT_EQ(Value{s64{}}.type(), Type::integer);
     ASSERT_TRUE(Value{std::numeric_limits<s64>::max()}.positive());
     ASSERT_FALSE(Value{std::numeric_limits<s64>::min()}.positive());
-    ASSERT_EQ(Value{s32(0)}.type(), Type::integer);
+    ASSERT_EQ(Value{s32{}}.type(), Type::integer);
     ASSERT_TRUE(Value{std::numeric_limits<s32>::max()}.positive());
     ASSERT_FALSE(Value{std::numeric_limits<s32>::min()}.positive());
-    ASSERT_EQ(Value{s16(0)}.type(), Type::integer);
+    ASSERT_EQ(Value{s16{}}.type(), Type::integer);
     ASSERT_TRUE(Value{std::numeric_limits<s16>::max()}.positive());
     ASSERT_FALSE(Value{std::numeric_limits<s16>::min()}.positive());
-    ASSERT_EQ(Value{s8(0)}.type(), Type::integer);
+    ASSERT_EQ(Value{s8{}}.type(), Type::integer);
     ASSERT_TRUE(Value{std::numeric_limits<s8>::max()}.positive());
     ASSERT_FALSE(Value{std::numeric_limits<s8>::min()}.positive());
-    ASSERT_EQ(Value{u64(0)}.type(), Type::integer);
+    ASSERT_EQ(Value{u64{}}.type(), Type::integer);
     ASSERT_TRUE(Value{std::numeric_limits<u64>::max()}.positive());
-    ASSERT_EQ(Value{u32(0)}.type(), Type::integer);
+    ASSERT_EQ(Value{u32{}}.type(), Type::integer);
     ASSERT_TRUE(Value{std::numeric_limits<u32>::max()}.positive());
-    ASSERT_EQ(Value{u16(0)}.type(), Type::integer);
+    ASSERT_EQ(Value{u16{}}.type(), Type::integer);
     ASSERT_TRUE(Value{std::numeric_limits<u16>::max()}.positive());
-    ASSERT_EQ(Value{u8(0)}.type(), Type::integer);
+    ASSERT_EQ(Value{u8{}}.type(), Type::integer);
     ASSERT_TRUE(Value{std::numeric_limits<u8>::max()}.positive());
 
     // Floater
@@ -584,14 +583,14 @@ TEST(Dom, valueAssignAndEquality)
     Value v{};
 
     { // Object
-        const Object objRef{makeObject("a", 1, "b", "wow", "c", nullptr)};
+        const Object objRef(makeObject("a", 1, "b", "wow", "c", nullptr));
         v = makeObject("a", 1, "b", "wow", "c", nullptr);
         ASSERT_EQ(v.type(), Type::object);
         ASSERT_TRUE(v == objRef);
         ASSERT_FALSE(v != objRef);
     }
     { // Array
-        const Array arrRef{makeArray(0, "a", true)};
+        const Array arrRef(makeArray(0, "a", true));
         v = makeArray(0, "a", true);
         ASSERT_EQ(v.type(), Type::array);
         ASSERT_TRUE(v == arrRef);
@@ -633,10 +632,10 @@ TEST(Dom, valueAssignAndEquality)
         v = std::numeric_limits<s64>::min();
         ASSERT_FALSE(v.positive());
 
-        v = s32(6);
+        v = s32{6};
         ASSERT_EQ(v.type(), Type::integer);
-        ASSERT_TRUE(v == s32(6));
-        ASSERT_FALSE(v != s32(6));
+        ASSERT_TRUE(v == s32{6});
+        ASSERT_FALSE(v != s32{6});
         v = std::numeric_limits<s32>::max();
         ASSERT_TRUE(v.positive());
         v = std::numeric_limits<s32>::min();
@@ -667,10 +666,10 @@ TEST(Dom, valueAssignAndEquality)
         v = std::numeric_limits<u64>::max();
         ASSERT_TRUE(v.positive());
 
-        v = u32(11u);
+        v = u32{11u};
         ASSERT_EQ(v.type(), Type::integer);
-        ASSERT_TRUE(v == u32(11u));
-        ASSERT_FALSE(v != u32(11u));
+        ASSERT_TRUE(v == u32{11u});
+        ASSERT_FALSE(v != u32{11u});
         v = std::numeric_limits<u32>::max();
         ASSERT_TRUE(v.positive());
 
@@ -733,7 +732,7 @@ TEST(Dom, valueAssignAndEquality)
 
 TEST(Dom, swap)
 {
-    const Array arrRef{makeArray(0, "a", true)};
+    const Array arrRef(makeArray(0, "a", true));
     Value v1{makeArray(0, "a", true)};
     ASSERT_EQ(v1.type(), Type::array);
     ASSERT_EQ(v1, arrRef);
@@ -844,8 +843,8 @@ TEST(Dom, density)
 TEST(Dom, makeObject)
 {
     { // Generic
-        Object obj1{makeObject("a", 1, "b"s, 2.0, "c"sv, true)};
-        Object obj2{makeObject("d", std::move(obj1))};
+        Object obj1(makeObject("a", 1, "b"s, 2.0, "c"sv, true));
+        Object obj2(makeObject("d", std::move(obj1)));
         ASSERT_EQ(obj2.size(), 1u);
         ASSERT_TRUE(obj2.contains("d"));
 
@@ -869,7 +868,7 @@ TEST(Dom, makeObject)
         ASSERT_EQ(*cVal, true);
     }
     { // Empty array
-        Object obj{makeObject()};
+        Object obj(makeObject());
         ASSERT_TRUE(obj.empty());
     }
 }
@@ -877,8 +876,8 @@ TEST(Dom, makeObject)
 TEST(Dom, makeArray)
 {
     { // Generic
-        Array arr1{makeArray(1, 2.0, true)};
-        Array arr2{makeArray("ok", std::move(arr1))};
+        Array arr1(makeArray(1, 2.0, true));
+        Array arr2(makeArray("ok", std::move(arr1)));
         ASSERT_EQ(arr2.size(), 2u);
         ASSERT_EQ(arr2.capacity(), 2u);
 
@@ -904,7 +903,7 @@ TEST(Dom, makeArray)
         ASSERT_EQ(*v4, true);
     }
     { // Empty array
-        Array arr{makeArray()};
+        Array arr(makeArray());
         ASSERT_TRUE(arr.empty());
         ASSERT_EQ(arr.capacity(), 0u);
     }

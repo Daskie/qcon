@@ -1,7 +1,7 @@
 #pragma once
 
 ///
-/// QCON 0.1.2
+/// QCON 0.1.3
 /// https://github.com/daskie/qcon
 /// This header provides a DOM QCON encoder and decoder
 /// Uses `qcon-encode.hpp` to do the encoding and `qcon-decode.hpp` to do the decoding
@@ -360,22 +360,22 @@ namespace qcon
     }
 
     inline Value::Value(Object && v) :
-        _object{new Object{std::move(v)}},
+        _object{new Object(std::move(v))},
         _type{Type::object}
     {}
 
     inline Value::Value(Array && v) :
-        _array{new Array{std::move(v)}},
+        _array{new Array(std::move(v))},
         _type{Type::array}
     {}
 
     inline Value::Value(std::string && v) :
-        _string{new std::string{std::move(v)}},
+        _string{new std::string(std::move(v))},
         _type{Type::string}
     {}
 
     inline Value::Value(const std::string_view v) :
-        _string{new std::string{v}},
+        _string{new std::string(v)},
         _type{Type::string}
     {}
 
@@ -480,7 +480,7 @@ namespace qcon
         {
             _deleteValue();
             _type = Type::object;
-            _object = new Object{std::move(v)};
+            _object = new Object(std::move(v));
         }
         return *this;
     }
@@ -495,7 +495,7 @@ namespace qcon
         {
             _deleteValue();
             _type = Type::array;
-            _array = new Array{std::move(v)};
+            _array = new Array(std::move(v));
         }
         return *this;
     }
@@ -510,7 +510,7 @@ namespace qcon
         {
             _deleteValue();
             _type = Type::string;
-            _string = new std::string{std::move(v)};
+            _string = new std::string(std::move(v));
         }
         return *this;
     }
@@ -525,7 +525,7 @@ namespace qcon
         {
             _deleteValue();
             _type = Type::string;
-            _string = new std::string{v};
+            _string = new std::string(v);
         }
         return *this;
     }
