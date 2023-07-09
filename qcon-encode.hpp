@@ -211,11 +211,14 @@ namespace qcon
 
 namespace qcon
 {
-    constexpr char _hexEncodeTable[16u]{
-        '0', '1', '2', '3',
-        '4', '5', '6', '7',
-        '8', '9', 'A', 'B',
-        'C', 'D', 'E', 'F'};
+    namespace _private::qcon
+    {
+        constexpr char hexEncodeTable[16u]{
+            '0', '1', '2', '3',
+            '4', '5', '6', '7',
+            '8', '9', 'A', 'B',
+            'C', 'D', 'E', 'F'};
+    }
 
     inline Encoder::Encoder(const Density density, const std::string_view indentStr) :
         _baseDensity{density},
@@ -691,11 +694,11 @@ namespace qcon
             consteval ControlString(const char c)
             {
                 chars[0] = '\\';
-                if (_isControl(c))
+                if (_private::qcon::isControl(c))
                 {
                     chars[1] = 'x';
-                    chars[2] = _hexEncodeTable[u8(c) / 16u];
-                    chars[3] = _hexEncodeTable[u8(c) % 16u];
+                    chars[2] = _private::qcon::hexEncodeTable[u8(c) / 16u];
+                    chars[3] = _private::qcon::hexEncodeTable[u8(c) % 16u];
                 }
                 else
                 {
@@ -722,7 +725,7 @@ namespace qcon
         {
             const char c{v[i]};
 
-            if (_isControl(c))
+            if (_private::qcon::isControl(c))
             {
                 // Split strings on newlines in multiline density
                 if (c == '\n' && _density <= multiline && i < n - 1u)
@@ -846,7 +849,7 @@ namespace qcon
 
         do
         {
-            *--dst = _hexEncodeTable[v & 0b1111u];
+            *--dst = _private::qcon::hexEncodeTable[v & 0b1111u];
             v >>= 4;
         } while (v);
 
@@ -870,7 +873,7 @@ namespace qcon
         _str.append(buffer, length);
 
         // Add trailing `.0` if necessary
-        if (_isDigit(buffer[length - 1u]))
+        if (_private::qcon::isDigit(buffer[length - 1u]))
         {
             bool needsZero{true};
             for (unat i{0u}; i < length; ++i)

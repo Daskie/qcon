@@ -930,13 +930,16 @@ namespace qcon
         }
     }
 
-    template <typename K, typename V, typename... MoreKVs>
-    inline void _makeObjectHelper(Object & obj, K && k, V && v, MoreKVs &&... moreKVs)
+    namespace _private::qcon
     {
-        obj.emplace(std::forward<K>(k), std::forward<V>(v));
-        if constexpr (sizeof...(moreKVs) > 0u)
+        template <typename K, typename V, typename... MoreKVs>
+        inline void makeObjectHelper(Object & obj, K && k, V && v, MoreKVs && ... moreKVs)
         {
-            _makeObjectHelper(obj, std::forward<MoreKVs>(moreKVs)...);
+            obj.emplace(std::forward<K>(k), std::forward<V>(v));
+            if constexpr (sizeof...(moreKVs) > 0u)
+            {
+                makeObjectHelper(obj, std::forward<MoreKVs>(moreKVs)...);
+            }
         }
     }
 
@@ -946,7 +949,7 @@ namespace qcon
         static_assert(sizeof...(moreKVs) % 2u == 0u, "Must provide an even number of arguments alternating between key and value");
 
         Object obj{};
-        _makeObjectHelper(obj, std::forward<K>(k), std::forward<V>(v), std::forward<MoreKVs>(moreKVs)...);
+        _private::qcon::makeObjectHelper(obj, std::forward<K>(k), std::forward<V>(v), std::forward<MoreKVs>(moreKVs)...);
         return obj;
     }
 
@@ -964,173 +967,176 @@ namespace qcon
         return arr;
     }
 
-    inline bool _decodeArray(Decoder & decoder, Array & array);
-
-    inline bool _decodeObject(Decoder & decoder, Object & object)
+    namespace _private::qcon
     {
-        while (true)
+        inline bool decodeArray(Decoder & decoder, Array & array);
+
+        inline bool decodeObject(Decoder & decoder, Object & object)
         {
-            switch (decoder.step())
+            while (true)
             {
-                case DecodeState::object:
+                switch (decoder.step())
                 {
-                    Value & v{object.emplace(std::move(decoder.key), Object{}).first->second};
-                    if (!_decodeObject(decoder, *v.object()))
+                    case DecodeState::object:
+                    {
+                        Value & v{object.emplace(std::move(decoder.key), Object{}).first->second};
+                        if (!decodeObject(decoder, *v.object()))
+                        {
+                            return false;
+                        }
+                        break;
+                    }
+                    case DecodeState::array:
+                    {
+                        Value & v{object.emplace(std::move(decoder.key), Array{}).first->second};
+                        if (!decodeArray(decoder, *v.array()))
+                        {
+                            return false;
+                        }
+                        break;
+                    }
+                    case DecodeState::end:
+                    {
+                        return true;
+                    }
+                    case DecodeState::key:
+                    {
+                        break;
+                    }
+                    case DecodeState::string:
+                    {
+                        object.emplace(std::move(decoder.key), std::move(decoder.string));
+                        break;
+                    }
+                    case DecodeState::integer:
+                    {
+                        if (decoder.positive)
+                        {
+                            object.emplace(std::move(decoder.key), u64(decoder.integer));
+                        }
+                        else
+                        {
+                            object.emplace(std::move(decoder.key), decoder.integer);
+                        }
+                        break;
+                    }
+                    case DecodeState::floater:
+                    {
+                        object.emplace(std::move(decoder.key), decoder.floater);
+                        break;
+                    }
+                    case DecodeState::boolean:
+                    {
+                        object.emplace(std::move(decoder.key), decoder.boolean);
+                        break;
+                    }
+                    case DecodeState::date:
+                    {
+                        object.emplace(std::move(decoder.key), decoder.date);
+                        break;
+                    }
+                    case DecodeState::time:
+                    {
+                        object.emplace(std::move(decoder.key), decoder.time);
+                        break;
+                    }
+                    case DecodeState::datetime:
+                    {
+                        object.emplace(std::move(decoder.key), decoder.datetime);
+                        break;
+                    }
+                    case DecodeState::null:
+                    {
+                        object.emplace(std::move(decoder.key), nullptr);
+                        break;
+                    }
+                    default:
                     {
                         return false;
                     }
-                    break;
-                }
-                case DecodeState::array:
-                {
-                    Value & v{object.emplace(std::move(decoder.key), Array{}).first->second};
-                    if (!_decodeArray(decoder, *v.array()))
-                    {
-                        return false;
-                    }
-                    break;
-                }
-                case DecodeState::end:
-                {
-                    return true;
-                }
-                case DecodeState::key:
-                {
-                    break;
-                }
-                case DecodeState::string:
-                {
-                    object.emplace(std::move(decoder.key), std::move(decoder.string));
-                    break;
-                }
-                case DecodeState::integer:
-                {
-                    if (decoder.positive)
-                    {
-                        object.emplace(std::move(decoder.key), u64(decoder.integer));
-                    }
-                    else
-                    {
-                        object.emplace(std::move(decoder.key), decoder.integer);
-                    }
-                    break;
-                }
-                case DecodeState::floater:
-                {
-                    object.emplace(std::move(decoder.key), decoder.floater);
-                    break;
-                }
-                case DecodeState::boolean:
-                {
-                    object.emplace(std::move(decoder.key), decoder.boolean);
-                    break;
-                }
-                case DecodeState::date:
-                {
-                    object.emplace(std::move(decoder.key), decoder.date);
-                    break;
-                }
-                case DecodeState::time:
-                {
-                    object.emplace(std::move(decoder.key), decoder.time);
-                    break;
-                }
-                case DecodeState::datetime:
-                {
-                    object.emplace(std::move(decoder.key), decoder.datetime);
-                    break;
-                }
-                case DecodeState::null:
-                {
-                    object.emplace(std::move(decoder.key), nullptr);
-                    break;
-                }
-                default:
-                {
-                    return false;
                 }
             }
         }
-    }
 
-    inline bool _decodeArray(Decoder & decoder, Array & array)
-    {
-        while (true)
+        inline bool decodeArray(Decoder & decoder, Array & array)
         {
-            switch (decoder.step())
+            while (true)
             {
-                case DecodeState::object:
+                switch (decoder.step())
                 {
-                    Value & v{array.emplace_back(Object{})};
-                    if (!_decodeObject(decoder, *v.object()))
+                    case DecodeState::object:
+                    {
+                        Value & v{array.emplace_back(Object{})};
+                        if (!decodeObject(decoder, *v.object()))
+                        {
+                            return false;
+                        }
+                        break;
+                    }
+                    case DecodeState::array:
+                    {
+                        Value & v{array.emplace_back(Array{})};
+                        if (!decodeArray(decoder, *v.array()))
+                        {
+                            return false;
+                        }
+                        break;
+                    }
+                    case DecodeState::end:
+                    {
+                        return true;
+                    }
+                    case DecodeState::string:
+                    {
+                        array.push_back(std::move(decoder.string));
+                        break;
+                    }
+                    case DecodeState::integer:
+                    {
+                        if (decoder.positive)
+                        {
+                            array.push_back(u64(decoder.integer));
+                        }
+                        else
+                        {
+                            array.push_back(decoder.integer);
+                        }
+                        break;
+                    }
+                    case DecodeState::floater:
+                    {
+                        array.push_back(decoder.floater);
+                        break;
+                    }
+                    case DecodeState::boolean:
+                    {
+                        array.push_back(decoder.boolean);
+                        break;
+                    }
+                    case DecodeState::date:
+                    {
+                        array.push_back(decoder.date);
+                        break;
+                    }
+                    case DecodeState::time:
+                    {
+                        array.push_back(decoder.time);
+                        break;
+                    }
+                    case DecodeState::datetime:
+                    {
+                        array.push_back(decoder.datetime);
+                        break;
+                    }
+                    case DecodeState::null:
+                    {
+                        array.push_back(nullptr);
+                        break;
+                    }
+                    default:
                     {
                         return false;
                     }
-                    break;
-                }
-                case DecodeState::array:
-                {
-                    Value & v{array.emplace_back(Array{})};
-                    if (!_decodeArray(decoder, *v.array()))
-                    {
-                        return false;
-                    }
-                    break;
-                }
-                case DecodeState::end:
-                {
-                    return true;
-                }
-                case DecodeState::string:
-                {
-                    array.push_back(std::move(decoder.string));
-                    break;
-                }
-                case DecodeState::integer:
-                {
-                    if (decoder.positive)
-                    {
-                        array.push_back(u64(decoder.integer));
-                    }
-                    else
-                    {
-                        array.push_back(decoder.integer);
-                    }
-                    break;
-                }
-                case DecodeState::floater:
-                {
-                    array.push_back(decoder.floater);
-                    break;
-                }
-                case DecodeState::boolean:
-                {
-                    array.push_back(decoder.boolean);
-                    break;
-                }
-                case DecodeState::date:
-                {
-                    array.push_back(decoder.date);
-                    break;
-                }
-                case DecodeState::time:
-                {
-                    array.push_back(decoder.time);
-                    break;
-                }
-                case DecodeState::datetime:
-                {
-                    array.push_back(decoder.datetime);
-                    break;
-                }
-                case DecodeState::null:
-                {
-                    array.push_back(nullptr);
-                    break;
-                }
-                default:
-                {
-                    return false;
                 }
             }
         }
@@ -1146,7 +1152,7 @@ namespace qcon
             case DecodeState::object:
             {
                 Object obj{};
-                if (!_decodeObject(decoder, obj))
+                if (!_private::qcon::decodeObject(decoder, obj))
                 {
                     return {};
                 }
@@ -1156,7 +1162,7 @@ namespace qcon
             case DecodeState::array:
             {
                 Array arr{};
-                if (!_decodeArray(decoder, arr))
+                if (!_private::qcon::decodeArray(decoder, arr))
                 {
                     return {};
                 }

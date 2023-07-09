@@ -153,14 +153,17 @@ namespace qcon
 
 namespace qcon
 {
-    inline constexpr bool _isDigit(const char c)
+    namespace _private::qcon
     {
-        return unat(c - '0') < 10u;
-    }
+        inline constexpr bool isDigit(const char c)
+        {
+            return unat(c - '0') < 10u;
+        }
 
-    inline constexpr bool _isControl(const char c)
-    {
-        return u8(c) < 32u;
+        inline constexpr bool isControl(const char c)
+        {
+            return u8(c) < 32u;
+        }
     }
 
     inline Date Date::from(const std::chrono::year_month_day & ymd)
