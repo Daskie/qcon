@@ -1,4 +1,4 @@
-find_package(GTest CONFIG REQUIRED)
+find_package(GTest REQUIRED)
 
 qc_setup_target(
     qcon-test-dom
@@ -7,7 +7,7 @@ qc_setup_target(
         test-dom.cpp
     PRIVATE_LINKS
         qcon
-        GTest::gtest_main)
+        gtest_main)
 
 qc_setup_target(
     qcon-test-decode
@@ -16,7 +16,7 @@ qc_setup_target(
         test-decode.cpp
     PRIVATE_LINKS
         qcon
-        GTest::gtest_main)
+        gtest_main)
 
 qc_setup_target(
     qcon-test-encode
@@ -25,4 +25,4 @@ qc_setup_target(
         test-encode.cpp
     PRIVATE_LINKS
         qcon
-        GTest::gtest_main)
+        gtest_main)
