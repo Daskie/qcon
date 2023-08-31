@@ -1,7 +1,7 @@
 #pragma once
 
 ///
-/// QCON 0.1.3
+/// QCON 0.1.4
 /// https://github.com/daskie/qcon
 /// This header provides a SAX QCON decoder
 /// See the README for more info
@@ -53,7 +53,7 @@ namespace qcon
         std::string key{};    /// If an object element was just decoded, holds its key; unspecified otherwise; may be moved from
         std::string string{}; /// If a string was just decoded, holds its value; unspecified otherwise; may be moved from
         s64 integer{};        /// If an integer was just decoded, holds its value; unspecified otherwise
-        double floater{};     /// If a floater was just decoded, holds its value; unspecified otherwise
+        f64 floater{};     /// If a floater was just decoded, holds its value; unspecified otherwise
         bool positive{};      /// If a number was just decoded, indicates whether it was positive; unspecified otherwise
         bool boolean{};       /// If a boolean was just decoded, holds its value; unspecified otherwise
         Datetime datetime{};  /// If a datetime was just decoded, holds its value; unspecified otherwise
@@ -139,8 +139,8 @@ namespace qcon
         Decoder & operator>>(u16 & v);
         Decoder & operator>>(s8 & v);
         Decoder & operator>>(u8 & v);
-        Decoder & operator>>(double & v);
-        Decoder & operator>>(float & v);
+        Decoder & operator>>(f64 & v);
+        Decoder & operator>>(f32 & v);
         Decoder & operator>>(bool & v);
         Decoder & operator>>(Date & v);
         Decoder & operator>>(Time & v);
@@ -164,7 +164,7 @@ namespace qcon
         const char * _qcon;
         const char * _pos;
         u64 _stack;
-        unat _depth;
+        u64 _depth;
         const char * _cachedEnd; // Only used for floating point `from_chars`
         bool _hadComma;
 
@@ -195,19 +195,19 @@ namespace qcon
 
         template <bool checkOverflow> bool _tryConsumeHexDigit(u64 & dst);
 
-        bool _tryConsumeDecimalDigits(unat digits, u64 & dst);
+        bool _tryConsumeDecimalDigits(u64 digits, u64 & dst);
 
-        bool _tryConsumeHexDigits(unat digits, u64 & dst);
+        bool _tryConsumeHexDigits(u64 digits, u64 & dst);
 
         [[nodiscard]] bool _consumeChar(char c);
 
         [[nodiscard]] bool _consumeChars(std::string_view str);
 
-        [[nodiscard]] bool _consumeDecimalDigits(unat digits, u64 & dst);
+        [[nodiscard]] bool _consumeDecimalDigits(u64 digits, u64 & dst);
 
-        [[nodiscard]] bool _consumeHexDigits(unat digits, u64 & dst);
+        [[nodiscard]] bool _consumeHexDigits(u64 digits, u64 & dst);
 
-        [[nodiscard]] bool _consumeCodePoint(unat digits, std::string & dst);
+        [[nodiscard]] bool _consumeCodePoint(u64 digits, std::string & dst);
 
         [[nodiscard]] bool _consumeEscaped(std::string & dst);
 
@@ -225,7 +225,7 @@ namespace qcon
 
         [[nodiscard]] bool _consumeInteger(s64 & dst);
 
-        [[nodiscard]] bool _consumeFloater(double & dst);
+        [[nodiscard]] bool _consumeFloater(f64 & dst);
 
         [[nodiscard]] bool _consumeDate(Date & dst);
 
@@ -262,16 +262,16 @@ namespace qcon
         }
 
         // Set '0' - '9'
-        for (unat v{0u}; v < 10u; ++v)
+        for (u32 v{0u}; v < 10u; ++v)
         {
-            table[unat('0') + v] = u8(v);
+            table[u32('0') + v] = u8(v);
         }
 
         // Set 'A' - 'F' and 'a' - 'f'
-        for (unat v{0u}; v < 6u; ++v)
+        for (u32 v{0u}; v < 6u; ++v)
         {
-            table[unat('A') + v] = u8(10u + v);
-            table[unat('a') + v] = u8(10u + v);
+            table[u32('A') + v] = u8(10u + v);
+            table[u32('a') + v] = u8(10u + v);
         }
 
         return table;
@@ -699,7 +699,7 @@ namespace qcon
         return *this;
     }
 
-    inline Decoder & Decoder::operator>>(double & v)
+    inline Decoder & Decoder::operator>>(f64 & v)
     {
         if (!_preValueStreamCheck())
         {
@@ -714,12 +714,12 @@ namespace qcon
         }
         else if (_tryConsumeChars("inf"sv))
         {
-            v = positive ? std::numeric_limits<double>::infinity() : -std::numeric_limits<double>::infinity();
+            v = positive ? std::numeric_limits<f64>::infinity() : -std::numeric_limits<f64>::infinity();
             _postValue(DecodeState::floater);
         }
         else if (_tryConsumeChars("nan"sv))
         {
-            v = std::numeric_limits<double>::quiet_NaN();
+            v = std::numeric_limits<f64>::quiet_NaN();
             _postValue(DecodeState::floater);
         }
         else
@@ -731,12 +731,12 @@ namespace qcon
         return *this;
     }
 
-    inline Decoder & Decoder::operator>>(float & v)
+    inline Decoder & Decoder::operator>>(f32 & v)
     {
-        double tmp;
+        f64 tmp;
         if (*this >> tmp)
         {
-            v = float(tmp);
+            v = f32(tmp);
         }
 
         return *this;
@@ -1109,7 +1109,7 @@ namespace qcon
     }
 
     // Assumed to not overflow
-    inline bool Decoder::_tryConsumeDecimalDigits(unat digits, u64 & dst)
+    inline bool Decoder::_tryConsumeDecimalDigits(u64 digits, u64 & dst)
     {
         const char * const start{_pos};
 
@@ -1128,7 +1128,7 @@ namespace qcon
     }
 
     // Assumed to not overflow
-    inline bool Decoder::_tryConsumeHexDigits(unat digits, u64 & dst)
+    inline bool Decoder::_tryConsumeHexDigits(u64 digits, u64 & dst)
     {
         const char * const start{_pos};
 
@@ -1170,7 +1170,7 @@ namespace qcon
         return true;
     }
 
-    inline bool Decoder::_consumeDecimalDigits(const unat digits, u64 & dst)
+    inline bool Decoder::_consumeDecimalDigits(const u64 digits, u64 & dst)
     {
         if (_tryConsumeDecimalDigits(digits, dst))
         {
@@ -1184,7 +1184,7 @@ namespace qcon
         }
     }
 
-    inline bool Decoder::_consumeHexDigits(const unat digits, u64 & dst)
+    inline bool Decoder::_consumeHexDigits(const u64 digits, u64 & dst)
     {
         if (_tryConsumeHexDigits(digits, dst))
         {
@@ -1198,7 +1198,7 @@ namespace qcon
         }
     }
 
-    inline bool Decoder::_consumeCodePoint(const unat digits, std::string & dst)
+    inline bool Decoder::_consumeCodePoint(const u64 digits, std::string & dst)
     {
         u64 v;
         if (!_consumeHexDigits(digits, v))
@@ -1487,7 +1487,7 @@ namespace qcon
         return true;
     }
 
-    inline bool Decoder::_consumeFloater(double & dst)
+    inline bool Decoder::_consumeFloater(f64 & dst)
     {
         // Determine end of QCON
         if (!_cachedEnd) [[unlikely]]
@@ -1517,7 +1517,7 @@ namespace qcon
 
         if (month == 2u)
         {
-            return 28u + std::chrono::year(int(year)).is_leap();
+            return 28u + std::chrono::year(s32(year)).is_leap();
         }
         else
         {
@@ -1647,7 +1647,7 @@ namespace qcon
                 10'000'000'000'000u, 100'000'000'000'000u, 1'000'000'000'000'000u, 10'000'000'000'000'000u,
                 100'000'000'000'000'000u, 1'000'000'000'000'000'000u, 10'000'000'000'000'000'000u};
 
-            const unat digits{unat(_pos - start)};
+            const u64 digits{u64(_pos - start)};
             if (digits < 9u)
             {
                 subsecond *= powersOf10[9u - digits];
@@ -1818,13 +1818,13 @@ namespace qcon
                 }
                 else if (_tryConsumeChars("inf"sv))
                 {
-                    floater = std::numeric_limits<double>::infinity();
+                    floater = std::numeric_limits<f64>::infinity();
                     _postValue(DecodeState::floater);
                     return;
                 }
                 else if (_tryConsumeChars("nan"sv))
                 {
-                    floater = std::numeric_limits<double>::quiet_NaN();
+                    floater = std::numeric_limits<f64>::quiet_NaN();
                     _postValue(DecodeState::floater);
                     return;
                 }
@@ -1842,13 +1842,13 @@ namespace qcon
                 }
                 else if (_tryConsumeChars("inf"sv))
                 {
-                    floater = -std::numeric_limits<double>::infinity();
+                    floater = -std::numeric_limits<f64>::infinity();
                     _postValue(DecodeState::floater);
                     return;
                 }
                 else if (_tryConsumeChars("nan"sv))
                 {
-                    floater = std::numeric_limits<double>::quiet_NaN();
+                    floater = std::numeric_limits<f64>::quiet_NaN();
                     _postValue(DecodeState::floater);
                     return;
                 }
@@ -1860,7 +1860,7 @@ namespace qcon
                 ++_pos;
                 if (_tryConsumeChars("nf"sv))
                 {
-                    floater = std::numeric_limits<double>::infinity();
+                    floater = std::numeric_limits<f64>::infinity();
                     _postValue(DecodeState::floater);
                     return;
                 }
@@ -1900,7 +1900,7 @@ namespace qcon
                 }
                 else if (_tryConsumeChars("an"sv))
                 {
-                    floater = std::numeric_limits<double>::quiet_NaN();
+                    floater = std::numeric_limits<f64>::quiet_NaN();
                     _postValue(DecodeState::floater);
                     return;
                 }

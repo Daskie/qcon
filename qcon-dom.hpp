@@ -1,7 +1,7 @@
 #pragma once
 
 ///
-/// QCON 0.1.3
+/// QCON 0.1.4
 /// https://github.com/daskie/qcon
 /// This header provides a DOM QCON encoder and decoder
 /// Uses `qcon-encode.hpp` to do the encoding and `qcon-decode.hpp` to do the decoding
@@ -77,8 +77,8 @@ namespace qcon
         Value(u32 v);
         Value(u16 v);
         Value(u8 v);
-        Value(double v);
-        Value(float v);
+        Value(f64 v);
+        Value(f32 v);
         Value(bool v);
         Value(const Date & v);
         Value(const Time & v);
@@ -106,8 +106,8 @@ namespace qcon
         Value & operator=(u32 v);
         Value & operator=(u16 v);
         Value & operator=(u8 v);
-        Value & operator=(double v);
-        Value & operator=(float v);
+        Value & operator=(f64 v);
+        Value & operator=(f32 v);
         Value & operator=(bool v);
         Value & operator=(const Date & v);
         Value & operator=(const Time & v);
@@ -151,8 +151,8 @@ namespace qcon
         ///
         /// @return this value as a floater if it is a floater, otherwise null
         ///
-        [[nodiscard]] double * floater();
-        [[nodiscard]] const double * floater() const;
+        [[nodiscard]] f64 * floater();
+        [[nodiscard]] const f64 * floater() const;
 
         ///
         /// @return this value as a boolean if it is a boolean, otherwise null
@@ -211,8 +211,8 @@ namespace qcon
         [[nodiscard]] bool operator==(u32 v) const;
         [[nodiscard]] bool operator==(u16 v) const;
         [[nodiscard]] bool operator==(u8 v) const;
-        [[nodiscard]] bool operator==(double v) const;
-        [[nodiscard]] bool operator==(float v) const;
+        [[nodiscard]] bool operator==(f64 v) const;
+        [[nodiscard]] bool operator==(f32 v) const;
         [[nodiscard]] bool operator==(bool v) const;
         [[nodiscard]] bool operator==(const Date & v) const;
         [[nodiscard]] bool operator==(const Time & v) const;
@@ -227,7 +227,7 @@ namespace qcon
             Array * _array;
             std::string * _string;
             s64 _integer;
-            double _floater;
+            f64 _floater;
             bool _boolean;
             Datetime * _datetime;
             nullptr_t _null;
@@ -427,14 +427,14 @@ namespace qcon
         Value{u64{v}}
     {}
 
-    inline Value::Value(const double v) :
+    inline Value::Value(const f64 v) :
         _floater{v},
         _type{Type::floater},
         _positive{_floater >= 0.0}
     {}
 
-    inline Value::Value(const float v) :
-        Value{double{v}}
+    inline Value::Value(const f32 v) :
+        Value{f64{v}}
     {}
 
     inline Value::Value(const bool v) :
@@ -594,7 +594,7 @@ namespace qcon
         return *this = u64{v};
     }
 
-    inline Value & Value::operator=(const double v)
+    inline Value & Value::operator=(const f64 v)
     {
         if (_type != Type::floater)
         {
@@ -606,9 +606,9 @@ namespace qcon
         return *this;
     }
 
-    inline Value & Value::operator=(const float v)
+    inline Value & Value::operator=(const f32 v)
     {
-        return *this = double{v};
+        return *this = f64{v};
     }
 
     inline Value & Value::operator=(const bool v)
@@ -733,12 +733,12 @@ namespace qcon
         return _type == Type::integer ? &_integer : nullptr;
     }
 
-    inline double * Value::floater()
+    inline f64 * Value::floater()
     {
         return _type == Type::floater ? &_floater : nullptr;
     }
 
-    inline const double * Value::floater() const
+    inline const f64 * Value::floater() const
     {
         return _type == Type::floater ? &_floater : nullptr;
     }
@@ -881,14 +881,14 @@ namespace qcon
         return *this == u64{v};
     }
 
-    inline bool Value::operator==(const double v) const
+    inline bool Value::operator==(const f64 v) const
     {
         return _type == Type::floater && _floater == v;
     }
 
-    inline bool Value::operator==(const float v) const
+    inline bool Value::operator==(const f32 v) const
     {
-        return *this == double{v};
+        return *this == f64{v};
     }
 
     inline bool Value::operator==(const bool v) const

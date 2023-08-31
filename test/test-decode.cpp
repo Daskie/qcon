@@ -4,16 +4,16 @@
 
 #include <gtest/gtest.h>
 
-using s8 = int8_t;
-using s16 = int16_t;
-using s32 = int32_t;
-using s64 = int64_t;
-using u8 = uint8_t;
-using u16 = uint16_t;
-using u32 = uint32_t;
-using u64 = uint64_t;
-
-using unat = size_t;
+using qcon::u8;
+using qcon::s8;
+using qcon::u16;
+using qcon::s16;
+using qcon::u32;
+using qcon::s32;
+using qcon::f32;
+using qcon::u64;
+using qcon::s64;
+using qcon::f64;
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -250,7 +250,7 @@ TEST(Decode, string)
     }
     { // All non-ASCII
         std::string actual{};
-        for (unat c{128u}; c < 256u; ++c)
+        for (u32 c{128u}; c < 256u; ++c)
         {
             actual.push_back(char(c));
         }
@@ -275,7 +275,7 @@ TEST(Decode, string)
     { // 'x' code point
         Decoder decoder{};
 
-        for (unat i{0u}; i < 128u; ++i)
+        for (u32 i{0u}; i < 128u; ++i)
         {
             const std::string expectedStr{char(i)};
             const std::string decodeStr{std::format("\"\\x{:02X}\"", i)};
@@ -285,7 +285,7 @@ TEST(Decode, string)
             ASSERT_EQ(decoder.string, expectedStr);
             ASSERT_TRUE(decoder);
         }
-        for (unat i{128u}; i < 256u; ++i)
+        for (u32 i{128u}; i < 256u; ++i)
         {
             const std::string expectedStr{char(u8(0b110'00000u | (i >> 6))), char(u8(0b10'000000u | (i & 0b111111u)))};
             const std::string decodeStr{std::format("\"\\x{:02X}\"", i)};
@@ -299,7 +299,7 @@ TEST(Decode, string)
     { // 'u' code point
         Decoder decoder{};
 
-        for (unat i{0u}; i < 128u; ++i)
+        for (u32 i{0u}; i < 128u; ++i)
         {
             const std::string expectedStr{char(i)};
             const std::string decodeStr{std::format("\"\\u{:04X}\"", i)};
@@ -309,7 +309,7 @@ TEST(Decode, string)
             ASSERT_EQ(decoder.string, expectedStr);
             ASSERT_TRUE(decoder);
         }
-        for (unat i{128u}; i < 2048u; ++i)
+        for (u32 i{128u}; i < 2048u; ++i)
         {
             const std::string expectedStr{char(u8(0b110'00000u | (i >> 6))), char(u8(0b10'000000u | (i & 0b111111u)))};
             const std::string decodeStr{std::format("\"\\u{:04X}\"", i)};
@@ -319,7 +319,7 @@ TEST(Decode, string)
             ASSERT_EQ(decoder.string, expectedStr);
             ASSERT_TRUE(decoder);
         }
-        for (unat i{2048u}; i < 65536u; ++i)
+        for (u32 i{2048u}; i < 65536u; ++i)
         {
             const std::string expectedStr{char(u8(0b1110'0000u | (i >> 12))), char(u8(0b10'000000u | ((i >> 6) & 0b111111u))), char(u8(0b10'000000u | (i & 0b111111u)))};
             const std::string decodeStr{std::format("\"\\u{:04X}\"", i)};
@@ -1011,19 +1011,19 @@ TEST(Decode, floater)
 
         decoder.load("inf");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.floater, std::numeric_limits<f64>::infinity());
         ASSERT_TRUE(decoder.positive);
         ASSERT_TRUE(decoder);
 
         decoder.load("-inf");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.floater, -std::numeric_limits<f64>::infinity());
         ASSERT_FALSE(decoder.positive);
         ASSERT_TRUE(decoder);
 
         decoder.load("+inf");
         ASSERT_EQ(decoder.step(), DecodeState::floater);
-        ASSERT_EQ(decoder.floater, std::numeric_limits<double>::infinity());
+        ASSERT_EQ(decoder.floater, std::numeric_limits<f64>::infinity());
         ASSERT_TRUE(decoder.positive);
         ASSERT_TRUE(decoder);
     }
@@ -2514,8 +2514,8 @@ TEST(Decode, streamFloater)
     Decoder decoder;
     std::string k1;
     std::string k2;
-    double v1;
-    double v2;
+    f64 v1;
+    f64 v2;
 
     decoder.load(R"(0.0)");
     ASSERT_TRUE(decoder >> v1);
@@ -2576,15 +2576,15 @@ TEST(Decode, streamFloater)
 
     decoder.load(R"(inf)");
     ASSERT_TRUE(decoder >> v1);
-    ASSERT_EQ(v1, std::numeric_limits<double>::infinity());
+    ASSERT_EQ(v1, std::numeric_limits<f64>::infinity());
 
     decoder.load(R"(+inf)");
     ASSERT_TRUE(decoder >> v1);
-    ASSERT_EQ(v1, std::numeric_limits<double>::infinity());
+    ASSERT_EQ(v1, std::numeric_limits<f64>::infinity());
 
     decoder.load(R"(-inf)");
     ASSERT_TRUE(decoder >> v1);
-    ASSERT_EQ(v1, -std::numeric_limits<double>::infinity());
+    ASSERT_EQ(v1, -std::numeric_limits<f64>::infinity());
 
     decoder.load(R"(in)");
     ASSERT_FALSE(decoder >> v1);
@@ -2613,7 +2613,7 @@ TEST(Decode, streamFloater)
 TEST(Decode, streamFloaterOther)
 {
     Decoder decoder;
-    float v;
+    f32 v;
 
     decoder.load(R"(-12.5)");
     ASSERT_TRUE(decoder >> v);
@@ -3208,7 +3208,7 @@ R"(
                 ASSERT_EQ(decoder.step(), DecodeState::key);
                 ASSERT_EQ(decoder.key, "Price");
                 ASSERT_EQ(decoder.step(), DecodeState::floater);
-                ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
+                ASSERT_EQ(decoder.floater, -std::numeric_limits<f64>::infinity());
                 ASSERT_EQ(decoder.step(), DecodeState::key);
                 ASSERT_EQ(decoder.key, "Ingredients");
                 ASSERT_EQ(decoder.step(), DecodeState::array);
@@ -3380,7 +3380,7 @@ I do not like them Sam I am
                 ASSERT_TRUE(decoder >> decoder.key);
                 ASSERT_EQ(decoder.key, "Price");
                 ASSERT_TRUE(decoder >> decoder.floater);
-                ASSERT_EQ(decoder.floater, -std::numeric_limits<double>::infinity());
+                ASSERT_EQ(decoder.floater, -std::numeric_limits<f64>::infinity());
                 ASSERT_TRUE(decoder >> decoder.key);
                 ASSERT_EQ(decoder.key, "Ingredients");
                 ASSERT_TRUE(decoder >> array);

@@ -4,16 +4,16 @@
 
 #include <gtest/gtest.h>
 
-using s8 = int8_t;
-using s16 = int16_t;
-using s32 = int32_t;
-using s64 = int64_t;
-using u8 = uint8_t;
-using u16 = uint16_t;
-using u32 = uint32_t;
-using u64 = uint64_t;
-
-using unat = size_t;
+using qcon::u8;
+using qcon::s8;
+using qcon::u16;
+using qcon::s16;
+using qcon::u32;
+using qcon::s32;
+using qcon::f32;
+using qcon::u64;
+using qcon::s64;
+using qcon::f64;
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -271,7 +271,7 @@ TEST(Dom, encodeDecodeUnsignedInteger)
 TEST(Dom, encodeDecodeFloater)
 {
     { // Zero
-        double val{0.0};
+        f64 val{0.0};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -280,7 +280,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Typical
-        double val{123.45};
+        f64 val{123.45};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -289,7 +289,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Max integer 64
-        double val{std::bit_cast<double>(0b0'10000110011'1111111111111111111111111111111111111111111111111111u)};
+        f64 val{std::bit_cast<f64>(0b0'10000110011'1111111111111111111111111111111111111111111111111111u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -298,7 +298,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Max integer 32
-        double val{std::bit_cast<float>(0b0'10010110'11111111111111111111111u)};
+        f64 val{std::bit_cast<f32>(0b0'10010110'11111111111111111111111u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -307,7 +307,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Max 64
-        double val{std::bit_cast<double>(0b0'11111111110'1111111111111111111111111111111111111111111111111111u)};
+        f64 val{std::bit_cast<f64>(0b0'11111111110'1111111111111111111111111111111111111111111111111111u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -316,7 +316,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Max 32
-        double val{std::bit_cast<float>(0b0'11111110'11111111111111111111111u)};
+        f64 val{std::bit_cast<f32>(0b0'11111110'11111111111111111111111u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -325,7 +325,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Min normal 64
-        double val{std::bit_cast<double>(0b0'00000000001'0000000000000000000000000000000000000000000000000000u)};
+        f64 val{std::bit_cast<f64>(0b0'00000000001'0000000000000000000000000000000000000000000000000000u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -334,7 +334,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Min normal 32
-        double val{std::bit_cast<float>(0b0'00000001'00000000000000000000000u)};
+        f64 val{std::bit_cast<f32>(0b0'00000001'00000000000000000000000u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -343,7 +343,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Min subnormal 64
-        double val{std::bit_cast<double>(u64(0b0'00000000000'0000000000000000000000000000000000000000000000000001u))};
+        f64 val{std::bit_cast<f64>(u64(0b0'00000000000'0000000000000000000000000000000000000000000000000001u))};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -352,7 +352,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Min subnormal 32
-        double val{std::bit_cast<float>(0b0'00000000'00000000000000000000001u)};
+        f64 val{std::bit_cast<f32>(0b0'00000000'00000000000000000000001u)};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -361,7 +361,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Positive infinity
-        double val{std::numeric_limits<double>::infinity()};
+        f64 val{std::numeric_limits<f64>::infinity()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -370,7 +370,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // Negative infinity
-        double val{-std::numeric_limits<double>::infinity()};
+        f64 val{-std::numeric_limits<f64>::infinity()};
         const std::optional<std::string> encoded{encode(val)};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
@@ -379,7 +379,7 @@ TEST(Dom, encodeDecodeFloater)
         ASSERT_EQ(*decoded->floater(), val);
     }
     { // NaN
-        const std::optional<std::string> encoded{encode(std::numeric_limits<double>::quiet_NaN())};
+        const std::optional<std::string> encoded{encode(std::numeric_limits<f64>::quiet_NaN())};
         ASSERT_TRUE(encoded);
         const std::optional<Value> decoded{decode(*encoded)};
         ASSERT_TRUE(decoded);
@@ -858,7 +858,7 @@ TEST(Dom, makeObject)
         ASSERT_EQ(*aVal, 1);
 
         ASSERT_TRUE(innerObj->contains("b"));
-        const double * bVal{innerObj->at("b").floater()};
+        const f64 * bVal{innerObj->at("b").floater()};
         ASSERT_TRUE(aVal);
         ASSERT_EQ(*bVal, 2.0);
 
@@ -894,7 +894,7 @@ TEST(Dom, makeArray)
         ASSERT_TRUE(v2);
         ASSERT_EQ(*v2, 1);
 
-        const double * v3{(*innerArr)[1].floater()};
+        const f64 * v3{(*innerArr)[1].floater()};
         ASSERT_TRUE(v3);
         ASSERT_EQ(*v3, 2.0);
 
@@ -1005,12 +1005,12 @@ TEST(Dom, numberEquality)
         val = -1;
         ASSERT_TRUE(val == std::numeric_limits<u64>::max());
 
-        val = std::numeric_limits<double>::infinity();
-        ASSERT_TRUE(val == std::numeric_limits<double>::infinity());
+        val = std::numeric_limits<f64>::infinity();
+        ASSERT_TRUE(val == std::numeric_limits<f64>::infinity());
 
-        val = std::numeric_limits<double>::quiet_NaN();
-        ASSERT_FALSE(val == std::numeric_limits<double>::quiet_NaN());
-        ASSERT_TRUE(val != std::numeric_limits<double>::quiet_NaN());
+        val = std::numeric_limits<f64>::quiet_NaN();
+        ASSERT_FALSE(val == std::numeric_limits<f64>::quiet_NaN());
+        ASSERT_TRUE(val != std::numeric_limits<f64>::quiet_NaN());
     }
 }
 

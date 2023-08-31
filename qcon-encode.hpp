@@ -1,7 +1,7 @@
 #pragma once
 
 ///
-/// QCON 0.1.3
+/// QCON 0.1.4
 /// https://github.com/daskie/qcon
 /// This header provides a SAX QCON encoder
 /// See the README for more info
@@ -102,8 +102,8 @@ namespace qcon
         Encoder & operator<<(u32 v);
         Encoder & operator<<(u16 v);
         Encoder & operator<<(u8 v);
-        Encoder & operator<<(double v);
-        Encoder & operator<<(float v);
+        Encoder & operator<<(f64 v);
+        Encoder & operator<<(f32 v);
         Encoder & operator<<(bool v);
         Encoder & operator<<(const Date & v);
         Encoder & operator<<(const Time & v);
@@ -163,8 +163,8 @@ namespace qcon
         std::vector<_ScopeInfo> _scopeInfos;
         Container _container;
         Density _density;
-        unat _indentation;
-        unat _lineStartI;
+        u64 _indentation;
+        u64 _lineStartI;
         Density _nextDensity;
         Base _nextBase;
         TimezoneFormat _nextTimezoneFormat;
@@ -187,7 +187,7 @@ namespace qcon
         void _encodeOctal(u64 v);
         void _encodeDecimal(u64 v);
         void _encodeHex(u64 v);
-        [[nodiscard]] bool _encode(double v);
+        [[nodiscard]] bool _encode(f64 v);
         [[nodiscard]] bool _encode(bool v);
         [[nodiscard]] bool _encode(const Date & v);
         [[nodiscard]] bool _encode(const Time & v);
@@ -417,7 +417,7 @@ namespace qcon
         return operator<<(u64(v));
     }
 
-    inline Encoder & Encoder::operator<<(const double v)
+    inline Encoder & Encoder::operator<<(const f64 v)
     {
         if (_expect == _Expect::any)
         {
@@ -431,9 +431,9 @@ namespace qcon
         return *this;
     }
 
-    inline Encoder & Encoder::operator<<(const float v)
+    inline Encoder & Encoder::operator<<(const f32 v)
     {
-        return operator<<(double(v));
+        return operator<<(f64(v));
     }
 
     inline Encoder & Encoder::operator<<(const bool v)
@@ -667,7 +667,7 @@ namespace qcon
             {
                 _str += '\n';
                 _lineStartI = _str.size();
-                for (unat i{0u}; i < _indentation; ++i)
+                for (u64 i{0u}; i < _indentation; ++i)
                 {
                     _str += _indentStr;
                 }
@@ -708,7 +708,7 @@ namespace qcon
                 }
             }
 
-            unat length() const { return chars[2] ? 4u : 2u; };
+            u64 length() const { return chars[2] ? 4u : 2u; };
         };
 
         static constexpr ControlString controlStrings[32u]{
@@ -717,11 +717,11 @@ namespace qcon
             'a', 'b', 't', 'n', 'v', 'f', 'r',
             14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
 
-        const unat strStartOffset{_str.size() - _lineStartI};
+        const u64 strStartOffset{_str.size() - _lineStartI};
 
         _str += '"';
 
-        for (unat i{0u}, n{v.size()}; i < n; ++i)
+        for (u64 i{0u}, n{v.size()}; i < n; ++i)
         {
             const char c{v[i]};
 
@@ -730,7 +730,7 @@ namespace qcon
                 // Split strings on newlines in multiline density
                 if (c == '\n' && _density <= multiline && i < n - 1u)
                 {
-                    const unat extraSpaceN{strStartOffset - _indentation * _indentStr.size()};
+                    const u64 extraSpaceN{strStartOffset - _indentation * _indentStr.size()};
                     _str += "\\n\""sv;
                     _putSpace();
                     _str.append(extraSpaceN, ' ');
@@ -790,7 +790,7 @@ namespace qcon
         static thread_local u32 chunkBuffer[16u];
         static thread_local char * const charBuffer{reinterpret_cast<char *>(chunkBuffer)};
 
-        const unat leadZeroN{unat(std::countl_zero(v))};
+        const u32 leadZeroN{u32(std::countl_zero(v))};
 
         // Process four bits at a time
         u32 * dst{chunkBuffer + 16};
@@ -801,7 +801,7 @@ namespace qcon
         } while (v);
 
         _str += "0b"sv;
-        _str.append(charBuffer + std::min(leadZeroN, unat(63u)), charBuffer + 64);
+        _str.append(charBuffer + std::min(leadZeroN, 63u), charBuffer + 64);
     }
 
     inline void Encoder::_encodeOctal(u64 v)
@@ -857,7 +857,7 @@ namespace qcon
         _str.append(dst, bufferEnd);
     }
 
-    inline bool Encoder::_encode(const double v)
+    inline bool Encoder::_encode(const f64 v)
     {
         static thread_local char buffer[24u];
 
@@ -869,14 +869,14 @@ namespace qcon
         }
 
         const std::to_chars_result res{std::to_chars(buffer, buffer + sizeof(buffer), v)};
-        const unat length{unat(res.ptr - buffer)};
+        const u64 length{u64(res.ptr - buffer)};
         _str.append(buffer, length);
 
         // Add trailing `.0` if necessary
         if (_private::qcon::isDigit(buffer[length - 1u]))
         {
             bool needsZero{true};
-            for (unat i{0u}; i < length; ++i)
+            for (u64 i{0u}; i < length; ++i)
             {
                 if (buffer[i] == '.' || buffer[i] == 'e')
                 {
@@ -911,7 +911,7 @@ namespace qcon
         {
             return false;
         }
-        unat year{v.year};
+        u32 year{v.year};
         buffer[4] = char('0' + year % 10u); year /= 10u;
         buffer[3] = char('0' + year % 10u); year /= 10u;
         buffer[2] = char('0' + year % 10u); year /= 10u;
@@ -985,7 +985,7 @@ namespace qcon
             // Temporarily point to the last element instead of one-past for simplicity
             bufferEnd += 9u;
 
-            unat nanoseconds{v.subsecond};
+            u32 nanoseconds{v.subsecond};
             if (nanoseconds > 999'999'999u)
             {
                 return false;
@@ -1020,16 +1020,16 @@ namespace qcon
         {
             case utcOffset:
             {
-                unat offset;
+                u32 offset;
                 if (v.offset >= 0)
                 {
                     buffer[0] = '+';
-                    offset = unat(v.offset);
+                    offset = u32(v.offset);
                 }
                 else
                 {
                     buffer[0] = '-';
-                    offset = unat(-v.offset);
+                    offset = u32(-v.offset);
                 }
 
                 if (offset >= 100u * 60u)

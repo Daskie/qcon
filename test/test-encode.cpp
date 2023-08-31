@@ -4,16 +4,16 @@
 
 #include <gtest/gtest.h>
 
-using s8 = int8_t;
-using s16 = int16_t;
-using s32 = int32_t;
-using s64 = int64_t;
-using u8 = uint8_t;
-using u16 = uint16_t;
-using u32 = uint32_t;
-using u64 = uint64_t;
-
-using unat = size_t;
+using qcon::u8;
+using qcon::s8;
+using qcon::u16;
+using qcon::s16;
+using qcon::u32;
+using qcon::s32;
+using qcon::f32;
+using qcon::u64;
+using qcon::s64;
+using qcon::f64;
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -202,7 +202,7 @@ TEST(Encode, string)
     }
     { // All non-ASCII characters
         std::string actual{};
-        for (unat c{128u}; c < 256u; ++c)
+        for (u32 c{128u}; c < 256u; ++c)
         {
             actual.push_back(char(c));
         }
@@ -538,62 +538,62 @@ TEST(Encode, floater)
     }
     { // Max integer 64
         Encoder encoder{};
-        encoder << std::bit_cast<double>(0b0'10000110011'1111111111111111111111111111111111111111111111111111u);
+        encoder << std::bit_cast<f64>(0b0'10000110011'1111111111111111111111111111111111111111111111111111u);
         ASSERT_EQ(encoder.finish(), "9007199254740991.0");
     }
     { // Max integer 32
         Encoder encoder{};
-        encoder << std::bit_cast<float>(0b0'10010110'11111111111111111111111u);
+        encoder << std::bit_cast<f32>(0b0'10010110'11111111111111111111111u);
         ASSERT_EQ(encoder.finish(), "16777215.0");
     }
     { // Max 64
         Encoder encoder{};
-        encoder << std::bit_cast<double>(0b0'11111111110'1111111111111111111111111111111111111111111111111111u);
+        encoder << std::bit_cast<f64>(0b0'11111111110'1111111111111111111111111111111111111111111111111111u);
         ASSERT_EQ(encoder.finish(), "1.7976931348623157e+308");
     }
     { // Max 32
         Encoder encoder{};
-        encoder << std::bit_cast<float>(0b0'11111110'11111111111111111111111u);
+        encoder << std::bit_cast<f32>(0b0'11111110'11111111111111111111111u);
         ASSERT_EQ(encoder.finish(), "3.4028234663852886e+38");
     }
     { // Min normal 64
         Encoder encoder{};
-        encoder << std::bit_cast<double>(0b0'00000000001'0000000000000000000000000000000000000000000000000000u);
+        encoder << std::bit_cast<f64>(0b0'00000000001'0000000000000000000000000000000000000000000000000000u);
         ASSERT_EQ(encoder.finish(), "2.2250738585072014e-308");
     }
     { // Min normal 32
         Encoder encoder{};
-        encoder << std::bit_cast<float>(0b0'00000001'00000000000000000000000u);
+        encoder << std::bit_cast<f32>(0b0'00000001'00000000000000000000000u);
         ASSERT_EQ(encoder.finish(), "1.1754943508222875e-38");
     }
     { // Min subnormal 64
         Encoder encoder{};
-        encoder << std::bit_cast<double>(u64(0b0'00000000000'0000000000000000000000000000000000000000000000000001u));
+        encoder << std::bit_cast<f64>(u64(0b0'00000000000'0000000000000000000000000000000000000000000000000001u));
         ASSERT_EQ(encoder.finish(), "5e-324");
     }
     { // Min subnormal 32
         Encoder encoder{};
-        encoder << std::bit_cast<float>(0b0'00000000'00000000000000000000001u);
+        encoder << std::bit_cast<f32>(0b0'00000000'00000000000000000000001u);
         ASSERT_EQ(encoder.finish(), "1.401298464324817e-45");
     }
     { // Positive infinity
         Encoder encoder{};
-        encoder << std::numeric_limits<double>::infinity();
+        encoder << std::numeric_limits<f64>::infinity();
         ASSERT_EQ(encoder.finish(), "inf");
     }
     { // Negative infinity
         Encoder encoder{};
-        encoder << -std::numeric_limits<double>::infinity();
+        encoder << -std::numeric_limits<f64>::infinity();
         ASSERT_EQ(encoder.finish(), "-inf");
     }
     { // NaN
         Encoder encoder{};
-        encoder << std::numeric_limits<double>::quiet_NaN();
+        encoder << std::numeric_limits<f64>::quiet_NaN();
         ASSERT_EQ(encoder.finish(), "nan");
     }
     { // Negative NaN
         Encoder encoder{};
-        encoder << -std::numeric_limits<double>::quiet_NaN();
+        encoder << -std::numeric_limits<f64>::quiet_NaN();
         ASSERT_EQ(encoder.finish(), "nan");
     }
 }
@@ -1512,13 +1512,13 @@ TEST(Encode, general)
             encoder << end;
             encoder << object;
                 encoder << "Name"sv << "Two Tuna"sv;
-                encoder << "Price"sv << -std::numeric_limits<double>::infinity();
+                encoder << "Price"sv << -std::numeric_limits<f64>::infinity();
                 encoder << "Ingredients"sv << uniline << array << "Tuna"sv << end;
                 encoder << "Gluten Free"sv << true;
             encoder << end;
             encoder << object;
                 encoder << "Name"sv << "18 Leg Bouquet"sv;
-                encoder << "Price"sv << std::numeric_limits<double>::quiet_NaN();
+                encoder << "Price"sv << std::numeric_limits<f64>::quiet_NaN();
                 encoder << "Ingredients"sv << uniline << array << "\"Salt\""sv << "Octopus"sv << "Crab"sv << end;
                 encoder << "Gluten Free"sv << false;
             encoder << end;

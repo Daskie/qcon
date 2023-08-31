@@ -9,16 +9,19 @@
 
 namespace qcon
 {
-    using  s8 =   int8_t;
-    using s16 =  int16_t;
-    using s32 =  int32_t;
-    using s64 =  int64_t;
-    using  u8 =  uint8_t;
-    using u16 = uint16_t;
-    using u32 = uint32_t;
-    using u64 = uint64_t;
+    /// Only supporting 64 bit architecture
+    static_assert(sizeof(void *) == 8u);
 
-    using unat = size_t;
+    using  u8 =  uint8_t;
+    using  s8 =   int8_t;
+    using u16 = uint16_t;
+    using s16 =  int16_t;
+    using u32 = uint32_t;
+    using s32 =  int32_t;
+    using f32 =    float;
+    using s64 =  int64_t;
+    using u64 = uint64_t;
+    using f64 =   double;
 
     using namespace std::string_literals;
     using namespace std::string_view_literals;
@@ -157,7 +160,7 @@ namespace qcon
     {
         inline constexpr bool isDigit(const char c)
         {
-            return unat(c - '0') < 10u;
+            return u32(c - '0') < 10u;
         }
 
         inline constexpr bool isControl(const char c)
@@ -175,9 +178,9 @@ namespace qcon
 
     inline void Date::fromYmd(const std::chrono::year_month_day & ymd)
     {
-        year = u16(static_cast<int>(ymd.year()));
-        month = u8(static_cast<unsigned int>(ymd.month()));
-        day = u8(static_cast<unsigned int>(ymd.day()));
+        year = u16(static_cast<s32>(ymd.year()));
+        month = u8(static_cast<u32>(ymd.month()));
+        day = u8(static_cast<u32>(ymd.day()));
     }
 
     inline std::chrono::year_month_day Date::toYmd() const
