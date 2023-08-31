@@ -28,9 +28,9 @@ namespace qcon
     {
       public:
 
-        static constexpr Density defaultDensity{multiline};
-        static constexpr std::string_view defaultIndentString{"    "sv}; /// Four spaces
-        static constexpr TimezoneFormat defaultTimezoneFormat{utcOffset};
+        inline static constexpr Density defaultDensity{multiline};
+        inline static constexpr std::string_view defaultIndentString{"    "sv}; /// Four spaces
+        inline static constexpr TimezoneFormat defaultTimezoneFormat{utcOffset};
 
         ///
         /// Construct a new `Encoder` with the given options
@@ -213,7 +213,7 @@ namespace qcon
 {
     namespace _private::qcon
     {
-        constexpr char hexEncodeTable[16u]{
+        inline constexpr char hexEncodeTable[16u]{
             '0', '1', '2', '3',
             '4', '5', '6', '7',
             '8', '9', 'A', 'B',
