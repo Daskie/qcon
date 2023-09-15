@@ -930,7 +930,7 @@ namespace qcon
         }
     }
 
-    namespace _private::qcon
+    namespace _private
     {
         template <typename K, typename V, typename... MoreKVs>
         inline void makeObjectHelper(Object & obj, K && k, V && v, MoreKVs && ... moreKVs)
@@ -949,7 +949,7 @@ namespace qcon
         static_assert(sizeof...(moreKVs) % 2u == 0u, "Must provide an even number of arguments alternating between key and value");
 
         Object obj{};
-        _private::qcon::makeObjectHelper(obj, std::forward<K>(k), std::forward<V>(v), std::forward<MoreKVs>(moreKVs)...);
+        _private::makeObjectHelper(obj, std::forward<K>(k), std::forward<V>(v), std::forward<MoreKVs>(moreKVs)...);
         return obj;
     }
 
@@ -967,7 +967,7 @@ namespace qcon
         return arr;
     }
 
-    namespace _private::qcon
+    namespace _private
     {
         inline bool decodeArray(Decoder & decoder, Array & array);
 
@@ -1152,7 +1152,7 @@ namespace qcon
             case DecodeState::object:
             {
                 Object obj{};
-                if (!_private::qcon::decodeObject(decoder, obj))
+                if (!_private::decodeObject(decoder, obj))
                 {
                     return {};
                 }
@@ -1162,7 +1162,7 @@ namespace qcon
             case DecodeState::array:
             {
                 Array arr{};
-                if (!_private::qcon::decodeArray(decoder, arr))
+                if (!_private::decodeArray(decoder, arr))
                 {
                     return {};
                 }

@@ -211,7 +211,7 @@ namespace qcon
 
 namespace qcon
 {
-    namespace _private::qcon
+    namespace _private
     {
         inline constexpr char hexEncodeTable[16u]{
             '0', '1', '2', '3',
@@ -694,11 +694,11 @@ namespace qcon
             consteval ControlString(const char c)
             {
                 chars[0] = '\\';
-                if (_private::qcon::isControl(c))
+                if (_private::isControl(c))
                 {
                     chars[1] = 'x';
-                    chars[2] = _private::qcon::hexEncodeTable[u8(c) / 16u];
-                    chars[3] = _private::qcon::hexEncodeTable[u8(c) % 16u];
+                    chars[2] = _private::hexEncodeTable[u8(c) / 16u];
+                    chars[3] = _private::hexEncodeTable[u8(c) % 16u];
                 }
                 else
                 {
@@ -725,7 +725,7 @@ namespace qcon
         {
             const char c{v[i]};
 
-            if (_private::qcon::isControl(c))
+            if (_private::isControl(c))
             {
                 // Split strings on newlines in multiline density
                 if (c == '\n' && _density <= multiline && i < n - 1u)
@@ -849,7 +849,7 @@ namespace qcon
 
         do
         {
-            *--dst = _private::qcon::hexEncodeTable[v & 0b1111u];
+            *--dst = _private::hexEncodeTable[v & 0b1111u];
             v >>= 4;
         } while (v);
 
@@ -873,7 +873,7 @@ namespace qcon
         _str.append(buffer, length);
 
         // Add trailing `.0` if necessary
-        if (_private::qcon::isDigit(buffer[length - 1u]))
+        if (_private::isDigit(buffer[length - 1u]))
         {
             bool needsZero{true};
             for (u64 i{0u}; i < length; ++i)

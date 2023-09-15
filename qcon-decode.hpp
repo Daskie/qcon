@@ -293,10 +293,10 @@ namespace qcon
 
     [[nodiscard]] inline bool _isFloater(const char * str)
     {
-        while (_private::qcon::isDigit(*str)) ++str;
+        while (_private::isDigit(*str)) ++str;
         if (*str == '.')
         {
-            return _private::qcon::isDigit(str[1]);
+            return _private::isDigit(str[1]);
         }
         else if (*str == 'e' || *str == 'E')
         {
@@ -589,7 +589,7 @@ namespace qcon
 
         positive = _tryConsumeSign() >= 0;
 
-        if (_private::qcon::isDigit(*_pos) && !_isFloater(_pos + 1))
+        if (_private::isDigit(*_pos) && !_isFloater(_pos + 1))
         {
             _postValue(_consumeInteger(v), DecodeState::integer);
         }
@@ -708,7 +708,7 @@ namespace qcon
 
         positive = _tryConsumeSign() >= 0;
 
-        if (_private::qcon::isDigit(*_pos) && _isFloater(_pos + 1))
+        if (_private::isDigit(*_pos) && _isFloater(_pos + 1))
         {
             _postValue(_consumeFloater(v), DecodeState::floater);
         }
@@ -1310,7 +1310,7 @@ namespace qcon
                     return false;
                 }
             }
-            else if (_private::qcon::isControl(c))
+            else if (_private::isControl(c))
             {
                 errorMessage = "Invalid string content"sv;
                 return false;
@@ -1811,7 +1811,7 @@ namespace qcon
             case '+':
             {
                 ++_pos;
-                if (_private::qcon::isDigit(*_pos))
+                if (_private::isDigit(*_pos))
                 {
                     _ingestNumber();
                     return;
@@ -1835,7 +1835,7 @@ namespace qcon
             {
                 positive = false;
                 ++_pos;
-                if (_private::qcon::isDigit(*_pos))
+                if (_private::isDigit(*_pos))
                 {
                     _ingestNumber();
                     return;

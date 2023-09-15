@@ -156,7 +156,7 @@ namespace qcon
 
 namespace qcon
 {
-    namespace _private::qcon
+    namespace _private
     {
         inline constexpr bool isDigit(const char c)
         {
